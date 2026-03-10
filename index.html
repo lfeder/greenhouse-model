@@ -494,13 +494,13 @@ function updateChart(labels, existNetCFs, newNetCFs) {
         x: {
           stacked: true,
           ticks: { font: { family: 'monospace', size: 14 }, color: '#4a7a4a' },
-          grid: { color: '#162416', drawBorder: false }
+          grid: { display: false }
         },
         y: {
           stacked: true,
           position: 'left',
           ticks: { font: { family: 'monospace', size: 14 }, color: '#4a7a4a', callback: v => fmtK(v) },
-          grid: { color: '#162416', drawBorder: false }
+          grid: { display: false }
         }
       }
     }
