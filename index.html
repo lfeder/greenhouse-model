@@ -60,7 +60,7 @@
   .fin-table td:first-child { text-align: left; color: var(--text-muted); }
   .fin-table tr.section-header td { color: var(--accent); font-weight: 700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding-top: 12px; border-bottom: 1px solid var(--border); }
   .fin-table tr.total-row-table td { color: var(--text); font-weight: 700; border-top: 1px solid var(--border); border-bottom: 2px solid var(--border); }
-  .fin-table tr.subtotal-row td { color: var(--green); font-weight: 700; border-bottom: 1px solid var(--border); }
+  .fin-table tr.subtotal-row td { color: var(--green); font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
   .fin-table .neg { color: var(--red); }
 
   @media (max-width: 720px) {
@@ -100,6 +100,15 @@
       <div id="sl-rampYears"></div>
       <div id="sl-revInflation"></div>
       <div id="sl-costInflation"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Capital Projects</div>
+      <div id="sl-constructionCost"></div>
+      <div id="sl-packhouseCost"></div>
+      <div id="sl-housingCost"></div>
+      <div id="sl-cukeAutomation"></div>
+      <div id="sl-refurbJTL"></div>
+      <div id="sl-regainGH1"></div>
     </div>
   </div>
 
@@ -144,7 +153,7 @@ for (let y = 2025; y <= 2029; y++) {
 
 const state = {
   currentDailyLbs: 10000, numGH: 3, pricePerLb: 4.00, profitMargin: 30,
-  constructionCost: 4500000, packhouseCost: 1500000,
+  constructionCost: 4500000, packhouseCost: 1500000, housingCost: 0, cukeAutomation: 0, refurbJTL: 0, regainGH1: 0,
   financingPct: 80, interestRate: 7, loanTermYears: 7,
   constructionStartQ: 20263, constructionMonths: 12,
   rampYears: 2,
@@ -270,6 +279,22 @@ function buildSliders() {
     label: 'Packhouse Cost', min: 0, max: 3000000, step: 250000,
     format: v => v === 0 ? 'None' : `${(v / 1e6).toFixed(2)}M`
   });
+  createSlider('sl-housingCost', 'housingCost', {
+    label: 'Housing', min: 0, max: 2000000, step: 250000,
+    format: v => v === 0 ? 'None' : `${(v / 1e6).toFixed(2)}M`
+  });
+  createSlider('sl-cukeAutomation', 'cukeAutomation', {
+    label: 'Cuke Automation', min: 0, max: 1000000, step: 50000,
+    format: v => v === 0 ? 'None' : `${(v / 1e6).toFixed(2)}M`
+  });
+  createSlider('sl-refurbJTL', 'refurbJTL', {
+    label: 'Refurb JTL', min: 0, max: 1000000, step: 50000,
+    format: v => v === 0 ? 'None' : `${(v / 1e6).toFixed(2)}M`
+  });
+  createSlider('sl-regainGH1', 'regainGH1', {
+    label: 'Regain GH1 Grow', min: 0, max: 100000, step: 10000,
+    format: v => v === 0 ? 'None' : `${(v / 1e3).toFixed(0)}K`
+  });
   createSlider('sl-financingPct', 'financingPct', {
     label: 'Loan-to-Cost', min: 50, max: 90, step: 5,
     format: v => `${v}%`
@@ -328,7 +353,7 @@ function recalc() {
   const annualRevenue = annualProduction * s.pricePerLb;
   const annualOpEx = annualRevenue * (1 - s.profitMargin / 100);
   const operatingIncome = annualRevenue - annualOpEx;
-  const totalCost = s.constructionCost + s.packhouseCost;
+  const totalCost = s.constructionCost + s.packhouseCost + s.housingCost + s.cukeAutomation + s.refurbJTL + s.regainGH1;
   const loanAmt = totalCost * (s.financingPct / 100);
   const equity = totalCost - loanAmt;
   const mRate = s.interestRate / 100 / 12;
