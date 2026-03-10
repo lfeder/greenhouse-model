@@ -88,6 +88,7 @@
     <div style="display:flex;align-items:baseline;gap:14px">
       <div style="font-size:10px;color:var(--text-dim)">v 03-10 18:30</div>
       <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">light</button>
+      <button id="saveBtn" onclick="saveModel()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save model</button>
     </div>
   </div>
 </div>
@@ -618,6 +619,27 @@ function updateTable(annualRevenue, annualOpEx, annualDebtSvc, equity, prodOpenY
   `;
 }
 
+function saveModel() {
+  localStorage.setItem('gh-model-state', JSON.stringify(state));
+  localStorage.setItem('gh-model-theme', document.body.classList.contains('light') ? 'light' : 'dark');
+  const btn = document.getElementById('saveBtn');
+  btn.textContent = 'saved!';
+  setTimeout(() => { btn.textContent = 'save model'; }, 1500);
+}
+
+function loadSavedModel() {
+  const saved = localStorage.getItem('gh-model-state');
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    Object.assign(state, parsed);
+  }
+  const theme = localStorage.getItem('gh-model-theme');
+  if (theme === 'light') {
+    document.body.classList.add('light');
+    document.getElementById('themeToggle').textContent = 'dark';
+  }
+}
+
 function toggleTheme() {
   document.body.classList.toggle('light');
   const isLight = document.body.classList.contains('light');
@@ -664,6 +686,7 @@ createSlider = function(containerId, key, opts) {
   });
 };
 
+loadSavedModel();
 buildSliders();
 recalc();
 </script>
