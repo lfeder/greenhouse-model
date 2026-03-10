@@ -88,7 +88,7 @@
     <div style="display:flex;align-items:baseline;gap:14px">
       <button id="saveBtn" onclick="saveModel()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save model</button>
       <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">light</button>
-      <div style="font-size:10px;color:var(--text-dim)">v 03-10 08:32</div>
+      <div id="versionLabel" style="font-size:10px;color:var(--text-dim)"></div>
     </div>
   </div>
 </div>
@@ -692,6 +692,10 @@ createSlider = function(containerId, key, opts) {
     input.style.background = `linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
   });
 };
+
+// Version label from browser clock
+const now = new Date();
+document.getElementById('versionLabel').textContent = `v ${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
 loadSavedModel();
 buildSliders();
