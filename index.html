@@ -17,12 +17,12 @@
     --chart-grid: #162416; --chart-tick: #4a7a4a;
   }
   body.light {
-    --text: #1a2e1a; --text-sub: #3a5a3a; --text-muted: #5a7a5a; --text-dim: #8aaa8a;
-    --green: #2a7a28; --green-bright: #1a6a18; --red: #c04040; --yellow: #a08020;
-    --border: #c8d8c8; --bg: #f0f4f0; --panel: #ffffff; --panel-dark: #e8ede8; --accent: #3a7a38;
-    --header-bg: linear-gradient(135deg, #e8f0e8, #f0f8f0, #e8f0e8);
-    --slider-track: #d0ddd0; --slider-fill: #3a7a38; --slider-thumb: #3a7a38; --slider-thumb-border: #ffffff;
-    --chart-grid: #e0e8e0; --chart-tick: #5a7a5a;
+    --text: #2a3a2a; --text-sub: #4a6a4a; --text-muted: #6a8a6a; --text-dim: #9ab89a;
+    --green: #3a8a38; --green-bright: #2a7a28; --red: #b84040; --yellow: #a08820;
+    --border: #a0b8a0; --bg: #d8e4d8; --panel: #e4ede4; --panel-dark: #c8d4c8; --accent: #3a7a38;
+    --header-bg: linear-gradient(135deg, #c8d8c8, #d8e8d8, #c8d8c8);
+    --slider-track: #b0c0b0; --slider-fill: #3a7a38; --slider-thumb: #3a7a38; --slider-thumb-border: #d8e4d8;
+    --chart-grid: #c0ccc0; --chart-tick: #5a7a5a;
   }
   body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; padding-bottom: 60px; }
 
@@ -86,9 +86,9 @@
   <div class="header-inner" style="display:flex;justify-content:space-between;align-items:baseline">
     <div class="header-title">Greenhouse Expansion Financial Model</div>
     <div style="display:flex;align-items:baseline;gap:14px">
-      <div style="font-size:10px;color:var(--text-dim)">v 03-10 08:13</div>
-      <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">light</button>
       <button id="saveBtn" onclick="saveModel()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save model</button>
+      <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">light</button>
+      <div style="font-size:10px;color:var(--text-dim)">v 03-10 08:20</div>
     </div>
   </div>
 </div>
