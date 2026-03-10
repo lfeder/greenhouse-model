@@ -88,7 +88,7 @@
     <div style="display:flex;align-items:baseline;gap:14px">
       <button id="saveBtn" onclick="saveModel()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save model</button>
       <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">light</button>
-      <div style="font-size:10px;color:var(--text-dim)">v 03-10 08:30</div>
+      <div style="font-size:10px;color:var(--text-dim)">v 03-10 08:33</div>
     </div>
   </div>
 </div>
@@ -221,6 +221,13 @@ function snapToQuarter(val) {
   return closest;
 }
 
+function sliderBg(pct) {
+  const s = getComputedStyle(document.documentElement);
+  const fill = s.getPropertyValue('--slider-fill').trim();
+  const track = s.getPropertyValue('--slider-track').trim();
+  return `linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
+}
+
 function createSlider(containerId, key, opts) {
   const container = document.getElementById(containerId);
   const fill = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
@@ -233,17 +240,17 @@ function createSlider(containerId, key, opts) {
         </div>
         <span class="slider-value" id="${key}-display">${opts.format(state[key])}</span>
       </div>
-      <input type="range" id="${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${state[key]}"
-        style="background:linear-gradient(to right,#5a9e55 0%,#5a9e55 ${fill}%,#243624 ${fill}%,#243624 100%)">
+      <input type="range" id="${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${state[key]}">
     </div>`;
   const input = document.getElementById(key);
+  input.style.background = sliderBg(fill);
   input.addEventListener('input', (e) => {
     let val = Number(e.target.value);
     if (opts.snap) val = opts.snap(val);
     state[key] = val;
     input.value = val;
     const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
-    input.style.background = `linear-gradient(to right,#5a9e55 0%,#5a9e55 ${pct}%,#243624 ${pct}%,#243624 100%)`;
+    input.style.background = sliderBg(pct);
     document.getElementById(`${key}-display`).textContent = opts.format(val);
     if (opts.sublabel) document.getElementById(`${key}-sublabel`).innerHTML = opts.sublabel();
     recalc();
