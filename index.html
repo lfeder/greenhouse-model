@@ -651,16 +651,16 @@ function toggleTheme() {
   document.body.classList.toggle('light');
   const isLight = document.body.classList.contains('light');
   document.getElementById('themeToggle').textContent = isLight ? 'dark' : 'light';
-  // Rebuild slider track colors
+  // Force reflow so CSS vars are updated before reading
+  document.body.offsetHeight;
+  // Rebuild all slider track colors
   document.querySelectorAll('input[type=range]').forEach(input => {
     const key = input.id;
     if (state[key] !== undefined) {
       const opts = sliderOpts[key];
       if (opts) {
         const pct = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
-        const fill = getComputedStyle(document.documentElement).getPropertyValue('--slider-fill').trim();
-        const track = getComputedStyle(document.documentElement).getPropertyValue('--slider-track').trim();
-        input.style.background = `linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
+        input.style.background = sliderBg(pct);
       }
     }
   });
