@@ -12,10 +12,21 @@
     --text: #f2faf2; --text-sub: #b8d8b8; --text-muted: #7aaa7a; --text-dim: #4a7a4a;
     --green: #7dd17a; --green-bright: #9adf97; --red: #e08888; --yellow: #e0c860;
     --border: #2a4a2a; --bg: #0d1a0d; --panel: #111f11; --panel-dark: #090f09; --accent: #5a9e55;
+    --header-bg: linear-gradient(135deg, #0d1a0d, #162816, #0d1a0d);
+    --slider-track: #243624; --slider-fill: #5a9e55; --slider-thumb: #5a9e55; --slider-thumb-border: #0d1a0d;
+    --chart-grid: #162416; --chart-tick: #4a7a4a;
+  }
+  body.light {
+    --text: #1a2e1a; --text-sub: #3a5a3a; --text-muted: #5a7a5a; --text-dim: #8aaa8a;
+    --green: #2a7a28; --green-bright: #1a6a18; --red: #c04040; --yellow: #a08020;
+    --border: #c8d8c8; --bg: #f0f4f0; --panel: #ffffff; --panel-dark: #e8ede8; --accent: #3a7a38;
+    --header-bg: linear-gradient(135deg, #e8f0e8, #f0f8f0, #e8f0e8);
+    --slider-track: #d0ddd0; --slider-fill: #3a7a38; --slider-thumb: #3a7a38; --slider-thumb-border: #ffffff;
+    --chart-grid: #e0e8e0; --chart-tick: #5a7a5a;
   }
   body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; padding-bottom: 60px; }
 
-  .header { background: linear-gradient(135deg, #0d1a0d, #162816, #0d1a0d); border-bottom: 1px solid var(--border); padding: 22px 32px 18px; }
+  .header { background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 22px 32px 18px; }
   .header-inner { max-width: 1060px; margin: 0 auto; }
   .header-sub { font-size: 9px; letter-spacing: 0.22em; color: var(--accent); text-transform: uppercase; margin-bottom: 4px; }
   .header-title { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--text); }
@@ -27,14 +38,14 @@
 
   .slider-group { margin-bottom: 0; padding-top: 10px; }
   .slider-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0; }
-  .slider-label { font-size: 10px; letter-spacing: 0.08em; color: #b8d8b8; text-transform: uppercase; line-height: 1; }
+  .slider-label { font-size: 10px; letter-spacing: 0.08em; color: var(--text-sub); text-transform: uppercase; line-height: 1; }
   .slider-sublabel { font-size: 9px; color: var(--text-muted); margin-top: 1px; line-height: 1.1; }
   .slider-sublabel:empty { display: none; }
   .slider-value { font-size: 14px; color: var(--text); font-weight: 700; white-space: nowrap; flex-shrink: 0; line-height: 1; }
 
   input[type=range] { width: 100%; appearance: none; -webkit-appearance: none; height: 3px; border-radius: 2px; outline: none; cursor: pointer; margin-top: 7px; margin-bottom: 0; padding: 0; display: block; }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #5a9e55; cursor: pointer; border: 2px solid #0d1a0d; }
-  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #5a9e55; cursor: pointer; border: 2px solid #0d1a0d; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); }
 
   .total-row { display: flex; justify-content: space-between; background: var(--panel-dark); border-radius: 5px; padding: 7px 11px; margin-top: 4px; }
   .total-row .label { font-size: 10px; color: var(--text-sub); }
@@ -74,7 +85,10 @@
 <div class="header">
   <div class="header-inner" style="display:flex;justify-content:space-between;align-items:baseline">
     <div class="header-title">Greenhouse Expansion Financial Model</div>
-    <div style="font-size:10px;color:var(--text-dim)">v 03-10 18:15</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="font-size:10px;color:var(--text-dim)">v 03-10 18:30</div>
+      <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">light</button>
+    </div>
   </div>
 </div>
 
@@ -603,6 +617,52 @@ function updateTable(annualRevenue, annualOpEx, annualDebtSvc, equity, prodOpenY
     </tbody>
   `;
 }
+
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const isLight = document.body.classList.contains('light');
+  document.getElementById('themeToggle').textContent = isLight ? 'dark' : 'light';
+  // Rebuild slider track colors
+  document.querySelectorAll('input[type=range]').forEach(input => {
+    const key = input.id;
+    if (state[key] !== undefined) {
+      const opts = sliderOpts[key];
+      if (opts) {
+        const pct = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
+        const fill = getComputedStyle(document.documentElement).getPropertyValue('--slider-fill').trim();
+        const track = getComputedStyle(document.documentElement).getPropertyValue('--slider-track').trim();
+        input.style.background = `linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
+      }
+    }
+  });
+  // Rebuild chart with new colors
+  if (chart) {
+    const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim();
+    const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-tick').trim();
+    chart.options.scales.x.ticks.color = tickColor;
+    chart.options.scales.x.grid.color = gridColor;
+    chart.options.scales.y.ticks.color = tickColor;
+    chart.options.scales.y.grid.color = gridColor;
+    chart.update();
+  }
+}
+
+// Store slider opts for theme toggle
+const sliderOpts = {};
+const _origCreateSlider = createSlider;
+createSlider = function(containerId, key, opts) {
+  sliderOpts[key] = opts;
+  _origCreateSlider(containerId, key, opts);
+  // Also patch the input handler to use CSS var colors
+  const input = document.getElementById(key);
+  const origHandler = input.oninput;
+  input.addEventListener('input', () => {
+    const fill = getComputedStyle(document.documentElement).getPropertyValue('--slider-fill').trim();
+    const track = getComputedStyle(document.documentElement).getPropertyValue('--slider-track').trim();
+    const pct = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
+    input.style.background = `linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
+  });
+};
 
 buildSliders();
 recalc();
