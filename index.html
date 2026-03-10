@@ -43,8 +43,10 @@
   .slider-sublabel:empty { display: none; }
   .slider-value { font-size: 14px; color: var(--text); font-weight: 700; white-space: nowrap; flex-shrink: 0; line-height: 1; }
 
-  input[type=range] { width: 100%; appearance: none; -webkit-appearance: none; height: 3px; border-radius: 2px; outline: none; cursor: pointer; margin-top: 7px; margin-bottom: 0; padding: 0; display: block; }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); }
+  input[type=range] { width: 100%; appearance: none; -webkit-appearance: none; height: 3px; border-radius: 2px; outline: none; cursor: pointer; margin-top: 7px; margin-bottom: 0; padding: 0; display: block; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: transparent; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); margin-top: -5px; }
+  input[type=range]::-moz-range-track { height: 3px; border-radius: 2px; background: transparent; border: none; }
   input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); }
 
   .total-row { display: flex; justify-content: space-between; background: var(--panel-dark); border-radius: 5px; padding: 7px 11px; margin-top: 4px; }
