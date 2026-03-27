@@ -98,7 +98,20 @@
       <div id="sl-currentDailyLbs"></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Phase 2 — GH Expansion</div>
+      <div class="panel-title">Phase 1 — New 60K SF GHs</div>
+      <div id="sl-p1NumGH"></div>
+      <div id="sl-p1PricePerLb"></div>
+      <div id="sl-p1Margin"></div>
+      <div id="sl-p1ConstructionCost"></div>
+      <div id="sl-p1PackhouseCost"></div>
+      <div id="sl-p1HousingCost"></div>
+      <div id="sl-p1CukeAutomation"></div>
+      <div id="sl-p1RefurbJTL"></div>
+      <div id="sl-p1RegainGH1"></div>
+      <div id="sl-p1StartQ"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Phase 2 — GH Expansion (8ac)</div>
       <div id="sl-p2Cost"></div>
       <div id="sl-p2Acres"></div>
       <div id="sl-p2PricePerLb"></div>
@@ -148,7 +161,8 @@
       <div style="position:relative;height:255px"><canvas id="chart"></canvas></div>
       <div class="chart-legend">
         <span><span class="legend-box" style="background:#4a8acc"></span>Existing</span>
-        <span><span class="legend-box" style="background:#5aaa55"></span>Phase 2: GH</span>
+        <span><span class="legend-box" style="background:#66bb6a"></span>Phase 1: 60K GH</span>
+        <span><span class="legend-box" style="background:#5aaa55"></span>Phase 2: 8ac GH</span>
         <span><span class="legend-box" style="background:#cc8a4a"></span>Phase 3: Lettuce</span>
         <span><span class="legend-box" style="background:#9a6acc"></span>Phase 4: Processing</span>
       </div>
@@ -163,6 +177,8 @@
 </div>
 
 <script>
+const SQFT_PER_GH = 60000;
+const ACRES_PER_GH = SQFT_PER_GH / 43560;
 const CURRENT_ACRES = 12;
 const OPERATING_DAYS = 365;
 
@@ -173,6 +189,10 @@ for (let y = 2025; y <= 2032; y++)
 
 const state = {
   currentDailyLbs: 10000,
+  // Phase 1: New 60K SF greenhouses + capital projects
+  p1NumGH: 3, p1PricePerLb: 4.00, p1Margin: 30,
+  p1ConstructionCost: 4500000, p1PackhouseCost: 1500000, p1HousingCost: 0,
+  p1CukeAutomation: 0, p1RefurbJTL: 0, p1RegainGH1: 0, p1StartQ: 20261,
   // Phase 2: GH expansion — 8ac + 20ac land + packhouse
   p2Cost: 2520000, p2Acres: 8, p2PricePerLb: 4.00, p2Margin: 30, p2StartQ: 20263,
   // Phase 3: Lettuce 3ac
@@ -192,7 +212,7 @@ const EXISTING_DEBT_HIGH = 1750000;
 const EXISTING_DEBT_LOW = 420000;
 const EXISTING_DEBT_CUTOFF = 2031;
 
-const PHASE_COLORS = { p2: '#5aaa55', p3: '#cc8a4a', p4: '#9a6acc' };
+const PHASE_COLORS = { p1: '#66bb6a', p2: '#5aaa55', p3: '#cc8a4a', p4: '#9a6acc' };
 
 // Formatters
 const fmt = (n) => {
@@ -297,6 +317,46 @@ function buildSliders() {
     format: v => `${v.toLocaleString()} lb/day`
   });
 
+  // Phase 1
+  createSlider('sl-p1NumGH', 'p1NumGH', {
+    label: 'New 60K SF Greenhouses', min: 0, max: 4, step: 1,
+    format: v => `${v} GH`,
+    sublabel: () => `${(state.p1NumGH * ACRES_PER_GH).toFixed(1)} acres`
+  });
+  createSlider('sl-p1PricePerLb', 'p1PricePerLb', {
+    label: 'Price per lb', min: 3.00, max: 6.00, step: 0.05,
+    format: v => `$${v.toFixed(2)}`
+  });
+  createSlider('sl-p1Margin', 'p1Margin', {
+    label: 'Operating Margin', min: 15, max: 55, step: 1,
+    format: v => `${v}%`
+  });
+  createSlider('sl-p1ConstructionCost', 'p1ConstructionCost', {
+    label: 'Greenhouse Build', min: 3000000, max: 8000000, step: 250000,
+    format: v => fmtM(v)
+  });
+  createSlider('sl-p1PackhouseCost', 'p1PackhouseCost', {
+    label: 'Packhouse', min: 0, max: 3000000, step: 250000,
+    format: v => v === 0 ? 'None' : fmtM(v)
+  });
+  createSlider('sl-p1HousingCost', 'p1HousingCost', {
+    label: 'Housing', min: 0, max: 2000000, step: 250000,
+    format: v => v === 0 ? 'None' : fmtM(v)
+  });
+  createSlider('sl-p1CukeAutomation', 'p1CukeAutomation', {
+    label: 'Cuke Automation', min: 0, max: 1000000, step: 50000,
+    format: v => v === 0 ? 'None' : fmtM(v)
+  });
+  createSlider('sl-p1RefurbJTL', 'p1RefurbJTL', {
+    label: 'Refurb JTL', min: 0, max: 1000000, step: 50000,
+    format: v => v === 0 ? 'None' : fmtM(v)
+  });
+  createSlider('sl-p1RegainGH1', 'p1RegainGH1', {
+    label: 'Regain GH1 Grow', min: 0, max: 100000, step: 10000,
+    format: v => v === 0 ? 'None' : `${(v / 1e3).toFixed(0)}K`
+  });
+  createSlider('sl-p1StartQ', 'p1StartQ', qOpts('p1StartQ'));
+
   // Phase 2
   createSlider('sl-p2Cost', 'p2Cost', {
     label: 'Total Cost', min: 1000000, max: 6000000, step: 100000,
@@ -390,7 +450,14 @@ function phaseFinancials(phaseKey) {
   const s = state;
   let baseRev, baseExp, cost;
 
-  if (phaseKey === 'p2') {
+  if (phaseKey === 'p1') {
+    const yieldPerAcreDay = s.currentDailyLbs / CURRENT_ACRES;
+    const newAcres = s.p1NumGH * ACRES_PER_GH;
+    const dailyProd = newAcres * yieldPerAcreDay;
+    baseRev = dailyProd * OPERATING_DAYS * s.p1PricePerLb;
+    baseExp = baseRev * (1 - s.p1Margin / 100);
+    cost = s.p1ConstructionCost + s.p1PackhouseCost + s.p1HousingCost + s.p1CukeAutomation + s.p1RefurbJTL + s.p1RegainGH1;
+  } else if (phaseKey === 'p2') {
     const yieldPerAcreDay = s.currentDailyLbs / CURRENT_ACRES;
     const dailyProd = s.p2Acres * yieldPerAcreDay;
     baseRev = dailyProd * OPERATING_DAYS * s.p2PricePerLb;
@@ -425,7 +492,7 @@ const YEARS = Array.from({ length: CHART_END - CHART_START + 1 }, (_, i) => CHAR
 
 function recalc() {
   const s = state;
-  const phases = ['p2', 'p3', 'p4'];
+  const phases = ['p1', 'p2', 'p3', 'p4'];
   const pf = {};
   for (const p of phases) pf[p] = phaseFinancials(p);
 
@@ -514,9 +581,10 @@ function updateChart(labels, existCFs, phaseCFs) {
   if (chart) {
     chart.data.labels = labels;
     chart.data.datasets[0].data = existCFs;
-    chart.data.datasets[1].data = phaseCFs.p2;
-    chart.data.datasets[2].data = phaseCFs.p3;
-    chart.data.datasets[3].data = phaseCFs.p4;
+    chart.data.datasets[1].data = phaseCFs.p1;
+    chart.data.datasets[2].data = phaseCFs.p2;
+    chart.data.datasets[3].data = phaseCFs.p3;
+    chart.data.datasets[4].data = phaseCFs.p4;
     chart.update();
     return;
   }
@@ -527,7 +595,8 @@ function updateChart(labels, existCFs, phaseCFs) {
       labels,
       datasets: [
         { label: 'Existing', data: existCFs, backgroundColor: '#4a8acc', borderRadius: 2 },
-        { label: 'Phase 2: GH', data: phaseCFs.p2, backgroundColor: PHASE_COLORS.p2, borderRadius: 2 },
+        { label: 'Phase 1: 60K GH', data: phaseCFs.p1, backgroundColor: PHASE_COLORS.p1, borderRadius: 2 },
+        { label: 'Phase 2: 8ac GH', data: phaseCFs.p2, backgroundColor: PHASE_COLORS.p2, borderRadius: 2 },
         { label: 'Phase 3: Lettuce', data: phaseCFs.p3, backgroundColor: PHASE_COLORS.p3, borderRadius: 2 },
         { label: 'Phase 4: Processing', data: phaseCFs.p4, backgroundColor: PHASE_COLORS.p4, borderRadius: 2 }
       ]
@@ -570,7 +639,7 @@ function updateTable(existDetail, detail, phases) {
   const sectionRow = (label) =>
     `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
 
-  const phaseNames = { p2: 'Phase 2: GH Expansion', p3: 'Phase 3: Lettuce', p4: 'Phase 4: Processing' };
+  const phaseNames = { p1: 'Phase 1: 60K SF Greenhouses', p2: 'Phase 2: GH Expansion (8ac)', p3: 'Phase 3: Lettuce', p4: 'Phase 4: Processing' };
 
   // Existing
   const existNetCF = YEARS.map((_, i) => existDetail.rev[i] - existDetail.exp[i] - existDetail.debt[i]);
