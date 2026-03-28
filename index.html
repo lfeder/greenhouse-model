@@ -346,7 +346,7 @@ function createSlider(containerId, key, opts) {
 // === PHASE GRID BUILDER ===
 function buildPhaseGrid() {
   const grid = document.getElementById('phaseGrid');
-  const crops = CROP_DEFS.filter(c => c.key !== 'TB' || state.buyTomatoFacility);
+  const crops = CROP_DEFS.filter(c => !c.isBuy);
 
   const buildOpts = [6, 9, 12, 18, 24].map(m => `<option value="${m}">${m}mo</option>`).join('');
   const rampOpts = [0, 1, 2, 3].map(y => `<option value="${y}">${y}yr</option>`).join('');
@@ -597,9 +597,7 @@ function recalc() {
     const fullCapex = configs[c.key].capex + sharedCapex * share;
     const loan = fullCapex * s.financingPct / 100;
     const ioAnnual = loan * s.interestRate / 100; // interest-only payment
-    // P&I amortized over (term - 6 months)
-    const piTerm = Math.max(s.loanTermYears - 0.5, 1);
-    const piAnnual = annualDebtSvc(loan, s.interestRate, piTerm);
+    const piAnnual = annualDebtSvc(loan, s.interestRate, s.loanTermYears);
     cropDebtSvc[c.key] = { loan, ioAnnual, piAnnual, fullCapex };
   }
 
@@ -650,13 +648,14 @@ function recalc() {
       while (ioEndQ > 4) { ioEndQ -= 4; ioEndYear++; }
 
       const debtYear = year - startYear + 1; // year 1 = construction start year
+      const applyIO = s.interestOnly && !c.isBuy;
       let debt = 0;
       if (debtYear >= 1 && debtYear <= s.loanTermYears) {
         const ds = cropDebtSvc[c.key];
-        if (s.interestOnly && year < ioEndYear) {
+        if (applyIO && year < ioEndYear) {
           // Full IO year
           debt = ds.ioAnnual;
-        } else if (s.interestOnly && year === ioEndYear) {
+        } else if (applyIO && year === ioEndYear) {
           // Partial IO then P&I
           const ioFrac = (ioEndQ - 1) / 4;
           debt = ds.ioAnnual * ioFrac + ds.piAnnual * (1 - ioFrac);
@@ -855,8 +854,7 @@ function calcCropROI(cfg) {
   const s = state;
   const cropLoan = cfg.capex * s.financingPct / 100;
   const cropEquity = cfg.capex - cropLoan;
-  const piTerm = s.interestOnly ? Math.max(s.loanTermYears - 0.5, 1) : s.loanTermYears;
-  const piAnnual = annualDebtSvc(cropLoan, s.interestRate, piTerm);
+  const piAnnual = annualDebtSvc(cropLoan, s.interestRate, s.loanTermYears);
   const ioAnnual = cropLoan * s.interestRate / 100;
   const annualOpInc = cfg.baseRev - cfg.baseExp;
 
@@ -917,13 +915,14 @@ function showCropCF(key) {
     }
     const opInc = rev - exp;
 
-    // Debt
+    // Debt (IO does not apply to purchased facilities)
+    const applyIO = s.interestOnly && !cDef.isBuy;
     const debtYear = year - startYear + 1;
     let debt = 0;
     if (debtYear >= 1 && debtYear <= s.loanTermYears) {
-      if (s.interestOnly && year < ioEndYear) {
+      if (applyIO && year < ioEndYear) {
         debt = roi.ioAnnual;
-      } else if (s.interestOnly && year === ioEndYear) {
+      } else if (applyIO && year === ioEndYear) {
         const ioFrac = (ioEndQ - 1) / 4;
         debt = roi.ioAnnual * ioFrac + roi.piAnnual * (1 - ioFrac);
       } else {
