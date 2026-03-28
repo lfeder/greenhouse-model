@@ -650,7 +650,7 @@ function recalc() {
 
   updateChart(activeCrops, yearData, existKJ, existL);
   updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt);
-  updateROI(activeCrops, configs, sharedCapex, totalCropCapex);
+  updateROI(activeCrops, configs);
 }
 
 // === CHART ===
@@ -770,7 +770,7 @@ function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDe
 }
 
 // === ROI PANEL ===
-function updateROI(activeCrops, configs, sharedCapex, totalCropCapex) {
+function updateROI(activeCrops, configs) {
   const grid = document.getElementById('roiGrid');
   const s = state;
   let html = '';
@@ -780,14 +780,12 @@ function updateROI(activeCrops, configs, sharedCapex, totalCropCapex) {
     if (cfg.capex <= 0) continue;
     const annualOpInc = cfg.baseRev - cfg.baseExp;
 
-    // Unlevered ROI: operating income / total invested capital (direct + allocated shared)
-    const share = totalCropCapex > 0 ? cfg.capex / totalCropCapex : 0;
-    const fullCapex = cfg.capex + sharedCapex * share;
-    const unleveredROI = (annualOpInc / fullCapex) * 100;
+    // Unlevered ROI: op income / direct capex
+    const unleveredROI = (annualOpInc / cfg.capex) * 100;
 
     // Levered ROI (cash-on-cash): (op inc - debt svc) / equity
-    const cropLoan = fullCapex * s.financingPct / 100;
-    const cropEquity = fullCapex - cropLoan;
+    const cropLoan = cfg.capex * s.financingPct / 100;
+    const cropEquity = cfg.capex - cropLoan;
     const cropDebt = annualDebtSvc(cropLoan, s.interestRate, s.loanTermYears);
     const netInc = annualOpInc - cropDebt;
     const leveredROI = cropEquity > 0 ? (netInc / cropEquity) * 100 : 0;
@@ -796,7 +794,7 @@ function updateROI(activeCrops, configs, sharedCapex, totalCropCapex) {
     html += `<div class="roi-item${isTomatoCompare ? ' roi-highlight' : ''}">
       <div>
         <div class="roi-label">${c.label}</div>
-        <div style="font-size:8px;color:var(--text-dim)">${fmtK(fullCapex)} total | ${fmtK(cropEquity)} equity</div>
+        <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.capex)} capex | ${fmtK(cropEquity)} equity</div>
       </div>
       <div style="text-align:right">
         <div class="roi-value" style="color:${leveredROI >= 0 ? 'var(--green)' : 'var(--red)'}">${leveredROI.toFixed(1)}%</div>
