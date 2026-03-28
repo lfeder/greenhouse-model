@@ -851,8 +851,13 @@ function calcCropROI(cfg) {
   const ioAnnual = cropLoan * s.interestRate / 100;
   const annualOpInc = cfg.baseRev - cfg.baseExp;
 
-  // Steady-state ROI uses P&I payment (post-IO period)
-  const netInc = annualOpInc - piAnnual;
+  // Average annual DS over full loan life (IO period + P&I period)
+  const ioYears = cfg.buildMonths / 12 + 0.5;
+  const piYears = s.loanTermYears;
+  const totalLoanYears = ioYears + piYears;
+  const avgDS = (ioYears * ioAnnual + piYears * piAnnual) / totalLoanYears;
+
+  const netInc = annualOpInc - avgDS;
   const pct = cropEquity > 0 ? (netInc / cropEquity) * 100 : 0;
   return { pct, equity: cropEquity, loan: cropLoan, piAnnual, ioAnnual };
 }
