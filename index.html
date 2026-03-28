@@ -182,7 +182,7 @@
       <div class="kpi"><div class="kpi-label">Steady Rev</div><div class="kpi-value" id="kpi-revenue"></div><div class="kpi-sub" id="kpi-revenue-sub"></div></div>
       <div class="kpi"><div class="kpi-label">Steady Op Inc</div><div class="kpi-value" id="kpi-opIncome"></div><div class="kpi-sub" id="kpi-opIncome-sub"></div></div>
       <div class="kpi"><div class="kpi-label">Debt Svc</div><div class="kpi-value" id="kpi-debtSvc"></div><div class="kpi-sub" id="kpi-debtSvc-sub"></div></div>
-      <div class="kpi"><div class="kpi-label">Net CF (Steady)</div><div class="kpi-value" id="kpi-netCF"></div><div class="kpi-sub" id="kpi-netCF-sub"></div></div>
+      <div class="kpi"><div class="kpi-label">Total IRR</div><div class="kpi-value" id="kpi-irr"></div><div class="kpi-sub" id="kpi-irr-sub"></div></div>
     </div>
 
     <div class="panel chart-panel">
@@ -593,16 +593,24 @@ function recalc() {
   const housingCapex = s.housingPeople * 50000;
   const sharedCapex = landCapex + packhouseCapex + housingCapex;
 
-  // Per-crop CapEx (direct) — use allCrops so TB gets shared allocation too
-  let totalCropCapex = 0;
-  for (const c of allCrops) totalCropCapex += configs[c.key].capex;
+  // Per-crop CapEx (direct) — exclude TB from shared allocation base
+  let buildCropCapex = 0;
+  for (const c of allCrops) {
+    if (!c.isBuy) buildCropCapex += configs[c.key].capex;
+  }
+  let totalCropCapex = buildCropCapex;
+  if (s.buyTomatoFacility) totalCropCapex += configs.TB.capex;
   const totalCapex = totalCropCapex + sharedCapex;
   const equity = totalCapex * (1 - s.financingPct / 100);
 
-  // Allocate shared capex proportionally and store fullCapex on each config
+  // Allocate shared capex to built crops only, not TB
   for (const c of allCrops) {
-    const share = totalCropCapex > 0 ? configs[c.key].capex / totalCropCapex : 0;
-    configs[c.key].fullCapex = configs[c.key].capex + sharedCapex * share;
+    if (c.isBuy) {
+      configs[c.key].fullCapex = configs[c.key].capex;
+    } else {
+      const share = buildCropCapex > 0 ? configs[c.key].capex / buildCropCapex : 0;
+      configs[c.key].fullCapex = configs[c.key].capex + sharedCapex * share;
+    }
   }
 
   // Per-crop debt for table (activeCrops only, excludes TB)
@@ -710,8 +718,11 @@ function recalc() {
   document.getElementById('kpi-opIncome-sub').textContent = `${(steadyRev > 0 ? (steadyOpInc / steadyRev * 100).toFixed(1) : 0)}% margin`;
   document.getElementById('kpi-debtSvc').textContent = fmtK(peakDebt);
   document.getElementById('kpi-debtSvc-sub').textContent = `peak yr | ${fmtK(lastDebt)} in '${String(YEARS[lastIdx]).slice(2)}`;
-  document.getElementById('kpi-netCF').textContent = fmtK(steadyNetCF);
-  document.getElementById('kpi-netCF-sub').textContent = `net in '${String(YEARS[lastIdx]).slice(2)}`;
+  // Total IRR across all new investments
+  const combinedCF = simulateCombinedCF(allCrops, configs, s);
+  const totalIRR = calcIRR(combinedCF) * 100;
+  document.getElementById('kpi-irr').textContent = `${totalIRR.toFixed(1)}%`;
+  document.getElementById('kpi-irr-sub').textContent = 'all new crops';
 
   updateChart(activeCrops, yearData, existKJ, existL);
   updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt);
@@ -862,6 +873,34 @@ function updateROI(crops, configs) {
   grid.innerHTML = html;
   // Clear detail table if crops changed
   document.getElementById('roiDetail').innerHTML = '';
+}
+
+// Combined cashflows across all new crops for total IRR
+function simulateCombinedCF(crops, configs, s) {
+  // Find earliest start and latest end across all crops
+  let minYear = 9999, maxYear = 0;
+  const sims = [];
+  for (const c of crops) {
+    const cfg = configs[c.key];
+    if (!cfg || cfg.capex <= 0) continue;
+    const sim = simulateCropCF(cfg, c);
+    sims.push(sim);
+    for (const yr of sim.years) {
+      if (yr.year < minYear) minYear = yr.year;
+      if (yr.year > maxYear) maxYear = yr.year;
+    }
+  }
+  // Sum cashflows by year
+  const combined = [];
+  for (let y = minYear; y <= maxYear; y++) {
+    let total = 0;
+    for (const sim of sims) {
+      const yr = sim.years.find(r => r.year === y);
+      if (yr) total += yr.netCF;
+    }
+    combined.push(total);
+  }
+  return combined;
 }
 
 // Simulate year-by-year cashflows for a crop — used by both ROI calc and detail table
