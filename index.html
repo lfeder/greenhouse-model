@@ -1075,11 +1075,19 @@ function updateCapTable(equityNeeded, steadyOpInc) {
   const pre = { JJB: 50, EB: 27.5, JS: 22.5, External: 0 };
 
   // EB and JS investment based on target ownership
+  // Positive = investing, negative = selling shares
   const ebInv = (s.ebTargetPct / 100) * postMoney - (27.5 / 100) * preMoney;
   const jsInv = (s.jsTargetPct / 100) * postMoney - (22.5 / 100) * preMoney;
 
-  // JJB covers the balance
-  const jjbInv = equityNeeded - extEquity - Math.max(0, ebInv) - Math.max(0, jsInv);
+  // JJB covers: construction equity gap + buying any sold shares
+  // Construction equity not covered by external and participating partners:
+  const ebContrib = Math.max(0, ebInv); // EB's cash into the business (if positive)
+  const jsContrib = Math.max(0, jsInv);
+  const constructionGap = equityNeeded - extEquity - ebContrib - jsContrib;
+  // Buying shares from sellers:
+  const ebSale = ebInv < 0 ? -ebInv : 0;
+  const jsSale = jsInv < 0 ? -jsInv : 0;
+  const jjbInv = constructionGap + ebSale + jsSale;
 
   // Post-ownership
   const post = {
@@ -1094,7 +1102,7 @@ function updateCapTable(equityNeeded, steadyOpInc) {
 
   // Per-partner exit value and IRR
   const partners = ['JJB', 'EB', 'JS', 'External'];
-  const investments = { JJB: Math.max(0, jjbInv), EB: Math.max(0, ebInv), JS: Math.max(0, jsInv), External: extEquity };
+  const investments = { JJB: jjbInv, EB: Math.max(0, ebInv), JS: Math.max(0, jsInv), External: extEquity };
   // Negative investment = sale proceeds received
   const saleProceeds = { JJB: 0, EB: ebInv < 0 ? -ebInv : 0, JS: jsInv < 0 ? -jsInv : 0, External: 0 };
 
