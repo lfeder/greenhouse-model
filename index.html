@@ -535,7 +535,8 @@ function getCropConfig(c) {
     capex = acres * state[c.costKey];
   }
 
-  const startQ = state[`${p}StartQ`];
+  // TB (purchased) uses T (build) start quarter
+  const startQ = c.isBuy ? state.tStartQ : state[`${p}StartQ`];
   const buildMonths = state[`${p}BuildMonths`];
   const rampYears = state[`${p}RampYears`];
   const endQ = getEndQ(startQ, buildMonths);
