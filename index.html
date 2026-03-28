@@ -199,6 +199,9 @@
 <script>
 // === CONSTANTS ===
 const BASE_REV_PER_AC = 11500000 / 12; // ~$958K/ac from 12ac K+J in 2026
+const EXISTING_KJ_REV = 11500000;      // 12ac K/J baseline 2026
+const EXISTING_L_REV = 3000000;         // 2.5ac lettuce baseline 2026
+const EXISTING_EXP_RATIO = 0.66;        // ~66% expense ratio on existing ops
 const YEARS = [];
 for (let y = 2026; y <= 2035; y++) YEARS.push(y);
 
@@ -558,10 +561,23 @@ function recalc() {
   // Per-year data
   const yearData = {}; // key -> { rev: [], exp: [] }
   for (const c of activeCrops) yearData[c.key] = { rev: [], exp: [] };
+  const existKJ = { rev: [], exp: [] }, existL = { rev: [], exp: [] };
   const totalRev = [], totalExp = [];
 
   for (const year of YEARS) {
-    let yRev = 0, yExp = 0;
+    const n = year - 2026;
+    const revMult = Math.pow(1 + s.revInflation / 100, n);
+    const cstMult = Math.pow(1 + s.costInflation / 100, n);
+
+    // Existing operations
+    const eKJRev = EXISTING_KJ_REV * revMult;
+    const eKJExp = EXISTING_KJ_REV * EXISTING_EXP_RATIO * cstMult;
+    const eLRev = EXISTING_L_REV * revMult;
+    const eLExp = EXISTING_L_REV * EXISTING_EXP_RATIO * cstMult;
+    existKJ.rev.push(eKJRev); existKJ.exp.push(eKJExp);
+    existL.rev.push(eLRev); existL.exp.push(eLExp);
+
+    let yRev = eKJRev + eLRev, yExp = eKJExp + eLExp;
     for (const c of activeCrops) {
       const { rev, exp } = cropYearRevExp(configs[c.key], year);
       yearData[c.key].rev.push(rev);
@@ -594,25 +610,29 @@ function recalc() {
   document.getElementById('kpi-netCF').textContent = fmtK(steadyNetCF);
   document.getElementById('kpi-netCF-sub').textContent = 'op inc \u2212 debt svc';
 
-  updateChart(activeCrops, yearData);
-  updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebtSvc, sharedCapex);
+  updateChart(activeCrops, yearData, existKJ, existL);
+  updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebtSvc, sharedCapex, existKJ, existL);
   updateROI(activeCrops, configs, sharedCapex, totalCropCapex);
 }
 
 // === CHART ===
-function updateChart(activeCrops, yearData) {
+function updateChart(activeCrops, yearData, existKJ, existL) {
   const ctx = document.getElementById('chart').getContext('2d');
   const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-tick').trim();
   const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim();
   const labels = YEARS.map(y => `'${String(y).slice(2)}`);
 
-  const datasets = activeCrops.map(c => ({
-    label: c.label,
-    data: yearData[c.key].rev,
-    backgroundColor: c.color,
-    borderColor: c.color,
-    borderRadius: 2,
-  }));
+  const existRev = existKJ.rev.map((v, i) => v + existL.rev[i]);
+  const datasets = [
+    { label: 'Existing Ops', data: existRev, backgroundColor: '#4a8acc', borderColor: '#4a8acc', borderRadius: 2 },
+    ...activeCrops.map(c => ({
+      label: c.label,
+      data: yearData[c.key].rev,
+      backgroundColor: c.color,
+      borderColor: c.color,
+      borderRadius: 2,
+    }))
+  ];
 
   if (chart) {
     chart.data.labels = labels;
@@ -659,7 +679,7 @@ function updateChart(activeCrops, yearData) {
 }
 
 // === TABLE ===
-function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebtSvc, sharedCapex) {
+function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebtSvc, sharedCapex, existKJ, existL) {
   const table = document.getElementById('finTable');
 
   const fmtCell = (n) => {
@@ -678,6 +698,8 @@ function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDe
 
   // Revenue rows
   let revRows = sectionRow('Revenue ($M)');
+  revRows += row('Existing K/J', existKJ.rev);
+  revRows += row('Existing Lettuce', existL.rev);
   for (const c of activeCrops) {
     revRows += row(c.label, yearData[c.key].rev);
   }
@@ -685,6 +707,8 @@ function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDe
 
   // Expense rows
   let expRows = sectionRow('Expenses ($M)');
+  expRows += row('Existing K/J', existKJ.exp.map(v => -v));
+  expRows += row('Existing Lettuce', existL.exp.map(v => -v));
   for (const c of activeCrops) {
     expRows += row(c.label, yearData[c.key].exp.map(v => -v));
   }
