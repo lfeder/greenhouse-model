@@ -375,102 +375,102 @@ function toggleTomatoBuy() {
 function buildSliders() {
   // New acres
   createSlider('sl-newKAcres', 'newKAcres', {
-    label: 'Keiki', min: 0, max: 10, step: 1, format: v => `${v} ac`,
+    label: 'Keiki', min: 0, max: 10, step: 2, format: v => `${v} ac`,
     sublabel: () => `$${(state.newKAcres * BASE_REV_PER_AC / 1e6).toFixed(1)}M base rev`
   });
   createSlider('sl-newJAcres', 'newJAcres', {
-    label: 'Japanese', min: 0, max: 10, step: 1, format: v => `${v} ac`,
+    label: 'Japanese', min: 0, max: 10, step: 2, format: v => `${v} ac`,
     sublabel: () => `$${(state.newJAcres * BASE_REV_PER_AC / 1e6).toFixed(1)}M base rev`
   });
   createSlider('sl-newEAcres', 'newEAcres', {
-    label: 'English', min: 0, max: 10, step: 1, format: v => `${v} ac`,
+    label: 'English', min: 0, max: 10, step: 2, format: v => `${v} ac`,
     sublabel: () => `$${(state.newEAcres * BASE_REV_PER_AC * 0.8 / 1e6).toFixed(1)}M base rev (80% of K/J)`
   });
   createSlider('sl-newTAcres', 'newTAcres', {
-    label: 'Tomato (Build)', min: 0, max: 10, step: 1, format: v => `${v} ac`,
+    label: 'Tomato (Build)', min: 0, max: 10, step: 2, format: v => `${v} ac`,
     sublabel: () => `$${(state.newTAcres * BASE_REV_PER_AC * 1.2 / 1e6).toFixed(1)}M base rev (120% of K/J)`
   });
   createSlider('sl-newLAcres', 'newLAcres', {
-    label: 'Lettuce', min: 0, max: 5, step: 0.5, format: v => `${v} ac`,
+    label: 'Lettuce', min: 0, max: 5, step: 1, format: v => `${v} ac`,
     sublabel: () => `CapEx: $${(state.newLAcres * state.lettuceCostPerAc / 1e6).toFixed(1)}M`
   });
 
   // Lettuce revenue
   createSlider('sl-lettuceLbs', 'lettuceLbs', {
-    label: 'Lbs Sold / Year', min: 400000, max: 800000, step: 25000,
+    label: 'Lbs Sold / Year', min: 400000, max: 800000, step: 100000,
     format: v => `${(v / 1e3).toFixed(0)}K lb`
   });
   createSlider('sl-lettucePrice', 'lettucePrice', {
-    label: 'Price per lb', min: 6, max: 8, step: 0.25,
+    label: 'Price per lb', min: 6, max: 8, step: 0.50,
     format: v => `$${v.toFixed(2)}`,
     sublabel: () => `$${(state.lettuceLbs * state.lettucePrice / 1e6).toFixed(1)}M base rev`
   });
 
   // Capital costs
   createSlider('sl-cucumberCostPerAc', 'cucumberCostPerAc', {
-    label: 'Cucumber GH / Acre', min: 600000, max: 1500000, step: 50000,
+    label: 'Cucumber GH / Acre', min: 600000, max: 1500000, step: 200000,
     format: v => fmtM(v)
   });
   createSlider('sl-tomatoCostPerAc', 'tomatoCostPerAc', {
-    label: 'Tomato GH / Acre', min: 1000000, max: 2000000, step: 50000,
+    label: 'Tomato GH / Acre', min: 1000000, max: 2000000, step: 200000,
     format: v => fmtM(v)
   });
   createSlider('sl-lettuceCostPerAc', 'lettuceCostPerAc', {
-    label: 'Lettuce GH / Acre', min: 3000000, max: 5000000, step: 100000,
+    label: 'Lettuce GH / Acre', min: 3000000, max: 5000000, step: 500000,
     format: v => fmtM(v)
   });
   createSlider('sl-landCostPerAc', 'landCostPerAc', {
-    label: 'Land (20 acres)', min: 100000, max: 150000, step: 5000,
+    label: 'Land (20 acres)', min: 100000, max: 150000, step: 10000,
     format: v => `$${(v / 1e3).toFixed(0)}K/ac`,
     sublabel: () => `Total: $${(20 * state.landCostPerAc / 1e6).toFixed(1)}M`
   });
   createSlider('sl-packhouseSF', 'packhouseSF', {
-    label: 'Packhouse Size', min: 20000, max: 40000, step: 1000,
+    label: 'Packhouse Size', min: 20000, max: 40000, step: 5000,
     format: v => `${(v / 1e3).toFixed(0)}K SF`
   });
   createSlider('sl-packhouseCostPerSF', 'packhouseCostPerSF', {
-    label: 'Packhouse $/SF', min: 50, max: 150, step: 5,
+    label: 'Packhouse $/SF', min: 50, max: 150, step: 25,
     format: v => `$${v}/sf`,
     sublabel: () => `Total: $${(state.packhouseSF * state.packhouseCostPerSF / 1e6).toFixed(1)}M`
   });
   createSlider('sl-housingPeople', 'housingPeople', {
-    label: 'Housing (new people)', min: 10, max: 50, step: 1,
+    label: 'Housing (new people)', min: 10, max: 50, step: 10,
     format: v => `${v} people`,
     sublabel: () => `$50K/person \u2022 Total: $${(state.housingPeople * 50000 / 1e6).toFixed(1)}M`
   });
   createSlider('sl-tomatoPurchasePrice', 'tomatoPurchasePrice', {
-    label: 'Purchase Price (6ac)', min: 3000000, max: 15000000, step: 250000,
+    label: 'Purchase Price (6ac)', min: 3000000, max: 15000000, step: 2500000,
     format: v => fmtM(v)
   });
 
   // Operating expenses
   createSlider('sl-cukeExpPct', 'cukeExpPct', {
-    label: 'Cucumber Expenses', min: 60, max: 80, step: 1, format: v => `${v}%`
+    label: 'Cucumber Expenses', min: 60, max: 80, step: 5, format: v => `${v}%`
   });
   createSlider('sl-tomatoExpPct', 'tomatoExpPct', {
-    label: 'Tomato Expenses', min: 60, max: 80, step: 1, format: v => `${v}%`
+    label: 'Tomato Expenses', min: 60, max: 80, step: 5, format: v => `${v}%`
   });
   createSlider('sl-lettuceExpPct', 'lettuceExpPct', {
-    label: 'Lettuce Expenses', min: 60, max: 80, step: 1, format: v => `${v}%`
+    label: 'Lettuce Expenses', min: 60, max: 80, step: 5, format: v => `${v}%`
   });
 
   // Financing
   createSlider('sl-financingPct', 'financingPct', {
-    label: 'Loan-to-Cost', min: 50, max: 90, step: 5, format: v => `${v}%`
+    label: 'Loan-to-Cost', min: 50, max: 90, step: 10, format: v => `${v}%`
   });
   createSlider('sl-interestRate', 'interestRate', {
-    label: 'Interest Rate', min: 5, max: 9, step: 0.25, format: v => `${v.toFixed(2)}%`
+    label: 'Interest Rate', min: 5, max: 9, step: 1, format: v => `${v.toFixed(1)}%`
   });
   createSlider('sl-loanTermYears', 'loanTermYears', {
-    label: 'Loan Term', min: 5, max: 25, step: 1, format: v => `${v} yr`
+    label: 'Loan Term', min: 5, max: 25, step: 5, format: v => `${v} yr`
   });
 
   // Inflation
   createSlider('sl-revInflation', 'revInflation', {
-    label: 'Revenue Escalation', min: 0, max: 8, step: 0.5, format: v => `${v.toFixed(1)}%/yr`
+    label: 'Revenue Escalation', min: 0, max: 8, step: 2, format: v => `${v.toFixed(0)}%/yr`
   });
   createSlider('sl-costInflation', 'costInflation', {
-    label: 'Cost Escalation', min: 0, max: 8, step: 0.5, format: v => `${v.toFixed(1)}%/yr`
+    label: 'Cost Escalation', min: 0, max: 8, step: 2, format: v => `${v.toFixed(0)}%/yr`
   });
 
   // Phase grid & toggle
