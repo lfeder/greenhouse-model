@@ -166,10 +166,7 @@
       <div id="sl-financingPct"></div>
       <div id="sl-interestRate"></div>
       <div id="sl-loanTermYears"></div>
-      <div class="toggle-row">
-        <input type="checkbox" id="ioToggle" onchange="toggleIO()">
-        <label for="ioToggle">Interest-only during build + 6mo</label>
-      </div>
+      <div style="font-size:9px;color:var(--text-muted);padding-top:8px">Interest-only during build + 6mo</div>
     </div>
     <div class="panel">
       <div class="panel-title">Inflation</div>
@@ -248,7 +245,7 @@ const state = {
   tPhase: 2, tStartQ: 20281, tBuildMonths: 12, tRampYears: 2,
   tbPhase: 2, tbStartQ: 20281, tbBuildMonths: 6, tbRampYears: 1,
   lPhase: 3, lStartQ: 20291, lBuildMonths: 18, lRampYears: 2,
-  financingPct: 80, interestRate: 7, loanTermYears: 7, interestOnly: false,
+  financingPct: 80, interestRate: 7, loanTermYears: 7, interestOnly: true,
   revInflation: 4, costInflation: 3,
 };
 
@@ -382,10 +379,7 @@ function toggleTomatoBuy() {
   recalc();
 }
 
-function toggleIO() {
-  state.interestOnly = document.getElementById('ioToggle').checked;
-  recalc();
-}
+
 
 // === BUILD ALL SLIDERS ===
 function buildSliders() {
@@ -498,7 +492,6 @@ function buildSliders() {
   // Phase grid & toggle
   document.getElementById('buyTomatoToggle').checked = state.buyTomatoFacility;
   document.getElementById('tomatoBuySliders').style.display = state.buyTomatoFacility ? 'block' : 'none';
-  document.getElementById('ioToggle').checked = state.interestOnly;
   buildPhaseGrid();
 }
 
