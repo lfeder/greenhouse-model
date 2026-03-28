@@ -272,7 +272,8 @@ function getEndQ(startQ, months) {
 }
 
 function rampFactor(prodYr, rampYears) {
-  if (rampYears <= 1) return prodYr === 1 ? 0.70 : 1.0;
+  if (rampYears === 0) return 1.0;
+  if (rampYears === 1) return prodYr === 1 ? 0.70 : 1.0;
   if (rampYears === 2) return prodYr === 1 ? 0.50 : prodYr === 2 ? 0.85 : 1.0;
   return prodYr === 1 ? 0.40 : prodYr === 2 ? 0.65 : prodYr === 3 ? 0.85 : 1.0;
 }
@@ -333,7 +334,7 @@ function buildPhaseGrid() {
   const crops = CROP_DEFS.filter(c => c.key !== 'TB' || state.buyTomatoFacility);
 
   const buildOpts = [6, 9, 12, 18, 24].map(m => `<option value="${m}">${m}mo</option>`).join('');
-  const rampOpts = [1, 2, 3].map(y => `<option value="${y}">${y}yr</option>`).join('');
+  const rampOpts = [0, 1, 2, 3].map(y => `<option value="${y}">${y}yr</option>`).join('');
   const phaseOpts = [1, 2, 3, 4].map(p => `<option value="${p}">${p}</option>`).join('');
   const qOpts = QUARTERS.map(q => `<option value="${q.value}">${q.label}</option>`).join('');
 
@@ -544,7 +545,7 @@ function recalc() {
   const housingCapex = s.housingPeople * 50000;
   const sharedCapex = landCapex + packhouseCapex + housingCapex;
 
-  // Per-crop CapEx
+  // Per-crop CapEx (direct)
   const cropCapex = {};
   let totalCropCapex = 0;
   for (const c of activeCrops) {
@@ -552,17 +553,22 @@ function recalc() {
     totalCropCapex += configs[c.key].capex;
   }
   const totalCapex = totalCropCapex + sharedCapex;
+  const equity = totalCapex * (1 - s.financingPct / 100);
 
-  // Financing
-  const loan = totalCapex * s.financingPct / 100;
-  const equity = totalCapex - loan;
-  const totalDebtSvc = annualDebtSvc(loan, s.interestRate, s.loanTermYears);
+  // Per-crop debt: allocate shared capex proportionally, compute per-crop loan & annual payment
+  const cropDebtSvc = {};
+  for (const c of activeCrops) {
+    const share = totalCropCapex > 0 ? configs[c.key].capex / totalCropCapex : 0;
+    const fullCapex = configs[c.key].capex + sharedCapex * share;
+    const loan = fullCapex * s.financingPct / 100;
+    cropDebtSvc[c.key] = { annual: annualDebtSvc(loan, s.interestRate, s.loanTermYears), fullCapex };
+  }
 
   // Per-year data
-  const yearData = {}; // key -> { rev: [], exp: [] }
-  for (const c of activeCrops) yearData[c.key] = { rev: [], exp: [] };
+  const yearData = {}; // key -> { rev: [], exp: [], debt: [] }
+  for (const c of activeCrops) yearData[c.key] = { rev: [], exp: [], debt: [] };
   const existKJ = { rev: [], exp: [] }, existL = { rev: [], exp: [] };
-  const totalRev = [], totalExp = [];
+  const totalRev = [], totalExp = [], totalDebt = [];
 
   for (const year of YEARS) {
     const n = year - 2026;
@@ -577,24 +583,43 @@ function recalc() {
     existKJ.rev.push(eKJRev); existKJ.exp.push(eKJExp);
     existL.rev.push(eLRev); existL.exp.push(eLExp);
 
-    let yRev = eKJRev + eLRev, yExp = eKJExp + eLExp;
+    let yRev = eKJRev + eLRev, yExp = eKJExp + eLExp, yDebt = 0;
     for (const c of activeCrops) {
-      const { rev, exp } = cropYearRevExp(configs[c.key], year);
+      const cfg = configs[c.key];
+      const { rev, exp } = cropYearRevExp(cfg, year);
       yearData[c.key].rev.push(rev);
       yearData[c.key].exp.push(exp);
       yRev += rev;
       yExp += exp;
+
+      // Debt service: starts at construction start, runs for loan term
+      const startYear = Math.floor(cfg.startQ / 10);
+      const debtYear = year - startYear + 1; // year 1 = construction start year
+      let debt = 0;
+      if (debtYear >= 1 && debtYear <= s.loanTermYears) {
+        debt = cropDebtSvc[c.key].annual;
+        // Partial first year if construction starts mid-year
+        if (debtYear === 1) {
+          const startQtr = cfg.startQ % 10;
+          debt *= (4 - startQtr + 1) / 4;
+        }
+      }
+      yearData[c.key].debt.push(debt);
+      yDebt += debt;
     }
     totalRev.push(yRev);
     totalExp.push(yExp);
+    totalDebt.push(yDebt);
   }
 
-  // Steady-state values (last year)
+  // Steady-state: peak debt year (when all loans overlap)
+  const peakDebt = Math.max(...totalDebt);
   const lastIdx = YEARS.length - 1;
   const steadyRev = totalRev[lastIdx];
   const steadyExp = totalExp[lastIdx];
   const steadyOpInc = steadyRev - steadyExp;
-  const steadyNetCF = steadyOpInc - totalDebtSvc;
+  const lastDebt = totalDebt[lastIdx];
+  const steadyNetCF = steadyOpInc - lastDebt;
 
   // KPIs
   document.getElementById('kpi-capex').textContent = fmtK(totalCapex);
@@ -605,13 +630,13 @@ function recalc() {
   document.getElementById('kpi-revenue-sub').textContent = `year ${YEARS[lastIdx]}`;
   document.getElementById('kpi-opIncome').textContent = fmtK(steadyOpInc);
   document.getElementById('kpi-opIncome-sub').textContent = `${(steadyRev > 0 ? (steadyOpInc / steadyRev * 100).toFixed(1) : 0)}% margin`;
-  document.getElementById('kpi-debtSvc').textContent = fmtK(totalDebtSvc);
-  document.getElementById('kpi-debtSvc-sub').textContent = `${fmtK(Math.round(totalDebtSvc / 12))}/mo`;
+  document.getElementById('kpi-debtSvc').textContent = fmtK(peakDebt);
+  document.getElementById('kpi-debtSvc-sub').textContent = `peak yr | ${fmtK(lastDebt)} in '${String(YEARS[lastIdx]).slice(2)}`;
   document.getElementById('kpi-netCF').textContent = fmtK(steadyNetCF);
-  document.getElementById('kpi-netCF-sub').textContent = 'op inc \u2212 debt svc';
+  document.getElementById('kpi-netCF-sub').textContent = `net in '${String(YEARS[lastIdx]).slice(2)}`;
 
   updateChart(activeCrops, yearData, existKJ, existL);
-  updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebtSvc, sharedCapex, existKJ, existL);
+  updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL);
   updateROI(activeCrops, configs, sharedCapex, totalCropCapex);
 }
 
@@ -679,7 +704,7 @@ function updateChart(activeCrops, yearData, existKJ, existL) {
 }
 
 // === TABLE ===
-function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebtSvc, sharedCapex, existKJ, existL) {
+function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL) {
   const table = document.getElementById('finTable');
 
   const fmtCell = (n) => {
@@ -717,8 +742,8 @@ function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDe
 
   // Operating income, debt, net CF
   const opInc = YEARS.map((_, i) => totalRev[i] - totalExp[i]);
-  const debtRow = YEARS.map(() => -totalDebtSvc);
-  const netCF = YEARS.map((_, i) => opInc[i] - totalDebtSvc);
+  const debtRow = totalDebt.map(v => -v);
+  const netCF = YEARS.map((_, i) => opInc[i] - totalDebt[i]);
 
   const summaryRows = sectionRow('Summary ($M)')
     + row('Operating Income', opInc)
@@ -733,27 +758,35 @@ function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDe
 // === ROI PANEL ===
 function updateROI(activeCrops, configs, sharedCapex, totalCropCapex) {
   const grid = document.getElementById('roiGrid');
+  const s = state;
   let html = '';
 
   for (const c of activeCrops) {
     const cfg = configs[c.key];
     if (cfg.capex <= 0) continue;
     const annualOpInc = cfg.baseRev - cfg.baseExp;
-    const directROI = (annualOpInc / cfg.capex) * 100;
-    // Allocated ROI: include proportional share of shared costs
+
+    // Unlevered ROI: operating income / total invested capital (direct + allocated shared)
     const share = totalCropCapex > 0 ? cfg.capex / totalCropCapex : 0;
     const fullCapex = cfg.capex + sharedCapex * share;
-    const fullROI = (annualOpInc / fullCapex) * 100;
+    const unleveredROI = (annualOpInc / fullCapex) * 100;
+
+    // Levered ROI (cash-on-cash): (op inc - debt svc) / equity
+    const cropLoan = fullCapex * s.financingPct / 100;
+    const cropEquity = fullCapex - cropLoan;
+    const cropDebt = annualDebtSvc(cropLoan, s.interestRate, s.loanTermYears);
+    const netInc = annualOpInc - cropDebt;
+    const leveredROI = cropEquity > 0 ? (netInc / cropEquity) * 100 : 0;
 
     const isTomatoCompare = c.key === 'T' || c.key === 'TB';
     html += `<div class="roi-item${isTomatoCompare ? ' roi-highlight' : ''}">
       <div>
         <div class="roi-label">${c.label}</div>
-        <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.capex)} direct | ${fmtK(fullCapex)} allocated</div>
+        <div style="font-size:8px;color:var(--text-dim)">${fmtK(fullCapex)} total | ${fmtK(cropEquity)} equity</div>
       </div>
       <div style="text-align:right">
-        <div class="roi-value" style="color:${directROI >= 0 ? 'var(--green)' : 'var(--red)'}">${directROI.toFixed(1)}%</div>
-        <div style="font-size:8px;color:var(--text-dim)">${fullROI.toFixed(1)}% alloc</div>
+        <div class="roi-value" style="color:${leveredROI >= 0 ? 'var(--green)' : 'var(--red)'}">${leveredROI.toFixed(1)}%</div>
+        <div style="font-size:8px;color:var(--text-dim)">${unleveredROI.toFixed(1)}% unlev</div>
       </div>
     </div>`;
   }
