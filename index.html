@@ -225,7 +225,7 @@ const CROP_DEFS = [
   { key: 'K',  label: 'Keiki',    prefix: 'k',  color: '#5a9e55', acresKey: 'newKAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 1.0 },
   { key: 'J',  label: 'Japanese', prefix: 'j',  color: '#66bb6a', acresKey: 'newJAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 1.0 },
   { key: 'E',  label: 'English',  prefix: 'e',  color: '#4ac6c6', acresKey: 'newEAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMultKey: 'englishRevPct' },
-  { key: 'T',  label: 'Tomato (Built)',  prefix: 't',  color: '#e07050', acresKey: 'newTAcres', expKey: 'tomatoExpPct', costKey: 'tomatoCostPerAc', revMultKey: 'tomatoRevPct' },
+  { key: 'T',  label: 'Tomato (Build)',  prefix: 't',  color: '#e07050', acresKey: 'newTAcres', expKey: 'tomatoExpPct', costKey: 'tomatoCostPerAc', revMultKey: 'tomatoRevPct' },
   { key: 'TB', label: 'Tomato (Purchased)', prefix: 'tb', color: '#cc5535', fixedAcres: 6, expKey: 'tomatoExpPct', revMultKey: 'tomatoRevPct', isBuy: true },
   { key: 'L',  label: 'Lettuce',  prefix: 'l',  color: '#cc8a4a', acresKey: 'newLAcres',  expKey: 'lettuceExpPct', costKey: 'lettuceCostPerAc', isLettuce: true },
 ];
@@ -847,8 +847,8 @@ function updateROI(crops, configs) {
     if (cfg.capex <= 0) continue;
 
     const roi = calcCropROI(cfg, c);
-    const isTomatoCompare = c.key === 'T' || c.key === 'TB';
-    html += `<div class="roi-item${isTomatoCompare ? ' roi-highlight' : ''}" style="cursor:pointer" onclick="showCropCF('${c.key}')">
+    const isSelected = c.key === selectedROICrop;
+    html += `<div class="roi-item${isSelected ? ' roi-highlight' : ''}" style="cursor:pointer" onclick="showCropCF('${c.key}')">
       <div>
         <div class="roi-label">${c.label}</div>
         <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.capex)} capex | ${fmtK(roi.equity)} equity</div>
