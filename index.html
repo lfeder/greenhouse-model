@@ -1172,7 +1172,6 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
   // Compute per-year equity deployment based on crop construction starts
   const equityByYear = {};
   for (const c of allCrops) {
-    if (c.isBuy) continue;
     const cfg = configs[c.key];
     if (!cfg || cfg.capex <= 0) continue;
     const fullCapex = cfg.fullCapex || cfg.capex;
