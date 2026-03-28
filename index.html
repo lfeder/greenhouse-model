@@ -827,7 +827,7 @@ function updateROI(crops, configs) {
     const cfg = configs[c.key];
     if (cfg.capex <= 0) continue;
 
-    const roi = calcCropROI(cfg);
+    const roi = calcCropROI(cfg, c);
     const isTomatoCompare = c.key === 'T' || c.key === 'TB';
     html += `<div class="roi-item${isTomatoCompare ? ' roi-highlight' : ''}" style="cursor:pointer" onclick="showCropCF('${c.key}')">
       <div>
@@ -843,40 +843,23 @@ function updateROI(crops, configs) {
   document.getElementById('roiDetail').innerHTML = '';
 }
 
-function calcCropROI(cfg) {
+// Simulate year-by-year cashflows for a crop — used by both ROI calc and detail table
+function simulateCropCF(cfg, cDef) {
   const s = state;
   const cropLoan = cfg.capex * s.financingPct / 100;
   const cropEquity = cfg.capex - cropLoan;
   const piAnnual = annualDebtSvc(cropLoan, s.interestRate, s.loanTermYears);
   const ioAnnual = cropLoan * s.interestRate / 100;
-  const annualOpInc = cfg.baseRev - cfg.baseExp;
 
-  // Average annual DS over full loan life (IO period + P&I period)
-  const ioYears = cfg.buildMonths / 12 + 0.5;
-  const piYears = s.loanTermYears;
-  const totalLoanYears = ioYears + piYears;
-  const avgDS = (ioYears * ioAnnual + piYears * piAnnual) / totalLoanYears;
-
-  const netInc = annualOpInc - avgDS;
-  const pct = cropEquity > 0 ? (netInc / cropEquity) * 100 : 0;
-  return { pct, equity: cropEquity, loan: cropLoan, piAnnual, ioAnnual };
-}
-
-function showCropCF(key) {
-  const s = state;
-  const cDef = CROP_DEFS.find(c => c.key === key);
-  const cfg = lastROIConfigs[key];
-  if (!cfg) return;
-
-  const roi = calcCropROI(cfg);
   const endQ = cfg.endQ;
   const endYear = Math.floor(endQ / 10);
   const endQtr = endQ % 10;
   const startYear = Math.floor(cfg.startQ / 10);
 
-  // IO end: 6 months (2 quarters) after construction
   let ioEndQ = endQtr + 2, ioEndYear = endYear;
   while (ioEndQ > 4) { ioEndQ -= 4; ioEndYear++; }
+
+  const applyIO = s.interestOnly && !(cDef && cDef.isBuy);
 
   function ramp(yr) {
     const ry = cfg.rampYears;
@@ -886,9 +869,9 @@ function showCropCF(key) {
     return yr === 1 ? 0.40 : yr === 2 ? 0.65 : yr === 3 ? 0.85 : 1.0;
   }
 
-  const lastYear = Math.max(startYear + s.loanTermYears + 1, 2035);
-  let cumCF = 0;
-  let rows = '';
+  const lastYear = Math.max(startYear + s.loanTermYears + 2, 2035);
+  const years = [];
+  let cumCF = 0, totalNetCF = 0, numYears = 0;
 
   for (let year = startYear; year <= lastYear; year++) {
     const n = year - 2026;
@@ -913,18 +896,16 @@ function showCropCF(key) {
     }
     const opInc = rev - exp;
 
-    // Debt (IO does not apply to purchased facilities)
-    const applyIO = s.interestOnly && !cDef.isBuy;
     const debtYear = year - startYear + 1;
     let debt = 0;
     if (debtYear >= 1 && debtYear <= s.loanTermYears) {
       if (applyIO && year < ioEndYear) {
-        debt = roi.ioAnnual;
+        debt = ioAnnual;
       } else if (applyIO && year === ioEndYear) {
         const ioFrac = (ioEndQ - 1) / 4;
-        debt = roi.ioAnnual * ioFrac + roi.piAnnual * (1 - ioFrac);
+        debt = ioAnnual * ioFrac + piAnnual * (1 - ioFrac);
       } else {
-        debt = roi.piAnnual;
+        debt = piAnnual;
       }
       if (debtYear === 1) {
         const startQtr = cfg.startQ % 10;
@@ -932,24 +913,47 @@ function showCropCF(key) {
       }
     }
 
-    // Equity outlay in first construction year
     let eqOut = 0;
-    if (year === startYear) eqOut = roi.equity;
+    if (year === startYear) eqOut = cropEquity;
 
     const netCF = opInc - debt - eqOut;
     cumCF += netCF;
+    totalNetCF += netCF;
+    numYears++;
 
-    const p = (v) => {
-      if (Math.abs(v) < 500) return '\u2014';
-      const m = Math.abs(v) / 1e6;
-      return (v < 0 ? '\u2212' : '') + m.toFixed(2);
-    };
+    years.push({ year, phase, rev, exp, opInc, debt, eqOut, netCF, cumCF });
+  }
 
-    rows += `<tr><td>${year}</td><td>${phase}</td><td>${p(rev)}</td><td>${p(-exp)}</td><td>${p(opInc)}</td><td>${p(-debt)}</td><td>${p(netCF)}</td><td>${p(cumCF)}</td></tr>`;
+  const avgAnnualCF = totalNetCF / numYears;
+  const pct = cropEquity > 0 ? (avgAnnualCF / cropEquity) * 100 : 0;
+
+  return { years, pct, equity: cropEquity, loan: cropLoan, piAnnual, ioAnnual, avgAnnualCF, numYears };
+}
+
+function calcCropROI(cfg, cDef) {
+  return simulateCropCF(cfg, cDef);
+}
+
+function showCropCF(key) {
+  const cDef = CROP_DEFS.find(c => c.key === key);
+  const cfg = lastROIConfigs[key];
+  if (!cfg) return;
+
+  const sim = simulateCropCF(cfg, cDef);
+
+  const p = (v) => {
+    if (Math.abs(v) < 500) return '\u2014';
+    const m = Math.abs(v) / 1e6;
+    return (v < 0 ? '\u2212' : '') + m.toFixed(2);
+  };
+
+  let rows = '';
+  for (const yr of sim.years) {
+    rows += `<tr><td>${yr.year}</td><td>${yr.phase}</td><td>${p(yr.rev)}</td><td>${p(-yr.exp)}</td><td>${p(yr.opInc)}</td><td>${p(-yr.debt)}</td><td>${p(yr.netCF)}</td><td>${p(yr.cumCF)}</td></tr>`;
   }
 
   document.getElementById('roiDetail').innerHTML = `
-    <div style="margin-top:10px;font-size:9px;color:var(--accent);font-weight:700;letter-spacing:0.1em;text-transform:uppercase">${cDef.label} — Cashflow Detail ($M)</div>
+    <div style="margin-top:10px;font-size:9px;color:var(--accent);font-weight:700;letter-spacing:0.1em;text-transform:uppercase">${cDef.label} — Cashflow Detail ($M) · ROI = avg net CF / equity = ${fmtK(sim.avgAnnualCF)} / ${fmtK(sim.equity)} = ${sim.pct.toFixed(1)}%</div>
     <table class="fin-table" style="font-size:10px;margin-top:6px">
       <thead><tr><th>Year</th><th>Phase</th><th>Rev</th><th>Exp</th><th>OpInc</th><th>Debt</th><th>NetCF</th><th>CumCF</th></tr></thead>
       <tbody>${rows}</tbody>
