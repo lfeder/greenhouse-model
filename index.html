@@ -173,6 +173,14 @@
       <div id="sl-revInflation"></div>
       <div id="sl-costInflation"></div>
     </div>
+    <div class="panel">
+      <div class="panel-title">Investor / Cap Table</div>
+      <div id="sl-preMoneyVal"></div>
+      <div id="sl-externalEquity"></div>
+      <div id="sl-ebTargetPct"></div>
+      <div id="sl-jsTargetPct"></div>
+      <div id="sl-exitPE"></div>
+    </div>
   </div>
 
   <div style="min-width:0">
@@ -199,6 +207,11 @@
       <div class="panel-title">IRR (Internal Rate of Return)</div>
       <div class="roi-grid" id="roiGrid"></div>
       <div id="roiDetail"></div>
+    </div>
+
+    <div class="panel" id="capTablePanel">
+      <div class="panel-title">Cap Table &amp; Partner Returns</div>
+      <div id="capTable"></div>
     </div>
   </div>
 </div>
@@ -247,6 +260,10 @@ const state = {
   lPhase: 3, lStartQ: 20291, lBuildMonths: 18, lRampYears: 2,
   financingPct: 80, interestRate: 7, loanTermYears: 7, interestOnly: true,
   revInflation: 4, costInflation: 3,
+  // Investor / cap table
+  preMoneyVal: 40000000, externalEquity: 15000000,
+  ebTargetPct: 27.5, jsTargetPct: 22.5,
+  exitPE: 8,
 };
 
 // === FORMATTERS ===
@@ -508,6 +525,28 @@ function buildSliders() {
     label: 'Cost Escalation', min: 0, max: 8, step: 2, format: v => `${v.toFixed(0)}%/yr`
   });
 
+  // Investor / cap table
+  createSlider('sl-preMoneyVal', 'preMoneyVal', {
+    label: 'Pre-Money Valuation', min: 20000000, max: 80000000, step: 10000000,
+    format: v => fmtM(v)
+  });
+  createSlider('sl-externalEquity', 'externalEquity', {
+    label: 'New External Equity', min: 10000000, max: 35000000, step: 5000000,
+    format: v => fmtM(v)
+  });
+  createSlider('sl-ebTargetPct', 'ebTargetPct', {
+    label: 'EB Target Ownership', min: 0, max: 30, step: 2.5,
+    format: v => `${v.toFixed(1)}%`
+  });
+  createSlider('sl-jsTargetPct', 'jsTargetPct', {
+    label: 'JS Target Ownership', min: 0, max: 25, step: 2.5,
+    format: v => `${v.toFixed(1)}%`
+  });
+  createSlider('sl-exitPE', 'exitPE', {
+    label: 'Exit P/E Multiple', min: 4, max: 12, step: 1,
+    format: v => `${v}x`
+  });
+
   // Phase grid & toggle
   document.getElementById('buyTomatoToggle').checked = state.buyTomatoFacility;
   document.getElementById('tomatoBuySliders').style.display = state.buyTomatoFacility ? 'block' : 'none';
@@ -727,6 +766,7 @@ function recalc() {
   updateChart(activeCrops, yearData, existKJ, existL);
   updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt);
   updateROI(allCrops, configs);
+  updateCapTable(equity, steadyOpInc);
 }
 
 // === CHART ===
@@ -1020,6 +1060,84 @@ function showCropCF(key) {
     <div style="margin-top:10px;font-size:9px;color:var(--accent);font-weight:700;letter-spacing:0.1em;text-transform:uppercase">${cDef.label} — Cashflow Detail ($M) · IRR = ${sim.pct.toFixed(1)}%</div>
     <table class="fin-table" style="font-size:10px;margin-top:6px">
       <thead><tr><th>Year</th><th>Phase</th><th>Rev</th><th>Exp</th><th>OpInc</th><th>Debt</th><th>NetCF</th><th>CumCF</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// === CAP TABLE ===
+function updateCapTable(equityNeeded, steadyOpInc) {
+  const s = state;
+  const preMoney = s.preMoneyVal;
+  const extEquity = Math.min(s.externalEquity, equityNeeded);
+  const postMoney = preMoney + equityNeeded;
+
+  // Pre-ownership
+  const pre = { JJB: 50, EB: 27.5, JS: 22.5, External: 0 };
+
+  // EB and JS investment based on target ownership
+  const ebInv = (s.ebTargetPct / 100) * postMoney - (27.5 / 100) * preMoney;
+  const jsInv = (s.jsTargetPct / 100) * postMoney - (22.5 / 100) * preMoney;
+
+  // JJB covers the balance
+  const jjbInv = equityNeeded - extEquity - Math.max(0, ebInv) - Math.max(0, jsInv);
+
+  // Post-ownership
+  const post = {
+    JJB: ((50 / 100) * preMoney + jjbInv) / postMoney * 100,
+    EB: ((27.5 / 100) * preMoney + ebInv) / postMoney * 100,
+    JS: ((22.5 / 100) * preMoney + jsInv) / postMoney * 100,
+    External: extEquity / postMoney * 100,
+  };
+
+  // Exit valuation = steady-state op income × exit PE
+  const exitVal = steadyOpInc * s.exitPE;
+
+  // Per-partner exit value and IRR
+  const partners = ['JJB', 'EB', 'JS', 'External'];
+  const investments = { JJB: Math.max(0, jjbInv), EB: Math.max(0, ebInv), JS: Math.max(0, jsInv), External: extEquity };
+  // Negative investment = sale proceeds received
+  const saleProceeds = { JJB: 0, EB: ebInv < 0 ? -ebInv : 0, JS: jsInv < 0 ? -jsInv : 0, External: 0 };
+
+  // Find investment year (earliest crop start)
+  let investYear = 2030;
+  for (const key in lastROIConfigs) {
+    const cfg = lastROIConfigs[key];
+    if (cfg && cfg.startQ) {
+      const yr = Math.floor(cfg.startQ / 10);
+      if (yr < investYear) investYear = yr;
+    }
+  }
+  const holdYears = YEARS[YEARS.length - 1] - investYear;
+
+  let rows = '';
+  for (const p of partners) {
+    const inv = investments[p];
+    const proceeds = saleProceeds[p];
+    const exitShare = (post[p] / 100) * exitVal;
+    // IRR: invest now, get exitShare in holdYears
+    // For sellers: they receive proceeds now and give up future value
+    let irr = '\u2014';
+    if (inv > 0 && holdYears > 0) {
+      const annReturn = Math.pow(exitShare / inv, 1 / holdYears) - 1;
+      irr = (annReturn * 100).toFixed(1) + '%';
+    } else if (proceeds > 0) {
+      irr = 'sold';
+    }
+
+    rows += `<tr>
+      <td style="color:var(--text-sub)">${p}</td>
+      <td>${pre[p].toFixed(1)}%</td>
+      <td>${inv > 0 ? fmtK(inv) : proceeds > 0 ? '<span class="neg">\u2212' + fmtK(proceeds) + '</span>' : '\u2014'}</td>
+      <td>${post[p].toFixed(1)}%</td>
+      <td>${fmtK(exitShare)}</td>
+      <td>${irr}</td>
+    </tr>`;
+  }
+
+  document.getElementById('capTable').innerHTML = `
+    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">Pre-money: ${fmtK(preMoney)} · Post-money: ${fmtK(postMoney)} · Equity needed: ${fmtK(equityNeeded)} · Exit val (${s.exitPE}x): ${fmtK(exitVal)}</div>
+    <table class="fin-table" style="font-size:11px">
+      <thead><tr><th style="text-align:left">Investor</th><th>Pre %</th><th>Investment</th><th>Post %</th><th>Exit Value</th><th>IRR</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
