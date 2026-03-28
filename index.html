@@ -593,23 +593,24 @@ function recalc() {
   const housingCapex = s.housingPeople * 50000;
   const sharedCapex = landCapex + packhouseCapex + housingCapex;
 
-  // Per-crop CapEx (direct)
-  const cropCapex = {};
+  // Per-crop CapEx (direct) — use allCrops so TB gets shared allocation too
   let totalCropCapex = 0;
-  for (const c of activeCrops) {
-    cropCapex[c.key] = configs[c.key].capex;
-    totalCropCapex += configs[c.key].capex;
-  }
+  for (const c of allCrops) totalCropCapex += configs[c.key].capex;
   const totalCapex = totalCropCapex + sharedCapex;
   const equity = totalCapex * (1 - s.financingPct / 100);
 
-  // Per-crop debt: allocate shared capex proportionally, compute per-crop loan & payments
+  // Allocate shared capex proportionally and store fullCapex on each config
+  for (const c of allCrops) {
+    const share = totalCropCapex > 0 ? configs[c.key].capex / totalCropCapex : 0;
+    configs[c.key].fullCapex = configs[c.key].capex + sharedCapex * share;
+  }
+
+  // Per-crop debt for table (activeCrops only, excludes TB)
   const cropDebtSvc = {};
   for (const c of activeCrops) {
-    const share = totalCropCapex > 0 ? configs[c.key].capex / totalCropCapex : 0;
-    const fullCapex = configs[c.key].capex + sharedCapex * share;
+    const fullCapex = configs[c.key].fullCapex;
     const loan = fullCapex * s.financingPct / 100;
-    const ioAnnual = loan * s.interestRate / 100; // interest-only payment
+    const ioAnnual = loan * s.interestRate / 100;
     const piAnnual = annualDebtSvc(loan, s.interestRate, s.loanTermYears);
     cropDebtSvc[c.key] = { loan, ioAnnual, piAnnual, fullCapex };
   }
@@ -852,7 +853,7 @@ function updateROI(crops, configs) {
     html += `<div class="roi-item${isSelected ? ' roi-highlight' : ''}" style="cursor:pointer" onclick="showCropCF('${c.key}')">
       <div>
         <div class="roi-label">${c.label}</div>
-        <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.capex)} capex | ${fmtK(roi.equity)} equity</div>
+        <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.fullCapex || cfg.capex)} capex | ${fmtK(roi.equity)} equity</div>
       </div>
       <div class="roi-value" style="color:${roi.pct >= 0 ? 'var(--green)' : 'var(--red)'}">${roi.pct.toFixed(1)}%</div>
     </div>`;
@@ -866,8 +867,9 @@ function updateROI(crops, configs) {
 // Simulate year-by-year cashflows for a crop — used by both ROI calc and detail table
 function simulateCropCF(cfg, cDef) {
   const s = state;
-  const cropLoan = cfg.capex * s.financingPct / 100;
-  const cropEquity = cfg.capex - cropLoan;
+  const totalCap = cfg.fullCapex || cfg.capex;
+  const cropLoan = totalCap * s.financingPct / 100;
+  const cropEquity = totalCap - cropLoan;
   const piAnnual = annualDebtSvc(cropLoan, s.interestRate, s.loanTermYears);
   const ioAnnual = cropLoan * s.interestRate / 100;
 
