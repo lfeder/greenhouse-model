@@ -583,8 +583,9 @@ function recalc() {
     // Existing operations
     const eKJRev = EXISTING_KJ_REV * revMult;
     const eKJExp = EXISTING_KJ_REV * EXISTING_EXP_RATIO * cstMult;
-    const eLRev = EXISTING_L_REV * revMult;
-    const eLExp = EXISTING_L_REV * EXISTING_EXP_RATIO * cstMult;
+    const eLBaseRev = year <= 2026 ? EXISTING_L_REV : s.lettuceLbs * s.lettucePrice;
+    const eLRev = eLBaseRev * revMult;
+    const eLExp = eLBaseRev * (year <= 2026 ? EXISTING_EXP_RATIO : s.lettuceExpPct / 100) * cstMult;
     existKJ.rev.push(eKJRev); existKJ.exp.push(eKJExp);
     existL.rev.push(eLRev); existL.exp.push(eLExp);
 
