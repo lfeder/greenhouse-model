@@ -180,7 +180,7 @@
       <div id="sl-ebTargetPct"></div>
       <div id="sl-jsTargetPct"></div>
       <div id="sl-exitPE"></div>
-      <div id="sl-jjbTransferPct"></div>
+      <div id="sl-jsTransferPct"></div>
     </div>
   </div>
 
@@ -210,14 +210,14 @@
       <div id="roiDetail"></div>
     </div>
 
-    <div class="panel" id="capTablePanel">
-      <div class="panel-title">Scenario A — External Investor</div>
-      <div id="capTable"></div>
+    <div class="panel" id="internalPanel">
+      <div class="panel-title">Scenario A — JJB Funds All Equity, JS Transfers to EB</div>
+      <div id="internalCapTable"></div>
     </div>
 
-    <div class="panel" id="internalPanel">
-      <div class="panel-title">Scenario B — JJB Funds All Equity, Transfers to EB</div>
-      <div id="internalCapTable"></div>
+    <div class="panel" id="capTablePanel">
+      <div class="panel-title">Scenario B — External Investor</div>
+      <div id="capTable"></div>
     </div>
   </div>
 </div>
@@ -269,7 +269,7 @@ const state = {
   // Investor / cap table
   preMoneyVal: 40000000, externalEquity: 15000000,
   ebTargetPct: 27.5, jsTargetPct: 22.5,
-  exitPE: 8, jjbTransferPct: 1,
+  exitPE: 8, jsTransferPct: 0,
   yearPE: {}, // per-year PE overrides for Scenario B
 };
 
@@ -553,8 +553,8 @@ function buildSliders() {
     label: 'Exit P/E Multiple', min: 4, max: 12, step: 1,
     format: v => `${v}x`
   });
-  createSlider('sl-jjbTransferPct', 'jjbTransferPct', {
-    label: 'JJB→EB Transfer/yr', min: 1, max: 2, step: 0.5,
+  createSlider('sl-jsTransferPct', 'jsTransferPct', {
+    label: 'JS→EB Transfer/yr', min: 0, max: 2, step: 0.5,
     format: v => `${v.toFixed(1)}%`
   });
 
@@ -1180,7 +1180,7 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
 
   // Collect per-year data
   let jjb = 50, eb = 27.5, js = 22.5;
-  const transferPct = s.jjbTransferPct;
+  const jsTransferPct = s.jsTransferPct;
   const exitPE = s.exitPE;
   let jjbTotalInv = 0;
 
@@ -1196,10 +1196,10 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     const bizValue = opInc * pe;
 
     let transfer = 0;
-    if (jjbTotalInv > 0 && jjb > transferPct) {
-      jjb -= transferPct;
-      eb += transferPct;
-      transfer = transferPct / 100 * bizValue;
+    if (jjbTotalInv > 0 && js > jsTransferPct && jsTransferPct > 0) {
+      js -= jsTransferPct;
+      eb += jsTransferPct;
+      transfer = jsTransferPct / 100 * bizValue;
     }
 
     d.jjbInv.push(eqDeploy);
@@ -1233,7 +1233,7 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
   const lastIdx = YEARS.length - 1;
 
   document.getElementById('internalCapTable').innerHTML = `
-    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">JJB funds all equity · transfers ${transferPct.toFixed(1)}%/yr to EB · Exit: JJB ${jjb.toFixed(1)}% (${p(d.jjbVal[lastIdx])}) · EB ${eb.toFixed(1)}% (${p(d.ebVal[lastIdx])}) · JS ${js.toFixed(1)}% (${p(d.jsVal[lastIdx])})</div>
+    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">JJB funds all equity · JS transfers ${jsTransferPct.toFixed(1)}%/yr to EB · Exit: JJB ${jjb.toFixed(1)}% (${p(d.jjbVal[lastIdx])}) · EB ${eb.toFixed(1)}% (${p(d.ebVal[lastIdx])}) · JS ${js.toFixed(1)}% (${p(d.jsVal[lastIdx])})</div>
     <table class="fin-table" style="font-size:10px">
       <thead><tr><th></th>${yearHeaders}</tr></thead>
       <tbody>
