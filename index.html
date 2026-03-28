@@ -1251,9 +1251,10 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
   ).join('')}</tr>`;
 
   const lastIdx = YEARS.length - 1;
+  const finalJJB = d.jjbPct[lastIdx], finalEB = d.ebPct[lastIdx], finalJS = d.jsPct[lastIdx];
 
   document.getElementById('internalCapTable').innerHTML = `
-    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">JJB funds all equity · JS transfers ${jsTransferPct.toFixed(1)}%/yr to EB · Exit: JJB ${jjb.toFixed(1)}% (${p(d.jjbVal[lastIdx])}) · EB ${eb.toFixed(1)}% (${p(d.ebVal[lastIdx])}) · JS ${js.toFixed(1)}% (${p(d.jsVal[lastIdx])})</div>
+    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">JJB funds all equity · JS transfers ${jsTransferPct.toFixed(1)}%/yr to EB · Exit: JJB ${finalJJB.toFixed(1)}% (${p(d.jjbVal[lastIdx])}) · EB ${finalEB.toFixed(1)}% (${p(d.ebVal[lastIdx])}) · JS ${finalJS.toFixed(1)}% (${p(d.jsVal[lastIdx])})</div>
     <table class="fin-table" style="font-size:10px">
       <thead><tr><th></th>${yearHeaders}</tr></thead>
       <tbody>
