@@ -1178,8 +1178,13 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     equityByYear[startYear] = (equityByYear[startYear] || 0) + cropEquity;
   }
 
-  // Collect per-year data
-  let jjb = 50, eb = 27.5, js = 22.5;
+  // Collect per-year data with dilution tracking
+  // Track ownership as $ values, then compute %
+  const preMoney = s.preMoneyVal;
+  let jjbValue = 0.50 * preMoney;
+  let ebValue = 0.275 * preMoney;
+  let jsValue = 0.225 * preMoney;
+  let totalValue = preMoney; // book value of all equity (preMoney + cumulative equity invested)
   const jsTransferPct = s.jsTransferPct;
   const exitPE = s.exitPE;
   let jjbTotalInv = 0;
@@ -1191,14 +1196,29 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     const eqDeploy = equityByYear[year] || 0;
     jjbTotalInv += eqDeploy;
 
+    // JJB invests equity → increases total value, JJB value; EB/JS diluted
+    if (eqDeploy > 0) {
+      jjbValue += eqDeploy;
+      totalValue += eqDeploy;
+    }
+
+    // Compute ownership %
+    let jjb = totalValue > 0 ? jjbValue / totalValue * 100 : 50;
+    let eb = totalValue > 0 ? ebValue / totalValue * 100 : 27.5;
+    let js = totalValue > 0 ? jsValue / totalValue * 100 : 22.5;
+
     const opInc = totalRev[i] - totalExp[i];
     const pe = s.yearPE[year] || exitPE;
     const bizValue = opInc * pe;
 
+    // JS→EB transfer (in % points, applied after dilution)
     let transfer = 0;
     if (jjbTotalInv > 0 && js > jsTransferPct && jsTransferPct > 0) {
-      js -= jsTransferPct;
-      eb += jsTransferPct;
+      const transferValue = jsTransferPct / 100 * totalValue;
+      jsValue -= transferValue;
+      ebValue += transferValue;
+      js = jsValue / totalValue * 100;
+      eb = ebValue / totalValue * 100;
       transfer = jsTransferPct / 100 * bizValue;
     }
 
@@ -1225,7 +1245,7 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
 
   // PE dropdown row
-  const peOpts = [4,5,6,7,8].map(v => `<option value="${v}">${v}x</option>`).join('');
+  const peOpts = [4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
   const peRow = `<tr><td style="color:var(--text-muted)">P/E Multiple</td>${YEARS.map((y, i) =>
     `<td><select data-year="${y}" class="pe-select" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>`
   ).join('')}</tr>`;
