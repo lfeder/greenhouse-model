@@ -196,7 +196,7 @@
     </div>
 
     <div class="panel" id="roiPanel">
-      <div class="panel-title">Return on Investment (Steady-State Annual)</div>
+      <div class="panel-title">IRR (Internal Rate of Return)</div>
       <div class="roi-grid" id="roiGrid"></div>
       <div id="roiDetail"></div>
     </div>
@@ -288,6 +288,25 @@ function rampFactor(prodYr, rampYears) {
   if (rampYears === 1) return prodYr === 1 ? 0.70 : 1.0;
   if (rampYears === 2) return prodYr === 1 ? 0.50 : prodYr === 2 ? 0.85 : 1.0;
   return prodYr === 1 ? 0.40 : prodYr === 2 ? 0.65 : prodYr === 3 ? 0.85 : 1.0;
+}
+
+function calcIRR(cashflows, guess = 0.1) {
+  // Newton's method to find rate where NPV = 0
+  let rate = guess;
+  for (let i = 0; i < 200; i++) {
+    let npv = 0, dnpv = 0;
+    for (let t = 0; t < cashflows.length; t++) {
+      const pv = Math.pow(1 + rate, t);
+      npv += cashflows[t] / pv;
+      dnpv -= t * cashflows[t] / (pv * (1 + rate));
+    }
+    if (Math.abs(npv) < 0.01) return rate;
+    if (Math.abs(dnpv) < 1e-10) break;
+    rate -= npv / dnpv;
+    if (rate < -0.99) rate = -0.5;
+    if (rate > 10) rate = 1;
+  }
+  return rate;
 }
 
 function annualDebtSvc(principal, rate, termYears) {
@@ -814,7 +833,7 @@ function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDe
 }
 
 // === ROI PANEL ===
-let lastROICrops = [], lastROIConfigs = {};
+let lastROICrops = [], lastROIConfigs = {}, selectedROICrop = null;
 
 function updateROI(crops, configs) {
   lastROICrops = crops;
@@ -924,10 +943,11 @@ function simulateCropCF(cfg, cDef) {
     years.push({ year, phase, rev, exp, opInc, debt, eqOut, netCF, cumCF });
   }
 
-  const avgAnnualCF = totalNetCF / numYears;
-  const pct = cropEquity > 0 ? (avgAnnualCF / cropEquity) * 100 : 0;
+  // IRR: cashflows include equity outlay in year 0
+  const cfArray = years.map(y => y.netCF);
+  const irr = calcIRR(cfArray) * 100;
 
-  return { years, pct, equity: cropEquity, loan: cropLoan, piAnnual, ioAnnual, avgAnnualCF, numYears };
+  return { years, pct: irr, equity: cropEquity, loan: cropLoan, piAnnual, ioAnnual };
 }
 
 function calcCropROI(cfg, cDef) {
@@ -935,6 +955,8 @@ function calcCropROI(cfg, cDef) {
 }
 
 function showCropCF(key) {
+  selectedROICrop = key;
+  updateROI(lastROICrops, lastROIConfigs);
   const cDef = CROP_DEFS.find(c => c.key === key);
   const cfg = lastROIConfigs[key];
   if (!cfg) return;
@@ -953,7 +975,7 @@ function showCropCF(key) {
   }
 
   document.getElementById('roiDetail').innerHTML = `
-    <div style="margin-top:10px;font-size:9px;color:var(--accent);font-weight:700;letter-spacing:0.1em;text-transform:uppercase">${cDef.label} — Cashflow Detail ($M) · ROI = avg net CF / equity = ${fmtK(sim.avgAnnualCF)} / ${fmtK(sim.equity)} = ${sim.pct.toFixed(1)}%</div>
+    <div style="margin-top:10px;font-size:9px;color:var(--accent);font-weight:700;letter-spacing:0.1em;text-transform:uppercase">${cDef.label} — Cashflow Detail ($M) · IRR = ${sim.pct.toFixed(1)}%</div>
     <table class="fin-table" style="font-size:10px;margin-top:6px">
       <thead><tr><th>Year</th><th>Phase</th><th>Rev</th><th>Exp</th><th>OpInc</th><th>Debt</th><th>NetCF</th><th>CumCF</th></tr></thead>
       <tbody>${rows}</tbody>
