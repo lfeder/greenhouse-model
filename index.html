@@ -796,10 +796,7 @@ function updateROI(activeCrops, configs) {
         <div class="roi-label">${c.label}</div>
         <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.capex)} capex | ${fmtK(cropEquity)} equity</div>
       </div>
-      <div style="text-align:right">
-        <div class="roi-value" style="color:${leveredROI >= 0 ? 'var(--green)' : 'var(--red)'}">${leveredROI.toFixed(1)}%</div>
-        <div style="font-size:8px;color:var(--text-dim)">${unleveredROI.toFixed(1)}% unlev</div>
-      </div>
+      <div class="roi-value" style="color:${leveredROI >= 0 ? 'var(--green)' : 'var(--red)'}">${leveredROI.toFixed(1)}%</div>
     </div>`;
   }
 
