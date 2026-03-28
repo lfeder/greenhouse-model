@@ -174,13 +174,16 @@
       <div id="sl-costInflation"></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Investor / Cap Table</div>
+      <div class="panel-title">Scenario A — JS→EB Transfer</div>
+      <div id="sl-jsTransferPct"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Scenario B — External Investor</div>
       <div id="sl-preMoneyVal"></div>
       <div id="sl-externalEquity"></div>
       <div id="sl-ebTargetPct"></div>
       <div id="sl-jsTargetPct"></div>
       <div id="sl-exitPE"></div>
-      <div id="sl-jsTransferPct"></div>
     </div>
   </div>
 
@@ -1179,14 +1182,9 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
   }
 
   // Collect per-year data with dilution tracking
-  // Track ownership as $ values, then compute %
-  const preMoney = s.preMoneyVal;
-  let jjbValue = 0.50 * preMoney;
-  let ebValue = 0.275 * preMoney;
-  let jsValue = 0.225 * preMoney;
-  let totalValue = preMoney; // book value of all equity (preMoney + cumulative equity invested)
+  // Ownership tracked as percentages; dilution computed at market value (PE × opInc)
+  let jjbPct = 50, ebPct = 27.5, jsPct = 22.5;
   const jsTransferPct = s.jsTransferPct;
-  const exitPE = s.exitPE;
   let jjbTotalInv = 0;
 
   const d = { jjbInv: [], jjbPct: [], ebPct: [], jsPct: [], bizVal: [], jjbVal: [], ebVal: [], jsVal: [], transfer: [], pe: [], opInc: [] };
@@ -1196,42 +1194,36 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     const eqDeploy = equityByYear[year] || 0;
     jjbTotalInv += eqDeploy;
 
-    // JJB invests equity → increases total value, JJB value; EB/JS diluted
-    if (eqDeploy > 0) {
-      jjbValue += eqDeploy;
-      totalValue += eqDeploy;
-    }
-
-    // Compute ownership %
-    let jjb = totalValue > 0 ? jjbValue / totalValue * 100 : 50;
-    let eb = totalValue > 0 ? ebValue / totalValue * 100 : 27.5;
-    let js = totalValue > 0 ? jsValue / totalValue * 100 : 22.5;
-
     const opInc = totalRev[i] - totalExp[i];
-    const pe = s.yearPE[year] || exitPE;
+    const pe = s.yearPE[year] || s.exitPE;
     const bizValue = opInc * pe;
 
-    // JS→EB transfer (in % points, applied after dilution)
+    // JJB invests equity at market value → dilutes EB/JS
+    if (eqDeploy > 0 && bizValue > 0) {
+      const postMoney = bizValue + eqDeploy;
+      jjbPct = (jjbPct / 100 * bizValue + eqDeploy) / postMoney * 100;
+      ebPct = ebPct / 100 * bizValue / postMoney * 100;
+      jsPct = jsPct / 100 * bizValue / postMoney * 100;
+    }
+
+    // JS→EB transfer (in % points of ownership)
     let transfer = 0;
-    if (jjbTotalInv > 0 && js > jsTransferPct && jsTransferPct > 0) {
-      const transferValue = jsTransferPct / 100 * totalValue;
-      jsValue -= transferValue;
-      ebValue += transferValue;
-      js = jsValue / totalValue * 100;
-      eb = ebValue / totalValue * 100;
+    if (jjbTotalInv > 0 && jsPct > jsTransferPct && jsTransferPct > 0) {
+      jsPct -= jsTransferPct;
+      ebPct += jsTransferPct;
       transfer = jsTransferPct / 100 * bizValue;
     }
 
     d.jjbInv.push(eqDeploy);
-    d.jjbPct.push(jjb);
-    d.ebPct.push(eb);
-    d.jsPct.push(js);
+    d.jjbPct.push(jjbPct);
+    d.ebPct.push(ebPct);
+    d.jsPct.push(jsPct);
     d.pe.push(pe);
     d.opInc.push(opInc);
     d.bizVal.push(bizValue);
-    d.jjbVal.push(jjb / 100 * bizValue);
-    d.ebVal.push(eb / 100 * bizValue);
-    d.jsVal.push(js / 100 * bizValue);
+    d.jjbVal.push(jjbPct / 100 * bizValue);
+    d.ebVal.push(ebPct / 100 * bizValue);
+    d.jsVal.push(jsPct / 100 * bizValue);
     d.transfer.push(transfer);
   }
 
