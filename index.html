@@ -180,6 +180,7 @@
       <div id="sl-ebTargetPct"></div>
       <div id="sl-jsTargetPct"></div>
       <div id="sl-exitPE"></div>
+      <div id="sl-jjbTransferPct"></div>
     </div>
   </div>
 
@@ -210,8 +211,13 @@
     </div>
 
     <div class="panel" id="capTablePanel">
-      <div class="panel-title">Cap Table &amp; Partner Returns</div>
+      <div class="panel-title">Scenario A — External Investor</div>
       <div id="capTable"></div>
+    </div>
+
+    <div class="panel" id="internalPanel">
+      <div class="panel-title">Scenario B — JJB Funds All Equity, Transfers to EB</div>
+      <div id="internalCapTable"></div>
     </div>
   </div>
 </div>
@@ -263,7 +269,7 @@ const state = {
   // Investor / cap table
   preMoneyVal: 40000000, externalEquity: 15000000,
   ebTargetPct: 27.5, jsTargetPct: 22.5,
-  exitPE: 8,
+  exitPE: 8, jjbTransferPct: 1,
 };
 
 // === FORMATTERS ===
@@ -546,6 +552,10 @@ function buildSliders() {
     label: 'Exit P/E Multiple', min: 4, max: 12, step: 1,
     format: v => `${v}x`
   });
+  createSlider('sl-jjbTransferPct', 'jjbTransferPct', {
+    label: 'JJB→EB Transfer/yr', min: 1, max: 2, step: 0.5,
+    format: v => `${v.toFixed(1)}%`
+  });
 
   // Phase grid & toggle
   document.getElementById('buyTomatoToggle').checked = state.buyTomatoFacility;
@@ -767,6 +777,7 @@ function recalc() {
   updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt);
   updateROI(allCrops, configs);
   updateCapTable(equity, steadyOpInc);
+  updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt, existKJ, existL, existDebt);
 }
 
 // === CHART ===
@@ -1146,6 +1157,90 @@ function updateCapTable(equityNeeded, steadyOpInc) {
     <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">Pre-money: ${fmtK(preMoney)} · Post-money: ${fmtK(postMoney)} · Equity needed: ${fmtK(equityNeeded)} · Exit val (${s.exitPE}x): ${fmtK(exitVal)}</div>
     <table class="fin-table" style="font-size:11px">
       <thead><tr><th style="text-align:left">Investor</th><th>Pre %</th><th>Investment</th><th>Post %</th><th>Exit Value</th><th>IRR</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// === INTERNAL FUNDING SCENARIO ===
+function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt, existKJ, existL, existDebt) {
+  const s = state;
+
+  // Compute per-year equity deployment based on crop construction starts
+  const equityByYear = {};
+  for (const c of allCrops) {
+    if (c.isBuy) continue;
+    const cfg = configs[c.key];
+    if (!cfg || cfg.capex <= 0) continue;
+    const fullCapex = cfg.fullCapex || cfg.capex;
+    const cropEquity = fullCapex * (1 - s.financingPct / 100);
+    const startYear = Math.floor(cfg.startQ / 10);
+    equityByYear[startYear] = (equityByYear[startYear] || 0) + cropEquity;
+  }
+
+  // Year-by-year cap table
+  let jjb = 50, eb = 27.5, js = 22.5;
+  const transferPct = s.jjbTransferPct;
+  const exitPE = s.exitPE;
+
+  let rows = '';
+  let jjbTotalInv = 0;
+
+  for (let i = 0; i < YEARS.length; i++) {
+    const year = YEARS[i];
+
+    // JJB equity investment this year
+    const eqDeploy = equityByYear[year] || 0;
+    jjbTotalInv += eqDeploy;
+
+    // Operating income this year (total business including existing)
+    const opInc = totalRev[i] - totalExp[i];
+    const bizValue = opInc * exitPE;
+
+    // Transfer: JJB gives transferPct to EB each year (starting from first construction year)
+    let transfer = 0;
+    if (jjbTotalInv > 0 && jjb > transferPct) {
+      jjb -= transferPct;
+      eb += transferPct;
+      transfer = transferPct / 100 * bizValue;
+    }
+
+    // Partner values
+    const jjbVal = jjb / 100 * bizValue;
+    const ebVal = eb / 100 * bizValue;
+    const jsVal = js / 100 * bizValue;
+
+    const p = (v) => {
+      if (Math.abs(v) < 500) return '\u2014';
+      return fmtK(v);
+    };
+
+    rows += `<tr>
+      <td>${year}</td>
+      <td>${eqDeploy > 0 ? p(eqDeploy) : '\u2014'}</td>
+      <td>${jjb.toFixed(1)}%</td>
+      <td>${eb.toFixed(1)}%</td>
+      <td>${js.toFixed(1)}%</td>
+      <td>${p(bizValue)}</td>
+      <td>${p(jjbVal)}</td>
+      <td>${p(ebVal)}</td>
+      <td>${p(jsVal)}</td>
+      <td>${transfer > 0 ? p(transfer) : '\u2014'}</td>
+    </tr>`;
+  }
+
+  // IRR for each partner: JJB invests equity over time, gets exit value at end
+  // EB pays transfer cost each year, gets exit value
+  // JS does nothing, gets exit value
+  const lastOpInc = totalRev[YEARS.length - 1] - totalExp[YEARS.length - 1];
+  const exitVal = lastOpInc * exitPE;
+  const jjbExit = jjb / 100 * exitVal;
+  const ebExit = eb / 100 * exitVal;
+  const jsExit = js / 100 * exitVal;
+
+  document.getElementById('internalCapTable').innerHTML = `
+    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">JJB funds all equity · transfers ${transferPct.toFixed(1)}%/yr to EB · Exit: JJB ${jjb.toFixed(1)}% (${fmtK(jjbExit)}) · EB ${eb.toFixed(1)}% (${fmtK(ebExit)}) · JS ${js.toFixed(1)}% (${fmtK(jsExit)})</div>
+    <table class="fin-table" style="font-size:10px">
+      <thead><tr><th>Year</th><th>JJB Inv</th><th>JJB%</th><th>EB%</th><th>JS%</th><th>Biz Val</th><th>JJB Val</th><th>EB Val</th><th>JS Val</th><th>Transfer $</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
