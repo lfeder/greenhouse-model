@@ -118,7 +118,9 @@
       <div id="sl-newKAcres"></div>
       <div id="sl-newJAcres"></div>
       <div id="sl-newEAcres"></div>
+      <div id="sl-englishRevPct"></div>
       <div id="sl-newTAcres"></div>
+      <div id="sl-tomatoRevPct"></div>
       <div id="sl-newLAcres"></div>
     </div>
     <div class="panel">
@@ -225,15 +227,16 @@ for (let y = 2026; y <= 2035; y++)
 const CROP_DEFS = [
   { key: 'K',  label: 'Keiki',    prefix: 'k',  color: '#5a9e55', acresKey: 'newKAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 1.0 },
   { key: 'J',  label: 'Japanese', prefix: 'j',  color: '#66bb6a', acresKey: 'newJAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 1.0 },
-  { key: 'E',  label: 'English',  prefix: 'e',  color: '#4ac6c6', acresKey: 'newEAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 0.8 },
-  { key: 'T',  label: 'Tomato (Built)',  prefix: 't',  color: '#e07050', acresKey: 'newTAcres', expKey: 'tomatoExpPct', costKey: 'tomatoCostPerAc', revMult: 1.2 },
-  { key: 'TB', label: 'Tomato (Purchased)', prefix: 'tb', color: '#cc5535', fixedAcres: 6, expKey: 'tomatoExpPct', revMult: 1.2, isBuy: true },
+  { key: 'E',  label: 'English',  prefix: 'e',  color: '#4ac6c6', acresKey: 'newEAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMultKey: 'englishRevPct' },
+  { key: 'T',  label: 'Tomato (Built)',  prefix: 't',  color: '#e07050', acresKey: 'newTAcres', expKey: 'tomatoExpPct', costKey: 'tomatoCostPerAc', revMultKey: 'tomatoRevPct' },
+  { key: 'TB', label: 'Tomato (Purchased)', prefix: 'tb', color: '#cc5535', fixedAcres: 6, expKey: 'tomatoExpPct', revMultKey: 'tomatoRevPct', isBuy: true },
   { key: 'L',  label: 'Lettuce',  prefix: 'l',  color: '#cc8a4a', acresKey: 'newLAcres',  expKey: 'lettuceExpPct', costKey: 'lettuceCostPerAc', isLettuce: true },
 ];
 
 // === STATE ===
 const state = {
   newKAcres: 3, newJAcres: 3, newEAcres: 2, newTAcres: 2, newLAcres: 2,
+  englishRevPct: 80, tomatoRevPct: 120,
   lettuceLbs: 600000, lettucePrice: 7.00,
   cucumberCostPerAc: 1000000, tomatoCostPerAc: 1500000, lettuceCostPerAc: 4500000,
   landCostPerAc: 125000, packhouseSF: 30000, packhouseCostPerSF: 100, housingPeople: 25,
@@ -397,11 +400,17 @@ function buildSliders() {
   });
   createSlider('sl-newEAcres', 'newEAcres', {
     label: 'English', min: 0, max: 10, step: 2, format: v => `${v} ac`,
-    sublabel: () => `$${(state.newEAcres * BASE_REV_PER_AC * 0.8 / 1e6).toFixed(1)}M base rev (80% of K/J)`
+    sublabel: () => `$${(state.newEAcres * BASE_REV_PER_AC * state.englishRevPct / 100 / 1e6).toFixed(1)}M base rev`
+  });
+  createSlider('sl-englishRevPct', 'englishRevPct', {
+    label: 'English Rev % of K/J', min: 60, max: 100, step: 10, format: v => `${v}%`
   });
   createSlider('sl-newTAcres', 'newTAcres', {
     label: 'Tomato (Build)', min: 0, max: 10, step: 2, format: v => `${v} ac`,
-    sublabel: () => `$${(state.newTAcres * BASE_REV_PER_AC * 1.2 / 1e6).toFixed(1)}M base rev (120% of K/J)`
+    sublabel: () => `$${(state.newTAcres * BASE_REV_PER_AC * state.tomatoRevPct / 100 / 1e6).toFixed(1)}M base rev`
+  });
+  createSlider('sl-tomatoRevPct', 'tomatoRevPct', {
+    label: 'Tomato Rev % of K/J', min: 80, max: 140, step: 10, format: v => `${v}%`
   });
   createSlider('sl-newLAcres', 'newLAcres', {
     label: 'Lettuce', min: 0, max: 2.5, step: 2.5, format: v => `${v} ac`,
@@ -410,7 +419,7 @@ function buildSliders() {
 
   // Lettuce revenue
   createSlider('sl-lettuceLbs', 'lettuceLbs', {
-    label: 'Lbs Sold / Year', min: 400000, max: 800000, step: 100000,
+    label: 'Lbs Sold / Year', min: 400000, max: 1200000, step: 200000,
     format: v => `${(v / 1e3).toFixed(0)}K lb`
   });
   createSlider('sl-lettucePrice', 'lettucePrice', {
@@ -501,7 +510,8 @@ function getCropConfig(c) {
   if (c.isLettuce) {
     baseRev = state.lettuceLbs * state.lettucePrice;
   } else {
-    baseRev = acres * BASE_REV_PER_AC * c.revMult;
+    const revMult = c.revMultKey ? state[c.revMultKey] / 100 : (c.revMult || 1.0);
+    baseRev = acres * BASE_REV_PER_AC * revMult;
   }
   const expPct = state[c.expKey] / 100;
   const baseExp = baseRev * expPct;
