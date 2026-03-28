@@ -403,14 +403,14 @@ function buildSliders() {
     sublabel: () => `$${(state.newEAcres * BASE_REV_PER_AC * state.englishRevPct / 100 / 1e6).toFixed(1)}M base rev`
   });
   createSlider('sl-englishRevPct', 'englishRevPct', {
-    label: 'English Rev % of K/J', min: 60, max: 100, step: 10, format: v => `${v}%`
+    label: 'English Rev % of K/J', min: 75, max: 95, step: 5, format: v => `${v}%`
   });
   createSlider('sl-newTAcres', 'newTAcres', {
     label: 'Tomato (Build)', min: 0, max: 10, step: 2, format: v => `${v} ac`,
     sublabel: () => `$${(state.newTAcres * BASE_REV_PER_AC * state.tomatoRevPct / 100 / 1e6).toFixed(1)}M base rev`
   });
   createSlider('sl-tomatoRevPct', 'tomatoRevPct', {
-    label: 'Tomato Rev % of K/J', min: 80, max: 140, step: 10, format: v => `${v}%`
+    label: 'Tomato Rev % of K/J', min: 90, max: 130, step: 10, format: v => `${v}%`
   });
   createSlider('sl-newLAcres', 'newLAcres', {
     label: 'Lettuce', min: 0, max: 2.5, step: 2.5, format: v => `${v} ac`,
