@@ -135,13 +135,6 @@
       <div id="sl-packhouseSF"></div>
       <div id="sl-packhouseCostPerSF"></div>
       <div id="sl-housingPeople"></div>
-      <div class="toggle-row">
-        <input type="checkbox" id="buyTomatoToggle" onchange="toggleTomatoBuy()">
-        <label for="buyTomatoToggle">Buy 6ac Tomato Facility</label>
-      </div>
-      <div id="tomatoBuySliders" style="display:none">
-        <div id="sl-tomatoPurchasePrice"></div>
-      </div>
     </div>
     <div class="panel">
       <div class="panel-title">Operating Expenses (% of Rev)</div>
@@ -157,10 +150,24 @@
       </table>
     </div>
     <div class="panel">
+      <div class="panel-title">Buy 6ac Tomato Facility</div>
+      <div class="toggle-row">
+        <input type="checkbox" id="buyTomatoToggle" onchange="toggleTomatoBuy()">
+        <label for="buyTomatoToggle">Enable</label>
+      </div>
+      <div id="tomatoBuySliders" style="display:none">
+        <div id="sl-tomatoPurchasePrice"></div>
+      </div>
+    </div>
+    <div class="panel">
       <div class="panel-title">Financing</div>
       <div id="sl-financingPct"></div>
       <div id="sl-interestRate"></div>
       <div id="sl-loanTermYears"></div>
+      <div class="toggle-row">
+        <input type="checkbox" id="ioToggle" onchange="toggleIO()">
+        <label for="ioToggle">Interest-only during build + 6mo</label>
+      </div>
     </div>
     <div class="panel">
       <div class="panel-title">Inflation</div>
@@ -192,6 +199,7 @@
     <div class="panel" id="roiPanel">
       <div class="panel-title">Return on Investment (Steady-State Annual)</div>
       <div class="roi-grid" id="roiGrid"></div>
+      <div id="roiDetail"></div>
     </div>
   </div>
 </div>
@@ -237,7 +245,7 @@ const state = {
   tPhase: 2, tStartQ: 20281, tBuildMonths: 12, tRampYears: 2,
   tbPhase: 2, tbStartQ: 20281, tbBuildMonths: 6, tbRampYears: 1,
   lPhase: 3, lStartQ: 20291, lBuildMonths: 18, lRampYears: 2,
-  financingPct: 80, interestRate: 7, loanTermYears: 7,
+  financingPct: 80, interestRate: 7, loanTermYears: 7, interestOnly: false,
   revInflation: 4, costInflation: 3,
 };
 
@@ -371,6 +379,11 @@ function toggleTomatoBuy() {
   recalc();
 }
 
+function toggleIO() {
+  state.interestOnly = document.getElementById('ioToggle').checked;
+  recalc();
+}
+
 // === BUILD ALL SLIDERS ===
 function buildSliders() {
   // New acres
@@ -476,6 +489,7 @@ function buildSliders() {
   // Phase grid & toggle
   document.getElementById('buyTomatoToggle').checked = state.buyTomatoFacility;
   document.getElementById('tomatoBuySliders').style.display = state.buyTomatoFacility ? 'block' : 'none';
+  document.getElementById('ioToggle').checked = state.interestOnly;
   buildPhaseGrid();
 }
 
@@ -533,7 +547,14 @@ let chart = null;
 
 function recalc() {
   const s = state;
+  // Active crops for table/chart (excludes TB)
   const activeCrops = CROP_DEFS.filter(c => {
+    if (c.isBuy) return false;
+    const acres = s[c.acresKey] || 0;
+    return acres > 0;
+  });
+  // All crops including TB for ROI panel
+  const allCrops = CROP_DEFS.filter(c => {
     if (c.isBuy && !s.buyTomatoFacility) return false;
     const acres = c.fixedAcres || s[c.acresKey] || 0;
     return acres > 0;
@@ -541,7 +562,7 @@ function recalc() {
 
   // Compute configs
   const configs = {};
-  for (const c of activeCrops) configs[c.key] = getCropConfig(c);
+  for (const c of allCrops) configs[c.key] = getCropConfig(c);
 
   // Shared CapEx
   const landCapex = 20 * s.landCostPerAc;
@@ -559,13 +580,17 @@ function recalc() {
   const totalCapex = totalCropCapex + sharedCapex;
   const equity = totalCapex * (1 - s.financingPct / 100);
 
-  // Per-crop debt: allocate shared capex proportionally, compute per-crop loan & annual payment
+  // Per-crop debt: allocate shared capex proportionally, compute per-crop loan & payments
   const cropDebtSvc = {};
   for (const c of activeCrops) {
     const share = totalCropCapex > 0 ? configs[c.key].capex / totalCropCapex : 0;
     const fullCapex = configs[c.key].capex + sharedCapex * share;
     const loan = fullCapex * s.financingPct / 100;
-    cropDebtSvc[c.key] = { annual: annualDebtSvc(loan, s.interestRate, s.loanTermYears), fullCapex };
+    const ioAnnual = loan * s.interestRate / 100; // interest-only payment
+    // P&I amortized over (term - 6 months)
+    const piTerm = Math.max(s.loanTermYears - 0.5, 1);
+    const piAnnual = annualDebtSvc(loan, s.interestRate, piTerm);
+    cropDebtSvc[c.key] = { loan, ioAnnual, piAnnual, fullCapex };
   }
 
   // Per-year data
@@ -607,10 +632,27 @@ function recalc() {
 
       // Debt service: starts at construction start, runs for loan term
       const startYear = Math.floor(cfg.startQ / 10);
+      const endQ = cfg.endQ;
+      const endYear = Math.floor(endQ / 10);
+      const endQtr = endQ % 10;
+      // IO period ends 6 months (2 quarters) after construction completion
+      let ioEndQ = endQtr + 2, ioEndYear = endYear;
+      while (ioEndQ > 4) { ioEndQ -= 4; ioEndYear++; }
+
       const debtYear = year - startYear + 1; // year 1 = construction start year
       let debt = 0;
       if (debtYear >= 1 && debtYear <= s.loanTermYears) {
-        debt = cropDebtSvc[c.key].annual;
+        const ds = cropDebtSvc[c.key];
+        if (s.interestOnly && year < ioEndYear) {
+          // Full IO year
+          debt = ds.ioAnnual;
+        } else if (s.interestOnly && year === ioEndYear) {
+          // Partial IO then P&I
+          const ioFrac = (ioEndQ - 1) / 4;
+          debt = ds.ioAnnual * ioFrac + ds.piAnnual * (1 - ioFrac);
+        } else {
+          debt = ds.piAnnual;
+        }
         // Partial first year if construction starts mid-year
         if (debtYear === 1) {
           const startQtr = cfg.startQ % 10;
@@ -650,7 +692,7 @@ function recalc() {
 
   updateChart(activeCrops, yearData, existKJ, existL);
   updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt);
-  updateROI(activeCrops, configs);
+  updateROI(allCrops, configs);
 }
 
 // === CHART ===
@@ -770,37 +812,141 @@ function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDe
 }
 
 // === ROI PANEL ===
-function updateROI(activeCrops, configs) {
+let lastROICrops = [], lastROIConfigs = {};
+
+function updateROI(crops, configs) {
+  lastROICrops = crops;
+  lastROIConfigs = configs;
   const grid = document.getElementById('roiGrid');
   const s = state;
   let html = '';
 
-  for (const c of activeCrops) {
+  for (const c of crops) {
     const cfg = configs[c.key];
     if (cfg.capex <= 0) continue;
-    const annualOpInc = cfg.baseRev - cfg.baseExp;
 
-    // Unlevered ROI: op income / direct capex
-    const unleveredROI = (annualOpInc / cfg.capex) * 100;
-
-    // Levered ROI (cash-on-cash): (op inc - debt svc) / equity
-    const cropLoan = cfg.capex * s.financingPct / 100;
-    const cropEquity = cfg.capex - cropLoan;
-    const cropDebt = annualDebtSvc(cropLoan, s.interestRate, s.loanTermYears);
-    const netInc = annualOpInc - cropDebt;
-    const leveredROI = cropEquity > 0 ? (netInc / cropEquity) * 100 : 0;
-
+    const roi = calcCropROI(cfg);
     const isTomatoCompare = c.key === 'T' || c.key === 'TB';
-    html += `<div class="roi-item${isTomatoCompare ? ' roi-highlight' : ''}">
+    html += `<div class="roi-item${isTomatoCompare ? ' roi-highlight' : ''}" style="cursor:pointer" onclick="showCropCF('${c.key}')">
       <div>
         <div class="roi-label">${c.label}</div>
-        <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.capex)} capex | ${fmtK(cropEquity)} equity</div>
+        <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.capex)} capex | ${fmtK(roi.equity)} equity</div>
       </div>
-      <div class="roi-value" style="color:${leveredROI >= 0 ? 'var(--green)' : 'var(--red)'}">${leveredROI.toFixed(1)}%</div>
+      <div class="roi-value" style="color:${roi.pct >= 0 ? 'var(--green)' : 'var(--red)'}">${roi.pct.toFixed(1)}%</div>
     </div>`;
   }
 
   grid.innerHTML = html;
+  // Clear detail table if crops changed
+  document.getElementById('roiDetail').innerHTML = '';
+}
+
+function calcCropROI(cfg) {
+  const s = state;
+  const cropLoan = cfg.capex * s.financingPct / 100;
+  const cropEquity = cfg.capex - cropLoan;
+  const piTerm = s.interestOnly ? Math.max(s.loanTermYears - 0.5, 1) : s.loanTermYears;
+  const piAnnual = annualDebtSvc(cropLoan, s.interestRate, piTerm);
+  const ioAnnual = cropLoan * s.interestRate / 100;
+  const annualOpInc = cfg.baseRev - cfg.baseExp;
+
+  // Steady-state ROI uses P&I payment (post-IO period)
+  const netInc = annualOpInc - piAnnual;
+  const pct = cropEquity > 0 ? (netInc / cropEquity) * 100 : 0;
+  return { pct, equity: cropEquity, loan: cropLoan, piAnnual, ioAnnual };
+}
+
+function showCropCF(key) {
+  const s = state;
+  const cDef = CROP_DEFS.find(c => c.key === key);
+  const cfg = lastROIConfigs[key];
+  if (!cfg) return;
+
+  const roi = calcCropROI(cfg);
+  const endQ = cfg.endQ;
+  const endYear = Math.floor(endQ / 10);
+  const endQtr = endQ % 10;
+  const startYear = Math.floor(cfg.startQ / 10);
+
+  // IO end: 6 months (2 quarters) after construction
+  let ioEndQ = endQtr + 2, ioEndYear = endYear;
+  while (ioEndQ > 4) { ioEndQ -= 4; ioEndYear++; }
+
+  function ramp(yr) {
+    const ry = cfg.rampYears;
+    if (ry === 0) return 1.0;
+    if (ry === 1) return yr === 1 ? 0.70 : 1.0;
+    if (ry === 2) return yr === 1 ? 0.50 : yr === 2 ? 0.85 : 1.0;
+    return yr === 1 ? 0.40 : yr === 2 ? 0.65 : yr === 3 ? 0.85 : 1.0;
+  }
+
+  const lastYear = Math.max(startYear + s.loanTermYears + 1, 2035);
+  let cumCF = 0;
+  let rows = '';
+
+  for (let year = startYear; year <= lastYear; year++) {
+    const n = year - 2026;
+    const revMult = Math.pow(1 + s.revInflation / 100, n);
+    const cstMult = Math.pow(1 + s.costInflation / 100, n);
+
+    let rev = 0, exp = 0, phase = '';
+    if (year < endYear) {
+      phase = 'Build';
+    } else if (year === endYear) {
+      const frac = (4 - endQtr + 1) / 4;
+      const r = ramp(1);
+      rev = cfg.baseRev * r * frac * revMult;
+      exp = cfg.baseExp * r * frac * cstMult;
+      phase = 'Yr1 (' + (ramp(1)*100).toFixed(0) + '%)';
+    } else {
+      const prodYr = year - endYear + 1;
+      const r = ramp(prodYr);
+      rev = cfg.baseRev * r * revMult;
+      exp = cfg.baseExp * r * cstMult;
+      phase = r < 1 ? 'Yr' + prodYr + ' (' + (r*100).toFixed(0) + '%)' : 'Full';
+    }
+    const opInc = rev - exp;
+
+    // Debt
+    const debtYear = year - startYear + 1;
+    let debt = 0;
+    if (debtYear >= 1 && debtYear <= s.loanTermYears) {
+      if (s.interestOnly && year < ioEndYear) {
+        debt = roi.ioAnnual;
+      } else if (s.interestOnly && year === ioEndYear) {
+        const ioFrac = (ioEndQ - 1) / 4;
+        debt = roi.ioAnnual * ioFrac + roi.piAnnual * (1 - ioFrac);
+      } else {
+        debt = roi.piAnnual;
+      }
+      if (debtYear === 1) {
+        const startQtr = cfg.startQ % 10;
+        debt *= (4 - startQtr + 1) / 4;
+      }
+    }
+
+    // Equity outlay in first construction year
+    let eqOut = 0;
+    if (year === startYear) eqOut = roi.equity;
+
+    const netCF = opInc - debt - eqOut;
+    cumCF += netCF;
+
+    const p = (v) => {
+      if (Math.abs(v) < 500) return '\u2014';
+      const m = Math.abs(v) / 1e6;
+      return (v < 0 ? '\u2212' : '') + m.toFixed(2);
+    };
+
+    rows += `<tr><td>${year}</td><td>${phase}</td><td>${p(rev)}</td><td>${p(-exp)}</td><td>${p(opInc)}</td><td>${p(-debt)}</td><td>${p(netCF)}</td><td>${p(cumCF)}</td></tr>`;
+  }
+
+  document.getElementById('roiDetail').innerHTML = `
+    <div style="margin-top:10px;font-size:9px;color:var(--accent);font-weight:700;letter-spacing:0.1em;text-transform:uppercase">${cDef.label} — Cashflow Detail ($M)</div>
+    <table class="fin-table" style="font-size:10px;margin-top:6px">
+      <thead><tr><th>Year</th><th>Phase</th><th>Rev</th><th>Exp</th><th>OpInc</th><th>Debt</th><th>NetCF</th><th>CumCF</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 // === SAVE / LOAD ===
