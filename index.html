@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Greenhouse Expansion Financial Model</title>
+<title>Greenhouse Expansion Planner</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
@@ -59,8 +59,6 @@
   .kpi-sub { font-size: 9px; color: var(--text-dim); margin-top: 4px; text-align: right; }
 
   .chart-panel { margin-bottom: 18px; }
-  .chart-legend { display: flex; gap: 16px; margin-top: 10px; margin-left: 40px; font-size: 10px; color: var(--text-muted); flex-wrap: wrap; }
-  .legend-box { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
 
   .fin-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'DM Mono', monospace; }
   .fin-table th { font-size: 14px; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 700; }
@@ -72,6 +70,28 @@
   .fin-table tr.subtotal-row td { color: var(--green); font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
   .fin-table .neg { color: var(--red); }
 
+  .phase-grid { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .phase-grid th { font-size: 8px; color: var(--text-muted); text-transform: uppercase; padding: 4px 2px; text-align: center; letter-spacing: 0.05em; }
+  .phase-grid th:first-child { text-align: left; }
+  .phase-grid td { padding: 3px 2px; }
+  .phase-grid td:first-child { font-size: 10px; color: var(--text-sub); font-weight: 700; padding-right: 4px; white-space: nowrap; }
+  .phase-grid select {
+    width: 100%; background: var(--panel-dark); color: var(--text-sub);
+    border: 1px solid var(--border); border-radius: 3px;
+    font-family: inherit; font-size: 9px; padding: 3px 1px;
+    cursor: pointer; text-align-last: center;
+  }
+
+  .toggle-row { display: flex; align-items: center; gap: 8px; padding: 10px 0 4px; }
+  .toggle-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+  .toggle-row label { font-size: 10px; color: var(--text-sub); cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .roi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .roi-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--panel-dark); border-radius: 4px; }
+  .roi-label { font-size: 10px; color: var(--text-muted); }
+  .roi-value { font-size: 14px; font-weight: 700; }
+  .roi-highlight { border: 1px solid var(--accent); }
+
   @media (max-width: 720px) {
     .layout { grid-template-columns: 1fr; }
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -82,11 +102,11 @@
 
 <div class="header">
   <div class="header-inner" style="display:flex;justify-content:space-between;align-items:baseline">
-    <div class="header-title">Greenhouse Expansion Financial Model</div>
+    <div class="header-title">Greenhouse Expansion Planner</div>
     <div style="display:flex;align-items:baseline;gap:14px">
       <button id="saveBtn" onclick="saveModel()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save model</button>
       <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">light</button>
-      <div id="versionLabel" style="font-size:10px;color:var(--text-dim)"></div>
+      <div id="versionLabel" style="font-size:10px;color:var(--text)"></div>
     </div>
   </div>
 </div>
@@ -94,43 +114,47 @@
 <div class="layout">
   <div id="inputs">
     <div class="panel">
-      <div class="panel-title">Existing Operations</div>
-      <div id="sl-currentDailyLbs"></div>
+      <div class="panel-title">New Greenhouse Acres</div>
+      <div id="sl-newKAcres"></div>
+      <div id="sl-newJAcres"></div>
+      <div id="sl-newEAcres"></div>
+      <div id="sl-newTAcres"></div>
+      <div id="sl-newLAcres"></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Phase 1 — New 60K SF GHs</div>
-      <div id="sl-p1NumGH"></div>
-      <div id="sl-p1PricePerLb"></div>
-      <div id="sl-p1Margin"></div>
-      <div id="sl-p1ConstructionCost"></div>
-      <div id="sl-p1PackhouseCost"></div>
-      <div id="sl-p1HousingCost"></div>
-      <div id="sl-p1CukeAutomation"></div>
-      <div id="sl-p1RefurbJTL"></div>
-      <div id="sl-p1RegainGH1"></div>
-      <div id="sl-p1StartQ"></div>
+      <div class="panel-title">Lettuce Revenue</div>
+      <div id="sl-lettuceLbs"></div>
+      <div id="sl-lettucePrice"></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Phase 2 — GH Expansion (8ac)</div>
-      <div id="sl-p2Cost"></div>
-      <div id="sl-p2Acres"></div>
-      <div id="sl-p2PricePerLb"></div>
-      <div id="sl-p2Margin"></div>
-      <div id="sl-p2StartQ"></div>
+      <div class="panel-title">Capital Costs</div>
+      <div id="sl-cucumberCostPerAc"></div>
+      <div id="sl-tomatoCostPerAc"></div>
+      <div id="sl-lettuceCostPerAc"></div>
+      <div id="sl-landCostPerAc"></div>
+      <div id="sl-packhouseSF"></div>
+      <div id="sl-packhouseCostPerSF"></div>
+      <div id="sl-housingPeople"></div>
+      <div class="toggle-row">
+        <input type="checkbox" id="buyTomatoToggle" onchange="toggleTomatoBuy()">
+        <label for="buyTomatoToggle">Buy 6ac Tomato Facility</label>
+      </div>
+      <div id="tomatoBuySliders" style="display:none">
+        <div id="sl-tomatoPurchasePrice"></div>
+      </div>
     </div>
     <div class="panel">
-      <div class="panel-title">Phase 3 — Lettuce (3ac)</div>
-      <div id="sl-p3Cost"></div>
-      <div id="sl-p3Revenue"></div>
-      <div id="sl-p3Profit"></div>
-      <div id="sl-p3StartQ"></div>
+      <div class="panel-title">Operating Expenses (% of Rev)</div>
+      <div id="sl-cukeExpPct"></div>
+      <div id="sl-tomatoExpPct"></div>
+      <div id="sl-lettuceExpPct"></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Phase 4 — Processing Facility</div>
-      <div id="sl-p4Cost"></div>
-      <div id="sl-p4Revenue"></div>
-      <div id="sl-p4Profit"></div>
-      <div id="sl-p4StartQ"></div>
+      <div class="panel-title">Crop Phasing</div>
+      <table class="phase-grid">
+        <thead><tr><th>Crop</th><th>Ph</th><th>Start</th><th>Build</th><th>Ramp</th></tr></thead>
+        <tbody id="phaseGrid"></tbody>
+      </table>
     </div>
     <div class="panel">
       <div class="panel-title">Financing</div>
@@ -139,9 +163,7 @@
       <div id="sl-loanTermYears"></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Timeline &amp; Escalation</div>
-      <div id="sl-constructionMonths"></div>
-      <div id="sl-rampYears"></div>
+      <div class="panel-title">Inflation</div>
       <div id="sl-revInflation"></div>
       <div id="sl-costInflation"></div>
     </div>
@@ -151,21 +173,14 @@
     <div class="kpi-grid" style="margin-bottom:18px">
       <div class="kpi"><div class="kpi-label">Total CapEx</div><div class="kpi-value" id="kpi-capex"></div><div class="kpi-sub" id="kpi-capex-sub"></div></div>
       <div class="kpi"><div class="kpi-label">Equity</div><div class="kpi-value" id="kpi-equity"></div><div class="kpi-sub" id="kpi-equity-sub"></div></div>
-      <div class="kpi"><div class="kpi-label">New Revenue</div><div class="kpi-value" id="kpi-revenue"></div><div class="kpi-sub" id="kpi-revenue-sub"></div></div>
-      <div class="kpi"><div class="kpi-label">New Op Inc</div><div class="kpi-value" id="kpi-opIncome"></div><div class="kpi-sub" id="kpi-opIncome-sub"></div></div>
-      <div class="kpi"><div class="kpi-label">New Debt Svc</div><div class="kpi-value" id="kpi-debtSvc"></div><div class="kpi-sub" id="kpi-debtSvc-sub"></div></div>
+      <div class="kpi"><div class="kpi-label">Steady Rev</div><div class="kpi-value" id="kpi-revenue"></div><div class="kpi-sub" id="kpi-revenue-sub"></div></div>
+      <div class="kpi"><div class="kpi-label">Steady Op Inc</div><div class="kpi-value" id="kpi-opIncome"></div><div class="kpi-sub" id="kpi-opIncome-sub"></div></div>
+      <div class="kpi"><div class="kpi-label">Debt Svc</div><div class="kpi-value" id="kpi-debtSvc"></div><div class="kpi-sub" id="kpi-debtSvc-sub"></div></div>
       <div class="kpi"><div class="kpi-label">Net CF (Steady)</div><div class="kpi-value" id="kpi-netCF"></div><div class="kpi-sub" id="kpi-netCF-sub"></div></div>
     </div>
 
     <div class="panel chart-panel">
       <div style="position:relative;height:255px"><canvas id="chart"></canvas></div>
-      <div class="chart-legend">
-        <span><span class="legend-box" style="background:#4a8acc"></span>Existing</span>
-        <span><span class="legend-box" style="background:#66bb6a"></span>Phase 1: 60K GH</span>
-        <span><span class="legend-box" style="background:#5aaa55"></span>Phase 2: 8ac GH</span>
-        <span><span class="legend-box" style="background:#cc8a4a"></span>Phase 3: Lettuce</span>
-        <span><span class="legend-box" style="background:#9a6acc"></span>Phase 4: Processing</span>
-      </div>
     </div>
 
     <div class="panel" id="tablePanel">
@@ -173,48 +188,53 @@
         <table class="fin-table" id="finTable"></table>
       </div>
     </div>
+
+    <div class="panel" id="roiPanel">
+      <div class="panel-title">Return on Investment (Steady-State Annual)</div>
+      <div class="roi-grid" id="roiGrid"></div>
+    </div>
   </div>
 </div>
 
 <script>
-const SQFT_PER_GH = 60000;
-const ACRES_PER_GH = SQFT_PER_GH / 43560;
-const CURRENT_ACRES = 12;
-const OPERATING_DAYS = 365;
+// === CONSTANTS ===
+const BASE_REV_PER_AC = 11500000 / 12; // ~$958K/ac from 12ac K+J in 2026
+const YEARS = [];
+for (let y = 2026; y <= 2035; y++) YEARS.push(y);
 
 const QUARTERS = [];
-for (let y = 2025; y <= 2032; y++)
+for (let y = 2026; y <= 2035; y++)
   for (let q = 1; q <= 4; q++)
     QUARTERS.push({ value: y * 10 + q, label: `Q${q}-${String(y).slice(2)}` });
 
+const CROP_DEFS = [
+  { key: 'K',  label: 'Keiki',    prefix: 'k',  color: '#5a9e55', acresKey: 'newKAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 1.0 },
+  { key: 'J',  label: 'Japanese', prefix: 'j',  color: '#66bb6a', acresKey: 'newJAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 1.0 },
+  { key: 'E',  label: 'English',  prefix: 'e',  color: '#4ac6c6', acresKey: 'newEAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 0.8 },
+  { key: 'T',  label: 'Tomato (Built)',  prefix: 't',  color: '#e07050', acresKey: 'newTAcres', expKey: 'tomatoExpPct', costKey: 'tomatoCostPerAc', revMult: 1.2 },
+  { key: 'TB', label: 'Tomato (Purchased)', prefix: 'tb', color: '#cc5535', fixedAcres: 6, expKey: 'tomatoExpPct', revMult: 1.2, isBuy: true },
+  { key: 'L',  label: 'Lettuce',  prefix: 'l',  color: '#cc8a4a', acresKey: 'newLAcres',  expKey: 'lettuceExpPct', costKey: 'lettuceCostPerAc', isLettuce: true },
+];
+
+// === STATE ===
 const state = {
-  currentDailyLbs: 10000,
-  // Phase 1: New 60K SF greenhouses + capital projects
-  p1NumGH: 3, p1PricePerLb: 4.00, p1Margin: 30,
-  p1ConstructionCost: 4500000, p1PackhouseCost: 1500000, p1HousingCost: 0,
-  p1CukeAutomation: 0, p1RefurbJTL: 0, p1RegainGH1: 0, p1StartQ: 20261,
-  // Phase 2: GH expansion — 8ac + 20ac land + packhouse
-  p2Cost: 2520000, p2Acres: 8, p2PricePerLb: 4.00, p2Margin: 30, p2StartQ: 20263,
-  // Phase 3: Lettuce 3ac
-  p3Cost: 8000000, p3Revenue: 7000000, p3Profit: 3000000, p3StartQ: 20273,
-  // Phase 4: Processing facility
-  p4Cost: 4000000, p4Revenue: 4000000, p4Profit: 1500000, p4StartQ: 20283,
-  // Global financing
+  newKAcres: 3, newJAcres: 3, newEAcres: 2, newTAcres: 2, newLAcres: 2,
+  lettuceLbs: 600000, lettucePrice: 7.00,
+  cucumberCostPerAc: 1000000, tomatoCostPerAc: 1500000, lettuceCostPerAc: 4500000,
+  landCostPerAc: 125000, packhouseSF: 30000, packhouseCostPerSF: 100, housingPeople: 25,
+  buyTomatoFacility: false, tomatoPurchasePrice: 8000000,
+  cukeExpPct: 70, tomatoExpPct: 70, lettuceExpPct: 70,
+  kPhase: 1, kStartQ: 20271, kBuildMonths: 12, kRampYears: 2,
+  jPhase: 1, jStartQ: 20271, jBuildMonths: 12, jRampYears: 2,
+  ePhase: 2, eStartQ: 20281, eBuildMonths: 12, eRampYears: 2,
+  tPhase: 2, tStartQ: 20281, tBuildMonths: 12, tRampYears: 2,
+  tbPhase: 2, tbStartQ: 20281, tbBuildMonths: 6, tbRampYears: 1,
+  lPhase: 3, lStartQ: 20291, lBuildMonths: 18, lRampYears: 2,
   financingPct: 80, interestRate: 7, loanTermYears: 7,
-  // Timeline
-  constructionMonths: 12, rampYears: 2, revInflation: 4, costInflation: 3
+  revInflation: 4, costInflation: 3,
 };
 
-// Existing business constants
-const EXISTING_REV_BASE = 14500000;
-const EXISTING_EXP_BASE = 9600000;
-const EXISTING_DEBT_HIGH = 1750000;
-const EXISTING_DEBT_LOW = 420000;
-const EXISTING_DEBT_CUTOFF = 2031;
-
-const PHASE_COLORS = { p1: '#66bb6a', p2: '#5aaa55', p3: '#cc8a4a', p4: '#9a6acc' };
-
-// Formatters
+// === FORMATTERS ===
 const fmt = (n) => {
   if (n == null || isNaN(n)) return "\u2014";
   const abs = Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -229,9 +249,8 @@ const fmtK = (n) => {
 };
 const fmtM = (n) => `${n < 0 ? '-' : ''}${(Math.abs(n) / 1e6).toFixed(2)}M`;
 
-function qLabel(qVal) {
-  return `Q${qVal % 10}-${String(Math.floor(qVal / 10)).slice(2)}`;
-}
+// === QUARTER UTILS ===
+function qLabel(qVal) { return `Q${qVal % 10}-${String(Math.floor(qVal / 10)).slice(2)}`; }
 
 function snapToQuarter(val) {
   let closest = QUARTERS[0].value, minDist = Math.abs(val - closest);
@@ -242,6 +261,29 @@ function snapToQuarter(val) {
   return closest;
 }
 
+function getEndQ(startQ, months) {
+  const sY = Math.floor(startQ / 10), sQ = startQ % 10;
+  let eQ = sQ + Math.ceil(months / 3), eY = sY;
+  while (eQ > 4) { eQ -= 4; eY++; }
+  return eY * 10 + eQ;
+}
+
+function rampFactor(prodYr, rampYears) {
+  if (rampYears <= 1) return prodYr === 1 ? 0.70 : 1.0;
+  if (rampYears === 2) return prodYr === 1 ? 0.50 : prodYr === 2 ? 0.85 : 1.0;
+  return prodYr === 1 ? 0.40 : prodYr === 2 ? 0.65 : prodYr === 3 ? 0.85 : 1.0;
+}
+
+function annualDebtSvc(principal, rate, termYears) {
+  if (principal <= 0) return 0;
+  const mRate = rate / 100 / 12, nPmt = termYears * 12;
+  const monthly = mRate > 0
+    ? principal * (mRate * Math.pow(1 + mRate, nPmt)) / (Math.pow(1 + mRate, nPmt) - 1)
+    : principal / nPmt;
+  return monthly * 12;
+}
+
+// === SLIDER BUILDER ===
 function sliderBg(pct) {
   const s = getComputedStyle(document.documentElement);
   const fill = s.getPropertyValue('--slider-fill').trim();
@@ -254,6 +296,7 @@ const sliderOpts = {};
 function createSlider(containerId, key, opts) {
   sliderOpts[key] = opts;
   const container = document.getElementById(containerId);
+  if (!container) return;
   const fill = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
   container.innerHTML = `
     <div class="slider-group">
@@ -281,355 +324,349 @@ function createSlider(containerId, key, opts) {
   });
 }
 
-function rampFactor(prodYr, rampYears) {
-  if (rampYears <= 1) return prodYr === 1 ? 0.70 : 1.0;
-  if (rampYears === 2) return prodYr === 1 ? 0.50 : prodYr === 2 ? 0.85 : 1.0;
-  return prodYr === 1 ? 0.40 : prodYr === 2 ? 0.65 : prodYr === 3 ? 0.85 : 1.0;
+// === PHASE GRID BUILDER ===
+function buildPhaseGrid() {
+  const grid = document.getElementById('phaseGrid');
+  const crops = CROP_DEFS.filter(c => c.key !== 'TB' || state.buyTomatoFacility);
+
+  const buildOpts = [6, 9, 12, 18, 24].map(m => `<option value="${m}">${m}mo</option>`).join('');
+  const rampOpts = [1, 2, 3].map(y => `<option value="${y}">${y}yr</option>`).join('');
+  const phaseOpts = [1, 2, 3, 4].map(p => `<option value="${p}">${p}</option>`).join('');
+  const qOpts = QUARTERS.map(q => `<option value="${q.value}">${q.label}</option>`).join('');
+
+  grid.innerHTML = crops.map(c => {
+    const p = c.prefix;
+    return `<tr>
+      <td>${c.key === 'TB' ? 'T\u2605' : c.key}</td>
+      <td><select data-key="${p}Phase">${phaseOpts}</select></td>
+      <td><select data-key="${p}StartQ">${qOpts}</select></td>
+      <td><select data-key="${p}BuildMonths">${buildOpts}</select></td>
+      <td><select data-key="${p}RampYears">${rampOpts}</select></td>
+    </tr>`;
+  }).join('');
+
+  // Set values and bind events
+  grid.querySelectorAll('select').forEach(sel => {
+    const key = sel.dataset.key;
+    sel.value = state[key];
+    sel.addEventListener('change', () => {
+      state[key] = Number(sel.value);
+      recalc();
+    });
+  });
 }
 
-function getEndQ(startQ, months) {
-  const sY = Math.floor(startQ / 10), sQ = startQ % 10;
-  let eQ = sQ + Math.ceil(months / 3), eY = sY;
-  while (eQ > 4) { eQ -= 4; eY++; }
-  return eY * 10 + eQ;
+function toggleTomatoBuy() {
+  state.buyTomatoFacility = document.getElementById('buyTomatoToggle').checked;
+  document.getElementById('tomatoBuySliders').style.display = state.buyTomatoFacility ? 'block' : 'none';
+  buildPhaseGrid();
+  recalc();
 }
 
-function annualDebtSvc(principal, rate, termYears) {
-  if (principal <= 0) return 0;
-  const mRate = rate / 100 / 12, nPmt = termYears * 12;
-  const monthly = mRate > 0
-    ? principal * (mRate * Math.pow(1 + mRate, nPmt)) / (Math.pow(1 + mRate, nPmt) - 1)
-    : principal / nPmt;
-  return monthly * 12;
-}
-
+// === BUILD ALL SLIDERS ===
 function buildSliders() {
-  const qMin = QUARTERS[0].value, qMax = QUARTERS[QUARTERS.length - 1].value;
-  const qOpts = (key) => ({
-    label: 'Start', min: qMin, max: qMax, step: 1,
-    format: v => qLabel(v), snap: snapToQuarter,
-    sublabel: () => `complete ${qLabel(getEndQ(state[key], state.constructionMonths))}`
+  // New acres
+  createSlider('sl-newKAcres', 'newKAcres', {
+    label: 'Keiki', min: 0, max: 10, step: 1, format: v => `${v} ac`,
+    sublabel: () => `$${(state.newKAcres * BASE_REV_PER_AC / 1e6).toFixed(1)}M base rev`
+  });
+  createSlider('sl-newJAcres', 'newJAcres', {
+    label: 'Japanese', min: 0, max: 10, step: 1, format: v => `${v} ac`,
+    sublabel: () => `$${(state.newJAcres * BASE_REV_PER_AC / 1e6).toFixed(1)}M base rev`
+  });
+  createSlider('sl-newEAcres', 'newEAcres', {
+    label: 'English', min: 0, max: 10, step: 1, format: v => `${v} ac`,
+    sublabel: () => `$${(state.newEAcres * BASE_REV_PER_AC * 0.8 / 1e6).toFixed(1)}M base rev (80% of K/J)`
+  });
+  createSlider('sl-newTAcres', 'newTAcres', {
+    label: 'Tomato (Build)', min: 0, max: 10, step: 1, format: v => `${v} ac`,
+    sublabel: () => `$${(state.newTAcres * BASE_REV_PER_AC * 1.2 / 1e6).toFixed(1)}M base rev (120% of K/J)`
+  });
+  createSlider('sl-newLAcres', 'newLAcres', {
+    label: 'Lettuce', min: 0, max: 5, step: 0.5, format: v => `${v} ac`,
+    sublabel: () => `CapEx: $${(state.newLAcres * state.lettuceCostPerAc / 1e6).toFixed(1)}M`
   });
 
-  // Existing
-  createSlider('sl-currentDailyLbs', 'currentDailyLbs', {
-    label: 'Current Production', min: 6000, max: 15000, step: 500,
-    format: v => `${v.toLocaleString()} lb/day`
+  // Lettuce revenue
+  createSlider('sl-lettuceLbs', 'lettuceLbs', {
+    label: 'Lbs Sold / Year', min: 400000, max: 800000, step: 25000,
+    format: v => `${(v / 1e3).toFixed(0)}K lb`
+  });
+  createSlider('sl-lettucePrice', 'lettucePrice', {
+    label: 'Price per lb', min: 6, max: 8, step: 0.25,
+    format: v => `$${v.toFixed(2)}`,
+    sublabel: () => `$${(state.lettuceLbs * state.lettucePrice / 1e6).toFixed(1)}M base rev`
   });
 
-  // Phase 1
-  createSlider('sl-p1NumGH', 'p1NumGH', {
-    label: 'New 60K SF Greenhouses', min: 0, max: 4, step: 1,
-    format: v => `${v} GH`,
-    sublabel: () => `${(state.p1NumGH * ACRES_PER_GH).toFixed(1)} acres`
-  });
-  createSlider('sl-p1PricePerLb', 'p1PricePerLb', {
-    label: 'Price per lb', min: 3.00, max: 6.00, step: 0.05,
-    format: v => `$${v.toFixed(2)}`
-  });
-  createSlider('sl-p1Margin', 'p1Margin', {
-    label: 'Operating Margin', min: 15, max: 55, step: 1,
-    format: v => `${v}%`
-  });
-  createSlider('sl-p1ConstructionCost', 'p1ConstructionCost', {
-    label: 'Greenhouse Build', min: 3000000, max: 8000000, step: 250000,
+  // Capital costs
+  createSlider('sl-cucumberCostPerAc', 'cucumberCostPerAc', {
+    label: 'Cucumber GH / Acre', min: 600000, max: 1500000, step: 50000,
     format: v => fmtM(v)
   });
-  createSlider('sl-p1PackhouseCost', 'p1PackhouseCost', {
-    label: 'Packhouse', min: 0, max: 3000000, step: 250000,
-    format: v => v === 0 ? 'None' : fmtM(v)
+  createSlider('sl-tomatoCostPerAc', 'tomatoCostPerAc', {
+    label: 'Tomato GH / Acre', min: 1000000, max: 2000000, step: 50000,
+    format: v => fmtM(v)
   });
-  createSlider('sl-p1HousingCost', 'p1HousingCost', {
-    label: 'Housing', min: 0, max: 2000000, step: 250000,
-    format: v => v === 0 ? 'None' : fmtM(v)
+  createSlider('sl-lettuceCostPerAc', 'lettuceCostPerAc', {
+    label: 'Lettuce GH / Acre', min: 4000000, max: 5000000, step: 100000,
+    format: v => fmtM(v)
   });
-  createSlider('sl-p1CukeAutomation', 'p1CukeAutomation', {
-    label: 'Cuke Automation', min: 0, max: 1000000, step: 50000,
-    format: v => v === 0 ? 'None' : fmtM(v)
+  createSlider('sl-landCostPerAc', 'landCostPerAc', {
+    label: 'Land (20 acres)', min: 100000, max: 150000, step: 5000,
+    format: v => `$${(v / 1e3).toFixed(0)}K/ac`,
+    sublabel: () => `Total: $${(20 * state.landCostPerAc / 1e6).toFixed(1)}M`
   });
-  createSlider('sl-p1RefurbJTL', 'p1RefurbJTL', {
-    label: 'Refurb JTL', min: 0, max: 1000000, step: 50000,
-    format: v => v === 0 ? 'None' : fmtM(v)
+  createSlider('sl-packhouseSF', 'packhouseSF', {
+    label: 'Packhouse Size', min: 20000, max: 40000, step: 1000,
+    format: v => `${(v / 1e3).toFixed(0)}K SF`
   });
-  createSlider('sl-p1RegainGH1', 'p1RegainGH1', {
-    label: 'Regain GH1 Grow', min: 0, max: 100000, step: 10000,
-    format: v => v === 0 ? 'None' : `${(v / 1e3).toFixed(0)}K`
+  createSlider('sl-packhouseCostPerSF', 'packhouseCostPerSF', {
+    label: 'Packhouse $/SF', min: 50, max: 150, step: 5,
+    format: v => `$${v}/sf`,
+    sublabel: () => `Total: $${(state.packhouseSF * state.packhouseCostPerSF / 1e6).toFixed(1)}M`
   });
-  createSlider('sl-p1StartQ', 'p1StartQ', qOpts('p1StartQ'));
+  createSlider('sl-housingPeople', 'housingPeople', {
+    label: 'Housing (new people)', min: 10, max: 50, step: 1,
+    format: v => `${v} people`,
+    sublabel: () => `$50K/person \u2022 Total: $${(state.housingPeople * 50000 / 1e6).toFixed(1)}M`
+  });
+  createSlider('sl-tomatoPurchasePrice', 'tomatoPurchasePrice', {
+    label: 'Purchase Price (6ac)', min: 3000000, max: 15000000, step: 250000,
+    format: v => fmtM(v)
+  });
 
-  // Phase 2
-  createSlider('sl-p2Cost', 'p2Cost', {
-    label: 'Total Cost', min: 1000000, max: 6000000, step: 100000,
-    format: v => fmtM(v), sublabel: () => 'incl. land + packhouse'
+  // Operating expenses
+  createSlider('sl-cukeExpPct', 'cukeExpPct', {
+    label: 'Cucumber Expenses', min: 60, max: 80, step: 1, format: v => `${v}%`
   });
-  createSlider('sl-p2Acres', 'p2Acres', {
-    label: 'New GH Acres', min: 2, max: 16, step: 1,
-    format: v => `${v} ac`
+  createSlider('sl-tomatoExpPct', 'tomatoExpPct', {
+    label: 'Tomato Expenses', min: 60, max: 80, step: 1, format: v => `${v}%`
   });
-  createSlider('sl-p2PricePerLb', 'p2PricePerLb', {
-    label: 'Price per lb', min: 3.00, max: 6.00, step: 0.05,
-    format: v => `$${v.toFixed(2)}`
+  createSlider('sl-lettuceExpPct', 'lettuceExpPct', {
+    label: 'Lettuce Expenses', min: 60, max: 80, step: 1, format: v => `${v}%`
   });
-  createSlider('sl-p2Margin', 'p2Margin', {
-    label: 'Operating Margin', min: 15, max: 55, step: 1,
-    format: v => `${v}%`
-  });
-  createSlider('sl-p2StartQ', 'p2StartQ', qOpts('p2StartQ'));
-
-  // Phase 3
-  createSlider('sl-p3Cost', 'p3Cost', {
-    label: 'Total Cost', min: 4000000, max: 14000000, step: 500000,
-    format: v => fmtM(v)
-  });
-  createSlider('sl-p3Revenue', 'p3Revenue', {
-    label: 'Annual Revenue', min: 3000000, max: 12000000, step: 500000,
-    format: v => fmtM(v)
-  });
-  createSlider('sl-p3Profit', 'p3Profit', {
-    label: 'Annual Profit', min: 1000000, max: 6000000, step: 250000,
-    format: v => fmtM(v)
-  });
-  createSlider('sl-p3StartQ', 'p3StartQ', qOpts('p3StartQ'));
-
-  // Phase 4
-  createSlider('sl-p4Cost', 'p4Cost', {
-    label: 'Total Cost', min: 1000000, max: 8000000, step: 250000,
-    format: v => fmtM(v)
-  });
-  createSlider('sl-p4Revenue', 'p4Revenue', {
-    label: 'Annual Revenue', min: 1000000, max: 8000000, step: 250000,
-    format: v => fmtM(v)
-  });
-  createSlider('sl-p4Profit', 'p4Profit', {
-    label: 'Annual Profit', min: 500000, max: 4000000, step: 250000,
-    format: v => fmtM(v)
-  });
-  createSlider('sl-p4StartQ', 'p4StartQ', qOpts('p4StartQ'));
 
   // Financing
   createSlider('sl-financingPct', 'financingPct', {
-    label: 'Loan-to-Cost', min: 50, max: 90, step: 5,
-    format: v => `${v}%`
+    label: 'Loan-to-Cost', min: 50, max: 90, step: 5, format: v => `${v}%`
   });
   createSlider('sl-interestRate', 'interestRate', {
-    label: 'Interest Rate', min: 5, max: 9, step: 0.25,
-    format: v => `${v.toFixed(2)}%`
+    label: 'Interest Rate', min: 5, max: 9, step: 0.25, format: v => `${v.toFixed(2)}%`
   });
   createSlider('sl-loanTermYears', 'loanTermYears', {
-    label: 'Loan Term', min: 5, max: 25, step: 1,
-    format: v => `${v} yr`
+    label: 'Loan Term', min: 5, max: 25, step: 1, format: v => `${v} yr`
   });
 
-  // Timeline
-  createSlider('sl-constructionMonths', 'constructionMonths', {
-    label: 'Build Duration (each)', min: 6, max: 24, step: 3,
-    format: v => `${v} mo`
-  });
-  createSlider('sl-rampYears', 'rampYears', {
-    label: 'Production Ramp', min: 1, max: 3, step: 1,
-    format: v => `${v} yr`,
-    sublabel: () => {
-      const ry = state.rampYears;
-      if (ry === 1) return 'Yr1: 70% \u00b7 Yr2+: 100%';
-      if (ry === 2) return 'Yr1: 50% \u00b7 Yr2: 85% \u00b7 Yr3+: 100%';
-      return 'Yr1: 40% \u00b7 Yr2: 65% \u00b7 Yr3: 85% \u00b7 Yr4+: 100%';
-    }
-  });
+  // Inflation
   createSlider('sl-revInflation', 'revInflation', {
-    label: 'Revenue Escalation', min: 0, max: 8, step: 0.5,
-    format: v => `${v.toFixed(1)}%/yr`
+    label: 'Revenue Escalation', min: 0, max: 8, step: 0.5, format: v => `${v.toFixed(1)}%/yr`
   });
   createSlider('sl-costInflation', 'costInflation', {
-    label: 'Cost Escalation', min: 0, max: 8, step: 0.5,
-    format: v => `${v.toFixed(1)}%/yr`
+    label: 'Cost Escalation', min: 0, max: 8, step: 0.5, format: v => `${v.toFixed(1)}%/yr`
   });
+
+  // Phase grid & toggle
+  document.getElementById('buyTomatoToggle').checked = state.buyTomatoFacility;
+  document.getElementById('tomatoBuySliders').style.display = state.buyTomatoFacility ? 'block' : 'none';
+  buildPhaseGrid();
 }
 
-// Compute per-phase steady-state financials
-function phaseFinancials(phaseKey) {
-  const s = state;
-  let baseRev, baseExp, cost;
-
-  if (phaseKey === 'p1') {
-    const yieldPerAcreDay = s.currentDailyLbs / CURRENT_ACRES;
-    const newAcres = s.p1NumGH * ACRES_PER_GH;
-    const dailyProd = newAcres * yieldPerAcreDay;
-    baseRev = dailyProd * OPERATING_DAYS * s.p1PricePerLb;
-    baseExp = baseRev * (1 - s.p1Margin / 100);
-    cost = s.p1ConstructionCost + s.p1PackhouseCost + s.p1HousingCost + s.p1CukeAutomation + s.p1RefurbJTL + s.p1RegainGH1;
-  } else if (phaseKey === 'p2') {
-    const yieldPerAcreDay = s.currentDailyLbs / CURRENT_ACRES;
-    const dailyProd = s.p2Acres * yieldPerAcreDay;
-    baseRev = dailyProd * OPERATING_DAYS * s.p2PricePerLb;
-    baseExp = baseRev * (1 - s.p2Margin / 100);
-    cost = s.p2Cost;
-  } else if (phaseKey === 'p3') {
-    baseRev = s.p3Revenue;
-    baseExp = s.p3Revenue - s.p3Profit;
-    cost = s.p3Cost;
+// === CROP HELPERS ===
+function getCropConfig(c) {
+  const p = c.prefix;
+  const acres = c.fixedAcres || state[c.acresKey] || 0;
+  let baseRev;
+  if (c.isLettuce) {
+    baseRev = state.lettuceLbs * state.lettucePrice;
   } else {
-    baseRev = s.p4Revenue;
-    baseExp = s.p4Revenue - s.p4Profit;
-    cost = s.p4Cost;
+    baseRev = acres * BASE_REV_PER_AC * c.revMult;
+  }
+  const expPct = state[c.expKey] / 100;
+  const baseExp = baseRev * expPct;
+
+  let capex;
+  if (c.isBuy) {
+    capex = state.tomatoPurchasePrice;
+  } else {
+    capex = acres * state[c.costKey];
   }
 
-  const startQ = s[`${phaseKey}StartQ`];
-  const endQ = getEndQ(startQ, s.constructionMonths);
-  const prodOpenYear = Math.floor(endQ / 10);
-  const firstYearProdFrac = (4 - (endQ % 10)) / 4;
-  const startYear = Math.floor(startQ / 10);
+  const startQ = state[`${p}StartQ`];
+  const buildMonths = state[`${p}BuildMonths`];
+  const rampYears = state[`${p}RampYears`];
+  const endQ = getEndQ(startQ, buildMonths);
 
-  const loan = cost * s.financingPct / 100;
-  const equity = cost - loan;
-  const debt = annualDebtSvc(loan, s.interestRate, s.loanTermYears);
-
-  return { baseRev, baseExp, cost, loan, equity, debt, startYear, prodOpenYear, firstYearProdFrac };
+  return { acres, baseRev, baseExp, expPct, capex, startQ, buildMonths, rampYears, endQ };
 }
 
+function cropYearRevExp(cfg, year) {
+  const endYear = Math.floor(cfg.endQ / 10);
+  const endQtr = cfg.endQ % 10;
+
+  if (year < endYear) return { rev: 0, exp: 0 };
+
+  let frac = 1, prodYr;
+  if (year === endYear) {
+    frac = (4 - endQtr + 1) / 4;
+    prodYr = 1;
+  } else {
+    prodYr = year - endYear + 1;
+  }
+
+  const ramp = rampFactor(prodYr, cfg.rampYears);
+  const n = year - 2026;
+  const rev = cfg.baseRev * ramp * frac * Math.pow(1 + state.revInflation / 100, n);
+  const exp = cfg.baseExp * ramp * frac * Math.pow(1 + state.costInflation / 100, n);
+  return { rev, exp };
+}
+
+// === MAIN RECALC ===
 let chart = null;
-const CHART_START = 2026, CHART_END = 2037;
-const YEARS = Array.from({ length: CHART_END - CHART_START + 1 }, (_, i) => CHART_START + i);
 
 function recalc() {
   const s = state;
-  const phases = ['p1', 'p2', 'p3', 'p4'];
-  const pf = {};
-  for (const p of phases) pf[p] = phaseFinancials(p);
+  const activeCrops = CROP_DEFS.filter(c => {
+    if (c.isBuy && !s.buyTomatoFacility) return false;
+    const acres = c.fixedAcres || s[c.acresKey] || 0;
+    return acres > 0;
+  });
 
-  // KPIs — steady-state (all phases at full capacity)
-  const totalCapex = phases.reduce((sum, p) => sum + pf[p].cost, 0);
-  const totalEquity = phases.reduce((sum, p) => sum + pf[p].equity, 0);
-  const totalNewRev = phases.reduce((sum, p) => sum + pf[p].baseRev, 0);
-  const totalNewOpInc = phases.reduce((sum, p) => sum + pf[p].baseRev - pf[p].baseExp, 0);
-  const totalNewDebt = phases.reduce((sum, p) => sum + pf[p].debt, 0);
-  const totalNewNetCF = totalNewOpInc - totalNewDebt;
+  // Compute configs
+  const configs = {};
+  for (const c of activeCrops) configs[c.key] = getCropConfig(c);
 
-  document.getElementById('kpi-capex').textContent = fmt(totalCapex);
-  document.getElementById('kpi-capex-sub').textContent = 'all phases';
-  document.getElementById('kpi-equity').textContent = fmt(totalEquity);
-  document.getElementById('kpi-equity-sub').textContent = `${100 - s.financingPct}% of cost`;
-  document.getElementById('kpi-revenue').textContent = fmt(totalNewRev);
-  document.getElementById('kpi-revenue-sub').textContent = 'at full capacity';
-  document.getElementById('kpi-opIncome').textContent = fmt(totalNewOpInc);
-  document.getElementById('kpi-opIncome-sub').textContent = 'all phases';
-  document.getElementById('kpi-debtSvc').textContent = fmt(totalNewDebt);
-  document.getElementById('kpi-debtSvc-sub').textContent = `${fmt(Math.round(totalNewDebt / 12))}/mo`;
-  document.getElementById('kpi-netCF').textContent = fmt(totalNewNetCF);
-  document.getElementById('kpi-netCF-sub').textContent = 'excl. existing';
+  // Shared CapEx
+  const landCapex = 20 * s.landCostPerAc;
+  const packhouseCapex = s.packhouseSF * s.packhouseCostPerSF;
+  const housingCapex = s.housingPeople * 50000;
+  const sharedCapex = landCapex + packhouseCapex + housingCapex;
+
+  // Per-crop CapEx
+  const cropCapex = {};
+  let totalCropCapex = 0;
+  for (const c of activeCrops) {
+    cropCapex[c.key] = configs[c.key].capex;
+    totalCropCapex += configs[c.key].capex;
+  }
+  const totalCapex = totalCropCapex + sharedCapex;
+
+  // Financing
+  const loan = totalCapex * s.financingPct / 100;
+  const equity = totalCapex - loan;
+  const totalDebtSvc = annualDebtSvc(loan, s.interestRate, s.loanTermYears);
 
   // Per-year data
-  const existCFs = [], phaseCFs = { p1: [], p2: [], p3: [], p4: [] };
-  const labels = [];
-  // Detailed arrays for table
-  const detail = {};
-  for (const p of phases) detail[p] = { rev: [], exp: [], debt: [], equity: [], netCF: [] };
-  const existDetail = { rev: [], exp: [], debt: [] };
+  const yearData = {}; // key -> { rev: [], exp: [] }
+  for (const c of activeCrops) yearData[c.key] = { rev: [], exp: [] };
+  const totalRev = [], totalExp = [];
 
   for (const year of YEARS) {
-    const yrIdx = year - CHART_START;
-    labels.push(`'${String(year).slice(2)}`);
-
-    // Existing business
-    const eRev = EXISTING_REV_BASE * Math.pow(1 + s.revInflation / 100, yrIdx);
-    const eExp = EXISTING_EXP_BASE * Math.pow(1 + s.costInflation / 100, yrIdx);
-    const eDebt = year <= EXISTING_DEBT_CUTOFF ? EXISTING_DEBT_HIGH : EXISTING_DEBT_LOW;
-    existCFs.push(eRev - eExp - eDebt);
-    existDetail.rev.push(eRev);
-    existDetail.exp.push(eExp);
-    existDetail.debt.push(eDebt);
-
-    // Each expansion phase
-    for (const p of phases) {
-      const f = pf[p];
-      const prodYr = year - f.prodOpenYear;
-      let rev = 0, exp = 0, debt = 0, eq = 0;
-
-      if (year >= f.startYear && year < f.prodOpenYear) {
-        // Construction period — equity outlay spread over construction years
-        const cYears = f.prodOpenYear - f.startYear;
-        if (cYears > 0) eq = f.equity / cYears;
-      } else if (prodYr >= 0) {
-        let r = rampFactor(prodYr + 1, s.rampYears);
-        if (prodYr === 0 && f.firstYearProdFrac < 1) r *= f.firstYearProdFrac;
-        const revMult = Math.pow(1 + s.revInflation / 100, prodYr);
-        const cstMult = Math.pow(1 + s.costInflation / 100, prodYr);
-        rev = f.baseRev * r * revMult;
-        exp = f.baseExp * r * cstMult;
-        const loanYr = prodYr + 1;
-        debt = loanYr <= s.loanTermYears ? f.debt : 0;
-        if (prodYr === 0 && f.firstYearProdFrac < 1) debt *= f.firstYearProdFrac;
-      }
-
-      const netCF = rev - exp - debt - eq;
-      phaseCFs[p].push(netCF);
-      detail[p].rev.push(rev);
-      detail[p].exp.push(exp);
-      detail[p].debt.push(debt);
-      detail[p].equity.push(eq);
-      detail[p].netCF.push(netCF);
+    let yRev = 0, yExp = 0;
+    for (const c of activeCrops) {
+      const { rev, exp } = cropYearRevExp(configs[c.key], year);
+      yearData[c.key].rev.push(rev);
+      yearData[c.key].exp.push(exp);
+      yRev += rev;
+      yExp += exp;
     }
+    totalRev.push(yRev);
+    totalExp.push(yExp);
   }
 
-  updateChart(labels, existCFs, phaseCFs);
-  updateTable(existDetail, detail, phases);
+  // Steady-state values (last year)
+  const lastIdx = YEARS.length - 1;
+  const steadyRev = totalRev[lastIdx];
+  const steadyExp = totalExp[lastIdx];
+  const steadyOpInc = steadyRev - steadyExp;
+  const steadyNetCF = steadyOpInc - totalDebtSvc;
+
+  // KPIs
+  document.getElementById('kpi-capex').textContent = fmtK(totalCapex);
+  document.getElementById('kpi-capex-sub').textContent = `crop: ${fmtK(totalCropCapex)} | infra: ${fmtK(sharedCapex)}`;
+  document.getElementById('kpi-equity').textContent = fmtK(equity);
+  document.getElementById('kpi-equity-sub').textContent = `${100 - s.financingPct}% of ${fmtK(totalCapex)}`;
+  document.getElementById('kpi-revenue').textContent = fmtK(steadyRev);
+  document.getElementById('kpi-revenue-sub').textContent = `year ${YEARS[lastIdx]}`;
+  document.getElementById('kpi-opIncome').textContent = fmtK(steadyOpInc);
+  document.getElementById('kpi-opIncome-sub').textContent = `${(steadyRev > 0 ? (steadyOpInc / steadyRev * 100).toFixed(1) : 0)}% margin`;
+  document.getElementById('kpi-debtSvc').textContent = fmtK(totalDebtSvc);
+  document.getElementById('kpi-debtSvc-sub').textContent = `${fmtK(Math.round(totalDebtSvc / 12))}/mo`;
+  document.getElementById('kpi-netCF').textContent = fmtK(steadyNetCF);
+  document.getElementById('kpi-netCF-sub').textContent = 'op inc \u2212 debt svc';
+
+  updateChart(activeCrops, yearData);
+  updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebtSvc, sharedCapex);
+  updateROI(activeCrops, configs, sharedCapex, totalCropCapex);
 }
 
-function updateChart(labels, existCFs, phaseCFs) {
+// === CHART ===
+function updateChart(activeCrops, yearData) {
   const ctx = document.getElementById('chart').getContext('2d');
   const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-tick').trim();
+  const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim();
+  const labels = YEARS.map(y => `'${String(y).slice(2)}`);
+
+  const datasets = activeCrops.map(c => ({
+    label: c.label,
+    data: yearData[c.key].rev,
+    backgroundColor: c.color,
+    borderColor: c.color,
+    borderRadius: 2,
+  }));
 
   if (chart) {
     chart.data.labels = labels;
-    chart.data.datasets[0].data = existCFs;
-    chart.data.datasets[1].data = phaseCFs.p1;
-    chart.data.datasets[2].data = phaseCFs.p2;
-    chart.data.datasets[3].data = phaseCFs.p3;
-    chart.data.datasets[4].data = phaseCFs.p4;
+    chart.data.datasets = datasets;
+    chart.options.scales.x.ticks.color = tickColor;
+    chart.options.scales.y.ticks.color = tickColor;
+    chart.options.scales.y.grid.color = gridColor;
     chart.update();
     return;
   }
 
   chart = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Existing', data: existCFs, backgroundColor: '#4a8acc', borderRadius: 2 },
-        { label: 'Phase 1: 60K GH', data: phaseCFs.p1, backgroundColor: PHASE_COLORS.p1, borderRadius: 2 },
-        { label: 'Phase 2: 8ac GH', data: phaseCFs.p2, backgroundColor: PHASE_COLORS.p2, borderRadius: 2 },
-        { label: 'Phase 3: Lettuce', data: phaseCFs.p3, backgroundColor: PHASE_COLORS.p3, borderRadius: 2 },
-        { label: 'Phase 4: Processing', data: phaseCFs.p4, backgroundColor: PHASE_COLORS.p4, borderRadius: 2 }
-      ]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: false },
+        legend: {
+          labels: {
+            usePointStyle: true, pointStyle: 'circle',
+            font: { family: 'DM Mono, monospace', size: 10 },
+            color: tickColor,
+            generateLabels: (ch) => {
+              const orig = Chart.defaults.plugins.legend.labels.generateLabels(ch);
+              orig.forEach(l => { if (l.hidden) l.fontColor = 'rgba(122,170,122,0.3)'; });
+              return orig;
+            }
+          }
+        },
         tooltip: {
           backgroundColor: '#0a150a', borderColor: '#3a5a3a', borderWidth: 1,
-          titleFont: { family: 'monospace', size: 10 },
-          bodyFont: { family: 'monospace', size: 11 },
+          titleFont: { family: 'monospace', size: 10 }, bodyFont: { family: 'monospace', size: 11 },
           titleColor: '#5a9e55',
           callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtK(ctx.parsed.y)}` }
         }
       },
       scales: {
-        x: { stacked: true, ticks: { font: { family: 'monospace', size: 14 }, color: tickColor }, grid: { display: false } },
-        y: { stacked: true, position: 'left', ticks: { font: { family: 'monospace', size: 14 }, color: tickColor, callback: v => fmtK(v) }, grid: { display: false } }
+        x: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor }, grid: { display: false } },
+        y: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor, callback: v => fmtK(v) }, grid: { color: gridColor } }
       }
     }
   });
 }
 
-function updateTable(existDetail, detail, phases) {
+// === TABLE ===
+function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebtSvc, sharedCapex) {
   const table = document.getElementById('finTable');
 
   const fmtCell = (n) => {
-    if (n === 0) return '\u2014';
+    if (Math.abs(n) < 500) return '\u2014';
     const inM = Math.abs(n) / 1e6;
-    const str = inM.toFixed(1);
-    if (n < 0) return `<span class="neg">-${str}</span>`;
+    const str = inM >= 0.05 ? inM.toFixed(1) : inM.toFixed(2);
+    if (n < 0) return `<span class="neg">\u2212${str}</span>`;
     return str;
   };
 
@@ -639,54 +676,70 @@ function updateTable(existDetail, detail, phases) {
   const sectionRow = (label) =>
     `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
 
-  const phaseNames = { p1: 'Phase 1: 60K SF Greenhouses', p2: 'Phase 2: GH Expansion (8ac)', p3: 'Phase 3: Lettuce', p4: 'Phase 4: Processing' };
-
-  // Existing
-  const existNetCF = YEARS.map((_, i) => existDetail.rev[i] - existDetail.exp[i] - existDetail.debt[i]);
-
-  let phaseRows = '';
-  for (const p of phases) {
-    const d = detail[p];
-    phaseRows += sectionRow(phaseNames[p]);
-    phaseRows += row('Equity Outlay', d.equity.map(v => v === 0 ? 0 : -v));
-    phaseRows += row('Revenue', d.rev);
-    phaseRows += row('Expenses', d.exp.map(v => v === 0 ? 0 : -v));
-    phaseRows += row('Debt Service', d.debt.map(v => v === 0 ? 0 : -v));
-    phaseRows += row('Net CF', d.netCF, 'subtotal-row');
+  // Revenue rows
+  let revRows = sectionRow('Revenue ($M)');
+  for (const c of activeCrops) {
+    revRows += row(c.label, yearData[c.key].rev);
   }
+  revRows += row('Total Revenue', totalRev, 'subtotal-row');
 
-  // Consolidated
-  const totalRev = YEARS.map((_, i) => existDetail.rev[i] + phases.reduce((s, p) => s + detail[p].rev[i], 0));
-  const totalExp = YEARS.map((_, i) => existDetail.exp[i] + phases.reduce((s, p) => s + detail[p].exp[i], 0));
-  const totalOpInc = YEARS.map((_, i) => totalRev[i] - totalExp[i]);
-  const totalDebt = YEARS.map((_, i) => existDetail.debt[i] + phases.reduce((s, p) => s + detail[p].debt[i], 0));
-  const totalEquity = YEARS.map((_, i) => phases.reduce((s, p) => s + detail[p].equity[i], 0));
-  const totalNetCF = YEARS.map((_, i) => totalOpInc[i] - totalDebt[i] - totalEquity[i]);
+  // Expense rows
+  let expRows = sectionRow('Expenses ($M)');
+  for (const c of activeCrops) {
+    expRows += row(c.label, yearData[c.key].exp.map(v => -v));
+  }
+  const totalExpNeg = totalExp.map(v => -v);
+  expRows += row('Total Expenses', totalExpNeg, 'subtotal-row');
+
+  // Operating income, debt, net CF
+  const opInc = YEARS.map((_, i) => totalRev[i] - totalExp[i]);
+  const debtRow = YEARS.map(() => -totalDebtSvc);
+  const netCF = YEARS.map((_, i) => opInc[i] - totalDebtSvc);
+
+  const summaryRows = sectionRow('Summary ($M)')
+    + row('Operating Income', opInc)
+    + row('Debt Service', debtRow)
+    + row('Net Cash Flow', netCF, 'total-row-table');
 
   table.innerHTML = `
     <thead><tr><th></th>${yearHeaders}</tr></thead>
-    <tbody>
-      ${sectionRow('Existing Operations')}
-      ${row('Revenue', existDetail.rev)}
-      ${row('Expenses', existDetail.exp.map(v => -v))}
-      ${row('Debt Service', existDetail.debt.map(v => -v))}
-      ${row('Existing Net CF', existNetCF, 'subtotal-row')}
-
-      ${phaseRows}
-
-      ${sectionRow('Consolidated')}
-      ${row('Total Revenue', totalRev)}
-      ${row('Total Expenses', totalExp.map(v => -v))}
-      ${row('Operating Income', totalOpInc)}
-      ${row('Total Debt Service', totalDebt.map(v => -v))}
-      ${row('Equity Outlay', totalEquity.map(v => v === 0 ? 0 : -v))}
-      ${row('Net Cash Flow', totalNetCF, 'total-row-table')}
-    </tbody>
-  `;
+    <tbody>${revRows}${expRows}${summaryRows}</tbody>`;
 }
 
+// === ROI PANEL ===
+function updateROI(activeCrops, configs, sharedCapex, totalCropCapex) {
+  const grid = document.getElementById('roiGrid');
+  let html = '';
+
+  for (const c of activeCrops) {
+    const cfg = configs[c.key];
+    if (cfg.capex <= 0) continue;
+    const annualOpInc = cfg.baseRev - cfg.baseExp;
+    const directROI = (annualOpInc / cfg.capex) * 100;
+    // Allocated ROI: include proportional share of shared costs
+    const share = totalCropCapex > 0 ? cfg.capex / totalCropCapex : 0;
+    const fullCapex = cfg.capex + sharedCapex * share;
+    const fullROI = (annualOpInc / fullCapex) * 100;
+
+    const isTomatoCompare = c.key === 'T' || c.key === 'TB';
+    html += `<div class="roi-item${isTomatoCompare ? ' roi-highlight' : ''}">
+      <div>
+        <div class="roi-label">${c.label}</div>
+        <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.capex)} direct | ${fmtK(fullCapex)} allocated</div>
+      </div>
+      <div style="text-align:right">
+        <div class="roi-value" style="color:${directROI >= 0 ? 'var(--green)' : 'var(--red)'}">${directROI.toFixed(1)}%</div>
+        <div style="font-size:8px;color:var(--text-dim)">${fullROI.toFixed(1)}% alloc</div>
+      </div>
+    </div>`;
+  }
+
+  grid.innerHTML = html;
+}
+
+// === SAVE / LOAD ===
 function saveModel() {
-  localStorage.setItem('gh-expansion-state', JSON.stringify(state));
+  localStorage.setItem('gh-expansion-v2', JSON.stringify(state));
   localStorage.setItem('gh-expansion-theme', document.body.classList.contains('light') ? 'light' : 'dark');
   const btn = document.getElementById('saveBtn');
   btn.textContent = 'saved!';
@@ -694,8 +747,10 @@ function saveModel() {
 }
 
 function loadSavedModel() {
-  const saved = localStorage.getItem('gh-expansion-state');
-  if (saved) Object.assign(state, JSON.parse(saved));
+  const saved = localStorage.getItem('gh-expansion-v2');
+  if (saved) {
+    try { Object.assign(state, JSON.parse(saved)); } catch(e) {}
+  }
   const theme = localStorage.getItem('gh-expansion-theme');
   if (theme === 'light') {
     document.body.classList.add('light');
@@ -715,18 +770,12 @@ function toggleTheme() {
       input.style.background = sliderBg(pct);
     }
   });
-  if (chart) {
-    const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-tick').trim();
-    chart.options.scales.x.ticks.color = tickColor;
-    chart.options.scales.y.ticks.color = tickColor;
-    chart.update();
-  }
+  if (chart) { chart.destroy(); chart = null; }
+  recalc();
 }
 
-// Version label
-const now = new Date();
-document.getElementById('versionLabel').textContent = `v ${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
+// === INIT ===
+document.getElementById('versionLabel').textContent = 'v 03-27 15:00';
 loadSavedModel();
 buildSliders();
 recalc();
