@@ -1177,26 +1177,22 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     equityByYear[startYear] = (equityByYear[startYear] || 0) + cropEquity;
   }
 
-  // Year-by-year cap table
+  // Collect per-year data
   let jjb = 50, eb = 27.5, js = 22.5;
   const transferPct = s.jjbTransferPct;
   const exitPE = s.exitPE;
-
-  let rows = '';
   let jjbTotalInv = 0;
+
+  const d = { jjbInv: [], jjbPct: [], ebPct: [], jsPct: [], bizVal: [], jjbVal: [], ebVal: [], jsVal: [], transfer: [] };
 
   for (let i = 0; i < YEARS.length; i++) {
     const year = YEARS[i];
-
-    // JJB equity investment this year
     const eqDeploy = equityByYear[year] || 0;
     jjbTotalInv += eqDeploy;
 
-    // Operating income this year (total business including existing)
     const opInc = totalRev[i] - totalExp[i];
     const bizValue = opInc * exitPE;
 
-    // Transfer: JJB gives transferPct to EB each year (starting from first construction year)
     let transfer = 0;
     if (jjbTotalInv > 0 && jjb > transferPct) {
       jjb -= transferPct;
@@ -1204,44 +1200,47 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
       transfer = transferPct / 100 * bizValue;
     }
 
-    // Partner values
-    const jjbVal = jjb / 100 * bizValue;
-    const ebVal = eb / 100 * bizValue;
-    const jsVal = js / 100 * bizValue;
-
-    const p = (v) => {
-      if (Math.abs(v) < 500) return '\u2014';
-      return fmtK(v);
-    };
-
-    rows += `<tr>
-      <td>${year}</td>
-      <td>${eqDeploy > 0 ? p(eqDeploy) : '\u2014'}</td>
-      <td>${jjb.toFixed(1)}%</td>
-      <td>${eb.toFixed(1)}%</td>
-      <td>${js.toFixed(1)}%</td>
-      <td>${p(bizValue)}</td>
-      <td>${p(jjbVal)}</td>
-      <td>${p(ebVal)}</td>
-      <td>${p(jsVal)}</td>
-      <td>${transfer > 0 ? p(transfer) : '\u2014'}</td>
-    </tr>`;
+    d.jjbInv.push(eqDeploy);
+    d.jjbPct.push(jjb);
+    d.ebPct.push(eb);
+    d.jsPct.push(js);
+    d.bizVal.push(bizValue);
+    d.jjbVal.push(jjb / 100 * bizValue);
+    d.ebVal.push(eb / 100 * bizValue);
+    d.jsVal.push(js / 100 * bizValue);
+    d.transfer.push(transfer);
   }
 
-  // IRR for each partner: JJB invests equity over time, gets exit value at end
-  // EB pays transfer cost each year, gets exit value
-  // JS does nothing, gets exit value
-  const lastOpInc = totalRev[YEARS.length - 1] - totalExp[YEARS.length - 1];
-  const exitVal = lastOpInc * exitPE;
-  const jjbExit = jjb / 100 * exitVal;
-  const ebExit = eb / 100 * exitVal;
-  const jsExit = js / 100 * exitVal;
+  const yearHeaders = YEARS.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
+  const p = (v) => { if (Math.abs(v) < 500) return '\u2014'; return fmtK(v); };
+  const pPct = (v) => `${v.toFixed(1)}%`;
+
+  const fmtRow = (label, data, fn, cls) =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fn(v)}</td>`).join('')}</tr>`;
+  const sectionRow = (label) =>
+    `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
+
+  const lastIdx = YEARS.length - 1;
+  const exitVal = d.bizVal[lastIdx];
 
   document.getElementById('internalCapTable').innerHTML = `
-    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">JJB funds all equity · transfers ${transferPct.toFixed(1)}%/yr to EB · Exit: JJB ${jjb.toFixed(1)}% (${fmtK(jjbExit)}) · EB ${eb.toFixed(1)}% (${fmtK(ebExit)}) · JS ${js.toFixed(1)}% (${fmtK(jsExit)})</div>
+    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">JJB funds all equity · transfers ${transferPct.toFixed(1)}%/yr to EB · Exit: JJB ${jjb.toFixed(1)}% (${p(d.jjbVal[lastIdx])}) · EB ${eb.toFixed(1)}% (${p(d.ebVal[lastIdx])}) · JS ${js.toFixed(1)}% (${p(d.jsVal[lastIdx])})</div>
     <table class="fin-table" style="font-size:10px">
-      <thead><tr><th>Year</th><th>JJB Inv</th><th>JJB%</th><th>EB%</th><th>JS%</th><th>Biz Val</th><th>JJB Val</th><th>EB Val</th><th>JS Val</th><th>Transfer $</th></tr></thead>
-      <tbody>${rows}</tbody>
+      <thead><tr><th></th>${yearHeaders}</tr></thead>
+      <tbody>
+        ${sectionRow('Ownership %')}
+        ${fmtRow('JJB', d.jjbPct, pPct)}
+        ${fmtRow('EB', d.ebPct, pPct)}
+        ${fmtRow('JS', d.jsPct, pPct)}
+        ${sectionRow('Investment & Transfers')}
+        ${fmtRow('JJB Equity In', d.jjbInv, p)}
+        ${fmtRow('Transfer to EB', d.transfer, p)}
+        ${sectionRow('Valuations (Op Inc \u00d7 ' + exitPE + 'x)')}
+        ${fmtRow('Business', d.bizVal, p)}
+        ${fmtRow('JJB', d.jjbVal, p)}
+        ${fmtRow('EB', d.ebVal, p)}
+        ${fmtRow('JS', d.jsVal, p)}
+      </tbody>
     </table>`;
 }
 
