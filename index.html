@@ -270,6 +270,7 @@ const state = {
   preMoneyVal: 40000000, externalEquity: 15000000,
   ebTargetPct: 27.5, jsTargetPct: 22.5,
   exitPE: 8, jjbTransferPct: 1,
+  yearPE: {}, // per-year PE overrides for Scenario B
 };
 
 // === FORMATTERS ===
@@ -1183,7 +1184,7 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
   const exitPE = s.exitPE;
   let jjbTotalInv = 0;
 
-  const d = { jjbInv: [], jjbPct: [], ebPct: [], jsPct: [], bizVal: [], jjbVal: [], ebVal: [], jsVal: [], transfer: [] };
+  const d = { jjbInv: [], jjbPct: [], ebPct: [], jsPct: [], bizVal: [], jjbVal: [], ebVal: [], jsVal: [], transfer: [], pe: [], opInc: [] };
 
   for (let i = 0; i < YEARS.length; i++) {
     const year = YEARS[i];
@@ -1191,7 +1192,8 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     jjbTotalInv += eqDeploy;
 
     const opInc = totalRev[i] - totalExp[i];
-    const bizValue = opInc * exitPE;
+    const pe = s.yearPE[year] || exitPE;
+    const bizValue = opInc * pe;
 
     let transfer = 0;
     if (jjbTotalInv > 0 && jjb > transferPct) {
@@ -1204,6 +1206,8 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     d.jjbPct.push(jjb);
     d.ebPct.push(eb);
     d.jsPct.push(js);
+    d.pe.push(pe);
+    d.opInc.push(opInc);
     d.bizVal.push(bizValue);
     d.jjbVal.push(jjb / 100 * bizValue);
     d.ebVal.push(eb / 100 * bizValue);
@@ -1220,8 +1224,13 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
   const sectionRow = (label) =>
     `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
 
+  // PE dropdown row
+  const peOpts = [4,5,6,7,8].map(v => `<option value="${v}">${v}x</option>`).join('');
+  const peRow = `<tr><td style="color:var(--text-muted)">P/E Multiple</td>${YEARS.map((y, i) =>
+    `<td><select data-year="${y}" class="pe-select" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>`
+  ).join('')}</tr>`;
+
   const lastIdx = YEARS.length - 1;
-  const exitVal = d.bizVal[lastIdx];
 
   document.getElementById('internalCapTable').innerHTML = `
     <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">JJB funds all equity · transfers ${transferPct.toFixed(1)}%/yr to EB · Exit: JJB ${jjb.toFixed(1)}% (${p(d.jjbVal[lastIdx])}) · EB ${eb.toFixed(1)}% (${p(d.ebVal[lastIdx])}) · JS ${js.toFixed(1)}% (${p(d.jsVal[lastIdx])})</div>
@@ -1235,13 +1244,24 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
         ${sectionRow('Investment & Transfers')}
         ${fmtRow('JJB Equity In', d.jjbInv, p)}
         ${fmtRow('Transfer to EB', d.transfer, p)}
-        ${sectionRow('Valuations (Op Inc \u00d7 ' + exitPE + 'x)')}
+        ${sectionRow('Valuations')}
+        ${peRow}
         ${fmtRow('Business', d.bizVal, p)}
         ${fmtRow('JJB', d.jjbVal, p)}
         ${fmtRow('EB', d.ebVal, p)}
         ${fmtRow('JS', d.jsVal, p)}
       </tbody>
     </table>`;
+
+  // Set dropdown values and bind events
+  document.querySelectorAll('.pe-select').forEach(sel => {
+    const year = Number(sel.dataset.year);
+    sel.value = s.yearPE[year] || exitPE;
+    sel.addEventListener('change', () => {
+      s.yearPE[year] = Number(sel.value);
+      recalc();
+    });
+  });
 }
 
 // === SAVE / LOAD ===
