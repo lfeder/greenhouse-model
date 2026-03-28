@@ -202,6 +202,10 @@ const BASE_REV_PER_AC = 11500000 / 12; // ~$958K/ac from 12ac K+J in 2026
 const EXISTING_KJ_REV = 11500000;      // 12ac K/J baseline 2026
 const EXISTING_L_REV = 3000000;         // 2.5ac lettuce baseline 2026
 const EXISTING_EXP_RATIO = 0.66;        // ~66% expense ratio on existing ops
+const EXISTING_DEBT_LETTUCE = 1000000;  // $1M/yr, pays off 3/2031
+const EXISTING_DEBT_LETTUCE_END = 2031; // last year of lettuce debt (Q1 payoff = partial year)
+const EXISTING_DEBT_LAND = 430000;      // $430K/yr through 2045
+const EXISTING_DEBT_LAND_END = 2045;
 const YEARS = [];
 for (let y = 2026; y <= 2035; y++) YEARS.push(y);
 
@@ -568,6 +572,7 @@ function recalc() {
   const yearData = {}; // key -> { rev: [], exp: [], debt: [] }
   for (const c of activeCrops) yearData[c.key] = { rev: [], exp: [], debt: [] };
   const existKJ = { rev: [], exp: [] }, existL = { rev: [], exp: [] };
+  const existDebt = [];
   const totalRev = [], totalExp = [], totalDebt = [];
 
   for (const year of YEARS) {
@@ -583,7 +588,14 @@ function recalc() {
     existKJ.rev.push(eKJRev); existKJ.exp.push(eKJExp);
     existL.rev.push(eLRev); existL.exp.push(eLExp);
 
-    let yRev = eKJRev + eLRev, yExp = eKJExp + eLExp, yDebt = 0;
+    // Existing debt service
+    let eDebt = 0;
+    if (year < EXISTING_DEBT_LETTUCE_END) eDebt += EXISTING_DEBT_LETTUCE;
+    else if (year === EXISTING_DEBT_LETTUCE_END) eDebt += EXISTING_DEBT_LETTUCE * 0.25; // Q1 payoff
+    if (year <= EXISTING_DEBT_LAND_END) eDebt += EXISTING_DEBT_LAND;
+    existDebt.push(eDebt);
+
+    let yRev = eKJRev + eLRev, yExp = eKJExp + eLExp, yDebt = eDebt;
     for (const c of activeCrops) {
       const cfg = configs[c.key];
       const { rev, exp } = cropYearRevExp(cfg, year);
@@ -636,7 +648,7 @@ function recalc() {
   document.getElementById('kpi-netCF-sub').textContent = `net in '${String(YEARS[lastIdx]).slice(2)}`;
 
   updateChart(activeCrops, yearData, existKJ, existL);
-  updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL);
+  updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt);
   updateROI(activeCrops, configs, sharedCapex, totalCropCapex);
 }
 
@@ -704,7 +716,7 @@ function updateChart(activeCrops, yearData, existKJ, existL) {
 }
 
 // === TABLE ===
-function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL) {
+function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt) {
   const table = document.getElementById('finTable');
 
   const fmtCell = (n) => {
@@ -742,12 +754,13 @@ function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDe
 
   // Operating income, debt, net CF
   const opInc = YEARS.map((_, i) => totalRev[i] - totalExp[i]);
-  const debtRow = totalDebt.map(v => -v);
+  const expansionDebt = YEARS.map((_, i) => totalDebt[i] - existDebt[i]);
   const netCF = YEARS.map((_, i) => opInc[i] - totalDebt[i]);
 
   const summaryRows = sectionRow('Summary ($M)')
     + row('Operating Income', opInc)
-    + row('Debt Service', debtRow)
+    + row('Existing Debt Svc', existDebt.map(v => -v))
+    + row('Expansion Debt Svc', expansionDebt.map(v => -v))
     + row('Net Cash Flow', netCF, 'total-row-table');
 
   table.innerHTML = `
