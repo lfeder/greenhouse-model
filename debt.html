@@ -68,11 +68,14 @@ function recalc() {
   // Loan schedules
   const { loanData, totalInt, totalPrin, totalDS } = computeLoanSchedules();
 
-  // PE/DD — run full model (same tax timing as distributions page)
-  const { rev, exp } = getRevExp(false);
-  const { fedDep, stateDep } = getDepreciation(false);
-  const model = runFullModel({ rev, exp, loanInt: totalInt, loanPrin: totalPrin, totalDS, fedDep, stateDep, tBillRate });
-  const { peddDetail } = model;
+  // PE/DD — read from distributions page (single source of truth for waterfall)
+  let peddDetail = {};
+  try {
+    const d = JSON.parse(localStorage.getItem('gh-pedd-detail'));
+    for (const inst of d.instruments) peddDetail[inst.name] = inst;
+  } catch(e) {
+    for (const pe of PEDD_INSTRUMENTS) peddDetail[pe.name] = { prinPaid: YEARS.map(() => 0), intPaid: YEARS.map(() => 0), endBal: YEARS.map(() => pe.balance), intOwed: YEARS.map(() => 0) };
+  }
 
   const totalPEDDPrin = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + (peddDetail[pe.name]?.prinPaid[i] || 0), 0));
   const totalPEDDInt = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + (peddDetail[pe.name]?.intPaid[i] || 0), 0));
