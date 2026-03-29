@@ -77,8 +77,9 @@ function recalc() {
     for (const pe of PEDD_INSTRUMENTS) peddDetail[pe.name] = { prinPaid: YEARS.map(() => 0), intPaid: YEARS.map(() => 0), endBal: YEARS.map(() => pe.balance), intOwed: YEARS.map(() => 0) };
   }
 
-  const totalPEDDPrin = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + (peddDetail[pe.name]?.prinPaid[i] || 0), 0));
-  const totalPEDDInt = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + (peddDetail[pe.name]?.intPaid[i] || 0), 0));
+  const allPEDD = [...PEDD_INSTRUMENTS.map(pe => pe.name), 'T1Short'];
+  const totalPEDDPrin = YEARS.map((_, i) => allPEDD.reduce((s, name) => s + (peddDetail[name]?.prinPaid[i] || 0), 0));
+  const totalPEDDInt = YEARS.map((_, i) => allPEDD.reduce((s, name) => s + (peddDetail[name]?.intPaid[i] || 0), 0));
 
   // Summary cards — PE/DD first, loans second
   let summaryHTML = '<div class="summary-grid pedd">';
@@ -108,8 +109,12 @@ function recalc() {
   let html = `<thead><tr><th></th>${yearHeaders()}</tr></thead><tbody>`;
 
   // PE/DD
+  const t1Short = peddDetail['T1Short'];
+  const hasT1Short = t1Short && t1Short.endBal.some(v => v > 50);
+
   html += sectionRow('PE/DD Principal Repayment (via Waterfall)');
   for (const pe of PEDD_INSTRUMENTS) html += row(pe.label, peddDetail[pe.name].prinPaid.map(v => -v));
+  if (hasT1Short) html += row('T1 Shortfall DD', t1Short.prinPaid.map(v => -v));
   html += row('Total PE/DD Principal', totalPEDDPrin.map(v => -v), 'subtotal-row');
 
   html += sectionRow('PE/DD Interest Paid');
@@ -121,6 +126,7 @@ function recalc() {
 
   html += sectionRow('PE/DD Balances (End of Year)');
   for (const pe of PEDD_INSTRUMENTS) html += balRow(pe.label, peddDetail[pe.name].endBal);
+  if (hasT1Short) html += balRow('T1 Shortfall DD', t1Short.endBal);
 
   const hasIntOwed = PEDD_INSTRUMENTS.some(pe => peddDetail[pe.name].intOwed.some(v => v > 50));
   if (hasIntOwed) {
