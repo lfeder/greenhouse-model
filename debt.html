@@ -193,25 +193,18 @@ const BIPAH = {
   }
 };
 
-// JJB Downpayment: $500,000 at 7.50%, annual, 5yr, started Jan 2025
+// JJB Downpayment: $500,000 at 7.50%, annual, 5yr, first payment Jan 2026
 const JJBDP = {
-  name: 'JJB Downpayment', origBal: 500000, rate: 0.075, termYears: 5,
-  annualPmt: function() {
-    const r = this.rate, n = this.termYears;
-    return this.origBal * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+  name: 'JJB Downpayment', origBal: 500000, rate: 0.075, maturity: 'Jan 2030',
+  schedule: {
+    2026: { interest: 37500, principal: 86082, endBal: 413918 },
+    2027: { interest: 31044, principal: 92539, endBal: 321379 },
+    2028: { interest: 24103, principal: 99479, endBal: 221900 },
+    2029: { interest: 16643, principal: 106940, endBal: 114960 },
+    2030: { interest: 8622, principal: 114960, endBal: 0 },
   },
   annualSchedule: function(year) {
-    const yr = year - 2025; // year 0 = 2025
-    if (yr < 0 || yr >= this.termYears) return { interest: 0, principal: 0, endBal: 0 };
-    const r = this.rate, pmt = this.annualPmt();
-    let bal = this.origBal;
-    for (let i = 0; i < yr; i++) {
-      const intPmt = bal * r;
-      bal -= (pmt - intPmt);
-    }
-    const intPmt = bal * r;
-    const prinPmt = pmt - intPmt;
-    return { interest: intPmt, principal: prinPmt, endBal: Math.max(0, bal - prinPmt) };
+    return this.schedule[year] || { interest: 0, principal: 0, endBal: 0 };
   }
 };
 
@@ -230,17 +223,17 @@ const PEDD_INSTRUMENTS = [
 // === FORMATTERS ===
 const fmtK = (n) => {
   if (n == null || isNaN(n)) return "\u2014";
-  const abs = Math.abs(n), sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n), sign = n < 0 ? "\u2212" : "";
   if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)}M`;
-  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(0)}K`;
-  return `${sign}${Math.round(abs)}`;
+  if (abs >= 1e3) return `${sign}${Math.round(abs / 1e3).toLocaleString()}K`;
+  return `${sign}${Math.round(abs).toLocaleString()}`;
 };
 
+// Table cells in $K, no red coloring
 const fmtCell = (n) => {
   if (Math.abs(n) < 50) return '\u2014';
-  const k = n / 1e3;
-  if (n < 0) return `<span class="neg">\u2212${Math.abs(k).toFixed(0)}</span>`;
-  return k.toFixed(0);
+  const k = Math.round(Math.abs(n) / 1e3);
+  return `${n < 0 ? '\u2212' : ''}${k.toLocaleString()}`;
 };
 
 // === SLIDER ===
@@ -280,27 +273,30 @@ function createSlider(containerId, key, opts) {
 function recalc() {
   const tBillRate = state.tBillRate / 100;
 
-  // Instrument summary cards
-  let summaryHTML = '';
+  // Instrument summary cards — loans first row, PE/DD second row
+  const loanMaturities = { 'FCL (Lettuce)': 'Mar 2031', 'BIPAH (Property)': 'Jan 2045', 'JJB Downpayment': 'Jan 2030' };
+  let summaryHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">';
   for (const loan of LOANS) {
     const sched2026 = loan.annualSchedule(2026);
     const startBal = loan.name === 'FCL (Lettuce)' ? loan.balanceAfter(22) :
                      loan.name === 'BIPAH (Property)' ? loan.balanceAfter(12) :
                      loan.origBal;
-    summaryHTML += `<div class="summary-item">
+    summaryHTML += `<div class="summary-item" style="flex:1;min-width:160px">
       <div class="summary-label">${loan.name}</div>
-      <div class="summary-detail">${(loan.rate * 100).toFixed(2)}% · ${fmtK(startBal)} bal (Jan '26)</div>
+      <div class="summary-detail">${(loan.rate * 100).toFixed(2)}% · ${fmtK(startBal)} bal · matures ${loanMaturities[loan.name]}</div>
       <div class="summary-value">${fmtK(sched2026.interest + sched2026.principal)}/yr</div>
     </div>`;
   }
+  summaryHTML += '</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
   for (const pe of PEDD_INSTRUMENTS) {
     const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
-    summaryHTML += `<div class="summary-item">
-      <div class="summary-label">${pe.name} (Order ${pe.order})</div>
-      <div class="summary-detail">${(rate * 100).toFixed(1)}% · ${fmtK(pe.balance)} bal</div>
+    summaryHTML += `<div class="summary-item" style="flex:1;min-width:160px">
+      <div class="summary-label">${pe.name} (#${pe.order})</div>
+      <div class="summary-detail">${rate > 0 ? (rate * 100).toFixed(1) + '%' : 'no interest'} · ${fmtK(pe.balance)} bal</div>
       <div class="summary-value">via waterfall</div>
     </div>`;
   }
+  summaryHTML += '</div>';
   document.getElementById('instrumentSummary').innerHTML = summaryHTML;
 
   // Build consolidated schedule
@@ -368,8 +364,7 @@ function recalc() {
   for (const loan of LOANS) html += row(loan.name, loanData[loan.name].principal.map(v => -v));
   html += row('Total Principal', totalPrin.map(v => -v), 'subtotal-row');
 
-  html += sectionRow('Total Debt Service');
-  html += row('Total DS', totalDS.map(v => -v), 'total-row-table');
+  html += row('Total Debt Service', totalDS.map(v => -v), 'total-row-table');
 
   html += sectionRow('Loan Balances (End of Year)');
   for (const loan of LOANS) html += balRow(loan.name, loanData[loan.name].endBal);
