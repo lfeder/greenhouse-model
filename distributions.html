@@ -92,7 +92,7 @@
       <div class="panel">
         <div class="panel-title">Fixed Parameters</div>
         <div style="font-size:9px;color:var(--text-sub);line-height:1.6">
-          Tier 0 (EB salary): $300K/yr<br>
+          Tier 0 (EB): $300K/yr<br>
           Tier 1: $500K '26 · $600K '27 · $750K '28+<br>
           Capex reserve: 2% of revenue<br>
           PE/DD order: PE3 → PE1 → PE2 → DD
@@ -233,8 +233,15 @@ function recalc() {
   const taxableInc = ebitda.map((e, i) => e - loanInt[i]);
 
   // === DEPRECIATION ===
-  const fedDep = depData ? depData.totalFed : YEARS.map(() => 0);
-  const stateDep = depData ? depData.totalState : YEARS.map(() => 0);
+  // Debug mode: only existing asset depreciation, no new investments
+  let fedDep, stateDep;
+  if (state.debug) {
+    fedDep = YEARS.map((_, i) => i < 8 ? 200000 : 0);       // $200K/yr for 8 remaining years
+    stateDep = YEARS.map(y => y <= 2029 ? 1000000 : 0);      // $1M/yr through 2029
+  } else {
+    fedDep = depData ? depData.totalFed : YEARS.map(() => 0);
+    stateDep = depData ? depData.totalState : YEARS.map(() => 0);
+  }
 
   // === TAX LIABILITY (per tax year) ===
   const fK = (v) => '$' + (Math.round(v / 1e3)).toLocaleString() + 'K';
@@ -410,7 +417,7 @@ function recalc() {
   wfHTML += row('Distributable Cash', distribCash);
   wfHTML += sectionRow('Distributions');
   wfHTML += rowTip('Tax (Fed + HI)', totalTaxDist.map(v => -v), taxCashTips);
-  wfHTML += row('Tier 0 (EB Salary)', tier0.map(v => -v));
+  wfHTML += row('Tier 0 (EB)', tier0.map(v => -v));
   wfHTML += row('Tier 1 (Partner Draws)', tier1.map(v => -v));
   wfHTML += row('PE/DD Repayment', peddPayments.map(v => -v));
   wfHTML += row('Tier 2 (Pro-Rata)', tier2.map(v => -v));
@@ -431,7 +438,7 @@ function recalc() {
 
     // Tier 0 (EB only)
     if (partner === 'EB') {
-      ptHTML += row('Tier 0 (Salary)', tier0);
+      ptHTML += row('Tier 0', tier0);
     }
 
     // Tier 1
