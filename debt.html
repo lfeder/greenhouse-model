@@ -251,7 +251,16 @@ function recalc() {
 
   // Instrument summary cards — loans row 1, PE/DD row 2
   const loanMaturities = { 'FCL (Lettuce)': 'Mar 2031', 'BIPAH (Property)': 'Jan 2045', 'JJB Downpayment': 'Jan 2030' };
-  let summaryHTML = '<div class="summary-grid loans">';
+  let summaryHTML = '<div class="summary-grid pedd">';
+  for (const pe of PEDD_INSTRUMENTS) {
+    const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
+    summaryHTML += `<div class="summary-item">
+      <div class="summary-label">${pe.name} (#${pe.order})</div>
+      <div class="summary-detail">${rate > 0 ? (rate * 100).toFixed(1) + '%' : 'no interest'} · ${fmtK(pe.balance)} bal</div>
+      <div class="summary-value">via waterfall</div>
+    </div>`;
+  }
+  summaryHTML += '</div><div class="summary-grid loans">';
   for (const loan of LOANS) {
     const sched2026 = loan.annualSchedule(2026);
     const startBal = loan.name === 'FCL (Lettuce)' ? 4718495 :
@@ -261,15 +270,6 @@ function recalc() {
       <div class="summary-label">${loan.name}</div>
       <div class="summary-detail">${(loan.rate * 100).toFixed(2)}% · ${fmtK(startBal)} bal · matures ${loanMaturities[loan.name]}</div>
       <div class="summary-value">${fmtK(sched2026.interest + sched2026.principal)}/yr</div>
-    </div>`;
-  }
-  summaryHTML += '</div><div class="summary-grid pedd">';
-  for (const pe of PEDD_INSTRUMENTS) {
-    const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
-    summaryHTML += `<div class="summary-item">
-      <div class="summary-label">${pe.name} (#${pe.order})</div>
-      <div class="summary-detail">${rate > 0 ? (rate * 100).toFixed(1) + '%' : 'no interest'} · ${fmtK(pe.balance)} bal</div>
-      <div class="summary-value">via waterfall</div>
     </div>`;
   }
   summaryHTML += '</div>';
@@ -291,19 +291,64 @@ function recalc() {
     }
   }
 
-  // PE/DD — read waterfall repayment data from distributions page
-  let peddFromDist = null;
-  try { peddFromDist = JSON.parse(localStorage.getItem('gh-pedd-detail')); } catch(e) {}
+  // PE/DD — run waterfall simulation inline
+  // Pull rev/exp from expansion model or use debug defaults
+  let expData = null;
+  try { expData = JSON.parse(localStorage.getItem('gh-expansion-data')); } catch(e) {}
+  const DEBUG_REV = 14200000, DEBUG_EXP = 9700000, GROWTH = 0.05;
+  const rev = YEARS.map((_, i) => expData ? (expData.totalRev[i] || 0) : DEBUG_REV * Math.pow(1 + GROWTH, i));
+  const exps = YEARS.map((_, i) => expData ? (expData.totalExp[i] || 0) : DEBUG_EXP * Math.pow(1 + GROWTH, i));
+  const opInc = rev.map((r, i) => r - exps[i]);
+  const capexRes = rev.map(r => r * 0.02);
+  const distribCash = opInc.map((o, i) => o - totalDS[i] - capexRes[i]);
 
+  // Simplified tax estimate (30% fed, 10% HI on taxable income)
+  const taxDist = distribCash.map((_, i) => {
+    const taxable = opInc[i] - totalInt[i];
+    return Math.max(0, taxable * 0.25); // ~25% blended effective rate
+  });
+  const TIER0 = 300000;
+  const TIER1_SCHED = { 2026: 500000, 2027: 600000 };
+
+  // Waterfall → PE/DD
+  const peddBal = PEDD_INSTRUMENTS.map(p => ({ ...p, remaining: p.balance, intOwed: 0 }));
   const peddData = {};
-  for (const pe of PEDD_INSTRUMENTS) {
-    const distInst = peddFromDist ? peddFromDist.instruments.find(p => p.name === pe.name) : null;
-    peddData[pe.name] = {
-      prinPaid: distInst ? distInst.prinPaid : YEARS.map(() => 0),
-      intPaid: distInst ? distInst.intPaid : YEARS.map(() => 0),
-      endBal: distInst ? distInst.endBal : YEARS.map(() => pe.balance),
-      intOwed: distInst ? distInst.intOwed : YEARS.map(() => 0),
-    };
+  for (const pe of peddBal) peddData[pe.name] = { prinPaid: [], intPaid: [], endBal: [], intOwed: [] };
+
+  for (let i = 0; i < YEARS.length; i++) {
+    const tier1 = TIER1_SCHED[YEARS[i]] || 750000;
+    let remaining = distribCash[i] - taxDist[i] - TIER0 - tier1;
+
+    for (const pe of peddBal) {
+      if (remaining <= 0) break;
+      if (pe.remaining > 0) {
+        const prinPay = Math.min(remaining, pe.remaining);
+        pe.remaining -= prinPay;
+        remaining -= prinPay;
+        peddData[pe.name].prinPaid.push(prinPay);
+      } else {
+        peddData[pe.name].prinPaid.push(0);
+      }
+      if (pe.remaining <= 0 && pe.intOwed > 0 && remaining > 0) {
+        const intPay = Math.min(remaining, pe.intOwed);
+        pe.intOwed -= intPay;
+        remaining -= intPay;
+        peddData[pe.name].intPaid.push(intPay);
+      } else {
+        // Only push if prinPaid didn't already push
+      }
+    }
+    // Ensure all instruments have entries, accrue interest
+    for (const pe of peddBal) {
+      if (peddData[pe.name].prinPaid.length <= i) peddData[pe.name].prinPaid.push(0);
+      if (peddData[pe.name].intPaid.length <= i) peddData[pe.name].intPaid.push(0);
+      if (pe.remaining > 0) {
+        const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
+        pe.intOwed += pe.remaining * rate;
+      }
+      peddData[pe.name].endBal.push(pe.remaining);
+      peddData[pe.name].intOwed.push(pe.intOwed);
+    }
   }
 
   // Total debt service
@@ -321,21 +366,7 @@ function recalc() {
 
   let html = `<thead><tr><th></th>${yearHeaders}</tr></thead><tbody>`;
 
-  // Loan section
-  html += sectionRow('Loan Interest');
-  for (const loan of LOANS) html += row(loan.name, loanData[loan.name].interest.map(v => -v));
-  html += row('Total Interest', totalInt.map(v => -v), 'subtotal-row');
-
-  html += sectionRow('Loan Principal');
-  for (const loan of LOANS) html += row(loan.name, loanData[loan.name].principal.map(v => -v));
-  html += row('Total Principal', totalPrin.map(v => -v), 'subtotal-row');
-
-  html += row('Total Debt Service', totalDS.map(v => -v), 'total-row-table');
-
-  html += sectionRow('Loan Balances (End of Year)');
-  for (const loan of LOANS) html += balRow(loan.name, loanData[loan.name].endBal);
-
-  // PE/DD section
+  // PE/DD section first
   html += sectionRow('PE/DD Principal Repayment (via Waterfall)');
   for (const pe of PEDD_INSTRUMENTS) {
     html += row(pe.name, peddData[pe.name].prinPaid.map(v => -v));
@@ -360,6 +391,20 @@ function recalc() {
       if (peddData[pe.name].intOwed.some(v => v > 50)) html += balRow(pe.name, peddData[pe.name].intOwed);
     }
   }
+
+  // Loan section
+  html += sectionRow('Loan Interest');
+  for (const loan of LOANS) html += row(loan.name, loanData[loan.name].interest.map(v => -v));
+  html += row('Total Interest', totalInt.map(v => -v), 'subtotal-row');
+
+  html += sectionRow('Loan Principal');
+  for (const loan of LOANS) html += row(loan.name, loanData[loan.name].principal.map(v => -v));
+  html += row('Total Principal', totalPrin.map(v => -v), 'subtotal-row');
+
+  html += row('Total Debt Service', totalDS.map(v => -v), 'total-row-table');
+
+  html += sectionRow('Loan Balances (End of Year)');
+  for (const loan of LOANS) html += balRow(loan.name, loanData[loan.name].endBal);
 
   html += '</tbody>';
   document.getElementById('scheduleTable').innerHTML = html;
