@@ -230,6 +230,79 @@ function computeLoanSchedules() {
   return { loanData, totalInt, totalPrin, totalDS };
 }
 
+// === FULL MODEL: rev/exp → tax → waterfall ===
+function runFullModel(opts) {
+  // opts: { rev, exp, loanInt, loanPrin, totalDS, fedDep, stateDep, fedTaxRate, hiTaxRate, fedNOL, tBillRate }
+  const opInc = opts.rev.map((r, i) => r - opts.exp[i]);
+  const capexRes = opts.rev.map(r => r * 0.02);
+  const taxableInc = opInc.map((e, i) => e - opts.loanInt[i]);
+
+  // Tax liability per year
+  let fedNOLRemaining = opts.fedNOL || 0;
+  const totalTaxLiab = [];
+  for (let i = 0; i < YEARS.length; i++) {
+    const own = getOwnership(YEARS[i]);
+    const fedTaxable = taxableInc[i] - (opts.fedDep[i] || 0);
+    const ebFedTaxable = fedTaxable * own.EB / 100;
+    const nolUsed = Math.min(fedNOLRemaining, Math.max(0, ebFedTaxable));
+    fedNOLRemaining -= nolUsed;
+    const ebNetFed = Math.max(0, ebFedTaxable - nolUsed);
+    const fedTax = ebNetFed * (opts.fedTaxRate || 30) / 100;
+    const fedDist = own.EB > 0 ? fedTax / (own.EB / 100) : 0;
+
+    const hiTaxable = taxableInc[i] - (opts.stateDep[i] || 0);
+    const ebHiTaxable = hiTaxable * own.EB / 100;
+    const hiTax = Math.max(0, ebHiTaxable) * (opts.hiTaxRate || 10) / 100;
+    const hiDist = own.EB > 0 ? hiTax / (own.EB / 100) : 0;
+
+    totalTaxLiab.push(fedDist + hiDist);
+  }
+
+  // Tax cash distributions (quarterly timing)
+  const taxCashDist = YEARS.map((year, i) => {
+    const priorLiab = i > 0 ? totalTaxLiab[i-1] : 0;
+    const twoPriorLiab = i > 1 ? totalTaxLiab[i-2] : 0;
+    if (year === 2026) return 0;
+    if (year === 2027) return totalTaxLiab[0] + totalTaxLiab[0] / 4 * 2;
+    const q4 = twoPriorLiab / 4;
+    const settle = Math.max(0, priorLiab - twoPriorLiab);
+    const curEst = priorLiab / 4 * 3;
+    return q4 + settle + curEst;
+  });
+
+  const distribCash = opInc.map((o, i) => o - opts.totalDS[i] - capexRes[i]);
+  const wf = runWaterfall(distribCash, taxCashDist, opts.tBillRate || 0.065);
+
+  return { opInc, capexRes, taxableInc, totalTaxLiab, taxCashDist, distribCash, ...wf };
+}
+
+// Get rev/exp from localStorage or debug defaults
+function getRevExp(debug) {
+  const DEBUG_REV = 14200000, DEBUG_EXP = 9700000, GROWTH = 0.05;
+  let expData = null;
+  try { expData = JSON.parse(localStorage.getItem('gh-expansion-data')); } catch(e) {}
+  return {
+    rev: YEARS.map((_, i) => (debug || !expData) ? DEBUG_REV * Math.pow(1 + GROWTH, i) : (expData.totalRev[i] || 0)),
+    exp: YEARS.map((_, i) => (debug || !expData) ? DEBUG_EXP * Math.pow(1 + GROWTH, i) : (expData.totalExp[i] || 0)),
+  };
+}
+
+// Get depreciation from localStorage or debug defaults
+function getDepreciation(debug) {
+  if (debug) {
+    return {
+      fedDep: YEARS.map((_, i) => i < 8 ? 200000 : 0),
+      stateDep: YEARS.map(y => y <= 2029 ? 1000000 : 0),
+    };
+  }
+  let depData = null;
+  try { depData = JSON.parse(localStorage.getItem('gh-depreciation')); } catch(e) {}
+  return {
+    fedDep: depData ? depData.totalFed : YEARS.map(() => 0),
+    stateDep: depData ? depData.totalState : YEARS.map(() => 0),
+  };
+}
+
 // === WATERFALL SIMULATION ===
 function runWaterfall(distribCash, taxDist, tBillRate) {
   const peddBal = PEDD_INSTRUMENTS.map(p => ({ ...p, remaining: p.balance, intOwed: p.accruedInt || 0 }));

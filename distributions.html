@@ -6,9 +6,7 @@
 <title>Distributions & Partner Cash</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="shared.css">
-<style>
-  .layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
-</style>
+<style>.layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }</style>
 </head>
 <body>
 <div class="header">
@@ -88,109 +86,66 @@ window._pageState = state;
 const saveLoad = makeSaveLoad('gh-dist-state', state);
 saveLoad.load();
 
-const DEBUG_REV = 14200000, DEBUG_EXP = 9700000, DEBUG_GROWTH = 0.05;
 const JS_BUYOUT_VAL = { 2026: 8000000, 2027: 9750000, 2028: 11500000, 2029: 13250000 };
 const JS_ANNUAL_LOSS = 0.03, EB_ANNUAL_GAIN = 0.005;
 
 function recalc() {
-  let expData = null, depData = null;
-  try { expData = JSON.parse(localStorage.getItem('gh-expansion-data')); } catch(e) {}
-  try { depData = JSON.parse(localStorage.getItem('gh-depreciation')); } catch(e) {}
+  const { rev, exp } = getRevExp(state.debug);
+  const { totalInt: loanInt, totalPrin: loanPrin, totalDS } = computeLoanSchedules();
+  const { fedDep, stateDep } = getDepreciation(state.debug);
+
+  const model = runFullModel({
+    rev, exp, loanInt, loanPrin, totalDS, fedDep, stateDep,
+    fedTaxRate: state.fedTaxRate, hiTaxRate: state.hiTaxRate,
+    fedNOL: state.fedNOL, tBillRate: 0.065,
+  });
+  const { opInc, capexRes, taxableInc, totalTaxLiab, taxCashDist, distribCash, peddDetail, peddPayments, tier2, cumPEDD } = model;
+  const totalTaxDist = taxCashDist;
 
   const row = (label, data, cls) => tableRow(label, data, fmtCellK, cls);
-  const rowTip = (label, data, tips, cls) =>
-    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map((v, i) => `<td title="${(tips[i]||'').replace(/"/g,'&quot;')}" style="cursor:help">${fmtCellK(v)}</td>`).join('')}</tr>`;
   const fK = (v) => '$' + Math.round(v / 1e3).toLocaleString() + 'K';
 
-  // Revenue & Expense
-  const rev = [], exp = [];
-  for (let i = 0; i < YEARS.length; i++) {
-    if (state.debug) {
-      rev.push(DEBUG_REV * Math.pow(1 + DEBUG_GROWTH, i));
-      exp.push(DEBUG_EXP * Math.pow(1 + DEBUG_GROWTH, i));
-    } else if (expData) {
-      rev.push(expData.totalRev[i] || 0);
-      exp.push(expData.totalExp[i] || 0);
-    } else { rev.push(0); exp.push(0); }
-  }
-  const opInc = rev.map((r, i) => r - exp[i]);
-
-  // Debt service
-  const { totalInt: loanInt, totalPrin: loanPrin, totalDS } = computeLoanSchedules();
-  const capexRes = rev.map(r => r * 0.02);
-  const taxableInc = opInc.map((e, i) => e - loanInt[i]);
-
-  // Depreciation
-  let fedDep, stateDep;
-  if (state.debug) {
-    fedDep = YEARS.map((_, i) => i < 8 ? 200000 : 0);
-    stateDep = YEARS.map(y => y <= 2029 ? 1000000 : 0);
-  } else {
-    fedDep = depData ? depData.totalFed : YEARS.map(() => 0);
-    stateDep = depData ? depData.totalState : YEARS.map(() => 0);
-  }
-
-  // Tax liability
-  let fedNOLRemaining = state.fedNOL;
-  const fedTaxLiab = [], hiTaxLiab = [], taxLiabTips = [];
+  // Build tooltips for tax cells
+  let fedNOLR = state.fedNOL;
+  const taxLiabTips = [], taxCashTips = [];
   for (let i = 0; i < YEARS.length; i++) {
     const own = getOwnership(YEARS[i]);
     const fedTaxable = taxableInc[i] - fedDep[i];
     const ebFedTaxable = fedTaxable * own.EB / 100;
-    const nolUsed = Math.min(fedNOLRemaining, Math.max(0, ebFedTaxable));
-    fedNOLRemaining -= nolUsed;
+    const nolUsed = Math.min(fedNOLR, Math.max(0, ebFedTaxable));
+    fedNOLR -= nolUsed;
     const ebNetFed = Math.max(0, ebFedTaxable - nolUsed);
     const fedTax = ebNetFed * state.fedTaxRate / 100;
     const fedDist = own.EB > 0 ? fedTax / (own.EB / 100) : 0;
-    fedTaxLiab.push(fedDist);
-
     const hiTaxable = taxableInc[i] - stateDep[i];
     const ebHiTaxable = hiTaxable * own.EB / 100;
     const hiTax = Math.max(0, ebHiTaxable) * state.hiTaxRate / 100;
     const hiDist = own.EB > 0 ? hiTax / (own.EB / 100) : 0;
-    hiTaxLiab.push(hiDist);
 
-    let tip = `--- ${YEARS[i]} TAX LIABILITY ---\nFEDERAL:\n`;
-    tip += `  Taxable Inc = ${fK(taxableInc[i])}\n  - Bonus Depr = ${fK(fedDep[i])}\n  = ${fK(fedTaxable)}\n`;
-    tip += `  x EB ${own.EB.toFixed(1)}% = ${fK(ebFedTaxable)}\n`;
-    if (nolUsed > 0) tip += `  - NOL = ${fK(nolUsed)}\n`;
-    tip += `  = Net ${fK(ebNetFed)} x ${state.fedTaxRate}% = ${fK(fedTax)}\n  / ${own.EB.toFixed(1)}% = ${fK(fedDist)}\n`;
-    tip += `HAWAII:\n  Taxable = ${fK(hiTaxable)}\n  x EB ${own.EB.toFixed(1)}% = ${fK(ebHiTaxable)}\n`;
-    tip += `  x ${state.hiTaxRate}% = ${fK(hiTax)} / ${own.EB.toFixed(1)}% = ${fK(hiDist)}\nTOTAL: ${fK(fedDist + hiDist)}`;
+    let tip = `--- ${YEARS[i]} TAX LIABILITY ---\nFED: TaxInc ${fK(taxableInc[i])} - Depr ${fK(fedDep[i])} = ${fK(fedTaxable)}\n`;
+    tip += `x EB ${own.EB.toFixed(1)}% = ${fK(ebFedTaxable)}`;
+    if (nolUsed > 0) tip += ` - NOL ${fK(nolUsed)}`;
+    tip += ` = ${fK(ebNetFed)} x ${state.fedTaxRate}% = ${fK(fedTax)} / ${own.EB.toFixed(1)}% = ${fK(fedDist)}\n`;
+    tip += `HI: ${fK(hiTaxable)} x ${own.EB.toFixed(1)}% = ${fK(ebHiTaxable)} x ${state.hiTaxRate}% = ${fK(hiTax)} / ${own.EB.toFixed(1)}% = ${fK(hiDist)}\n`;
+    tip += `TOTAL: ${fK(fedDist + hiDist)}`;
     taxLiabTips.push(tip);
-  }
-  const totalTaxLiab = fedTaxLiab.map((f, i) => f + hiTaxLiab[i]);
 
-  // Tax cash distributions (quarterly timing)
-  const taxCashDist = [], taxCashTips = [];
-  for (let i = 0; i < YEARS.length; i++) {
+    // Cash timing tooltip
     const year = YEARS[i];
     const priorLiab = i > 0 ? totalTaxLiab[i-1] : 0;
     const twoPriorLiab = i > 1 ? totalTaxLiab[i-2] : 0;
-    let cashOut = 0, tip = `--- ${year} CASH TAX DIST ---\n`;
-
-    if (year === 2026) {
-      cashOut = 0; tip += 'No 2025 liability';
-    } else if (year === 2027) {
-      const final26 = totalTaxLiab[0], qEst = totalTaxLiab[0] / 4;
-      cashOut = final26 + qEst * 2;
-      tip += `4/15: '26 final = ${fK(final26)}\n6/15+9/15: 2x ${fK(qEst)}\nTotal: ${fK(cashOut)}`;
-    } else {
-      const priorEstPerQ = twoPriorLiab / 4;
-      const q4 = priorEstPerQ, settle = Math.max(0, priorLiab - priorEstPerQ * 4);
-      const curEst = priorLiab / 4 * 3;
-      cashOut = q4 + settle + curEst;
-      tip += `1/15: Q4 est ${fK(q4)}\n4/15: settle ${fK(settle)}\nQ1-3 est: ${fK(curEst)}\nTotal: ${fK(cashOut)}`;
-    }
-    taxCashDist.push(cashOut); taxCashTips.push(tip);
+    let ctip = `--- ${year} CASH ---\n`;
+    if (year === 2026) ctip += 'No 2025 liability';
+    else if (year === 2027) ctip += `Final '26: ${fK(totalTaxLiab[0])}\n2x Q est: ${fK(totalTaxLiab[0]/4)}\nTotal: ${fK(taxCashDist[i])}`;
+    else ctip += `Q4 est: ${fK(twoPriorLiab/4)}\nSettle: ${fK(Math.max(0, priorLiab - twoPriorLiab))}\n3Q est: ${fK(priorLiab/4*3)}\nTotal: ${fK(taxCashDist[i])}`;
+    taxCashTips.push(ctip);
   }
-  const totalTaxDist = taxCashDist;
 
-  // Distributable cash
-  const distribCash = opInc.map((o, i) => o - totalDS[i] - capexRes[i]);
+  const rowTip = (label, data, tips, cls) =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map((v, i) => `<td title="${(tips[i]||'').replace(/"/g,'&quot;')}" style="cursor:help">${fmtCellK(v)}</td>`).join('')}</tr>`;
+  const linkRow = (label, data, href, cls) =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td><a href="${href}" style="color:inherit;text-decoration:underline;text-decoration-style:dotted">${label}</a></td>${data.map(v => `<td>${fmtCellK(v)}</td>`).join('')}</tr>`;
 
-  // Waterfall
-  const { peddDetail, peddPayments, tier2, cumPEDD } = runWaterfall(distribCash, totalTaxDist, 0.065);
   const tier0Arr = YEARS.map(() => TIER0);
   const tier1Arr = YEARS.map(y => getTier1(y));
 
@@ -201,8 +156,8 @@ function recalc() {
   plHTML += row('Operating Expense', exp.map(v => -v));
   plHTML += row('Operating Income', opInc, 'subtotal-row');
   plHTML += sectionRow('Cash Adjustments');
-  plHTML += row('Loan Interest', loanInt.map(v => -v));
-  plHTML += row('Loan Principal', loanPrin.map(v => -v));
+  plHTML += linkRow('Loan Interest', loanInt.map(v => -v), 'debt.html');
+  plHTML += linkRow('Loan Principal', loanPrin.map(v => -v), 'debt.html');
   plHTML += row('Capex Reserve (2%)', capexRes.map(v => -v));
   plHTML += row('Distributable Cash', distribCash, 'total-row-table');
   plHTML += sectionRow('Tax (Liability Year)');
@@ -223,7 +178,7 @@ function recalc() {
   wfHTML += rowTip('Tax (Fed + HI)', totalTaxDist.map(v => -v), taxCashTips);
   wfHTML += row('Tier 0 (EB)', tier0Arr.map(v => -v));
   wfHTML += row('Tier 1 (Partner Draws)', tier1Arr.map(v => -v));
-  wfHTML += row('PE/DD Repayment', peddPayments.map(v => -v));
+  wfHTML += linkRow('PE/DD Repayment', peddPayments.map(v => -v), 'debt.html');
   wfHTML += row('Tier 2 (Pro-Rata)', tier2.map(v => -v));
   wfHTML += '</tbody>';
   document.getElementById('waterfallTable').innerHTML = wfHTML;
@@ -244,8 +199,7 @@ function recalc() {
     if (partner === 'JS' || partner === 'JJB') {
       const eqPay = YEARS.map(y => {
         if (!JS_BUYOUT_VAL[y]) return 0;
-        const pmt = JS_BUYOUT_VAL[y] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2);
-        return partner === 'JS' ? pmt : -pmt;
+        return JS_BUYOUT_VAL[y] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2) * (partner === 'JS' ? 1 : -1);
       });
       ptHTML += row('Equity Buy/Sell', eqPay);
     }
@@ -254,8 +208,7 @@ function recalc() {
       if (partner === 'EB') t += TIER0;
       if (partner === 'JS' || partner === 'JJB') t += peddPayments[i] * 0.5;
       if (JS_BUYOUT_VAL[YEARS[i]]) {
-        const pmt = JS_BUYOUT_VAL[YEARS[i]] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2);
-        t += partner === 'JS' ? pmt : partner === 'JJB' ? -pmt : 0;
+        t += JS_BUYOUT_VAL[YEARS[i]] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2) * (partner === 'JS' ? 1 : partner === 'JJB' ? -1 : 0);
       }
       return t;
     });
@@ -265,12 +218,11 @@ function recalc() {
   document.getElementById('partnerTable').innerHTML = ptHTML;
 
   // Ownership sidebar
-  const distYears = [2026, 2027, 2028, 2029];
   let ownHTML = '<table style="width:100%;font-size:9px;color:var(--text-sub)">';
-  ownHTML += '<tr><td></td>' + distYears.map(y => `<td style="text-align:right;padding:2px 4px">'${String(y).slice(2)}</td>`).join('') + '</tr>';
+  ownHTML += '<tr><td></td>' + [2026,2027,2028,2029].map(y => `<td style="text-align:right;padding:2px 4px">'${String(y).slice(2)}</td>`).join('') + '</tr>';
   for (const p of ['EB', 'JS', 'JJB']) {
     ownHTML += `<tr><td style="color:var(--text-muted)">${p}</td>`;
-    for (const y of distYears) ownHTML += `<td style="text-align:right;padding:2px 4px">${getOwnership(y)[p].toFixed(1)}%</td>`;
+    for (const y of [2026,2027,2028,2029]) ownHTML += `<td style="text-align:right;padding:2px 4px">${getOwnership(y)[p].toFixed(1)}%</td>`;
     ownHTML += '</tr>';
   }
   ownHTML += '</table>';
@@ -289,8 +241,7 @@ function recalc() {
   localStorage.setItem('gh-pedd-detail', JSON.stringify({
     years: YEARS,
     instruments: PEDD_INSTRUMENTS.map(pe => ({
-      name: pe.name, initBalance: pe.balance,
-      prinPaid: peddDetail[pe.name].prinPaid, intPaid: peddDetail[pe.name].intPaid,
+      name: pe.name, prinPaid: peddDetail[pe.name].prinPaid, intPaid: peddDetail[pe.name].intPaid,
       endBal: peddDetail[pe.name].endBal, intOwed: peddDetail[pe.name].intOwed,
     })),
   }));
@@ -298,7 +249,7 @@ function recalc() {
 
 // Init
 initTheme();
-document.getElementById('versionLabel').textContent = 'v 03-28 06:00';
+document.getElementById('versionLabel').textContent = 'v 03-28 08:00';
 document.getElementById('debugToggle').checked = state.debug;
 createSlider('sl-fedTaxRate', 'fedTaxRate', state, { label: 'Federal Tax Rate', min: 20, max: 37, step: 1, format: v => `${v}%` });
 createSlider('sl-hiTaxRate', 'hiTaxRate', state, { label: 'Hawaii Tax Rate', min: 7, max: 11, step: 1, format: v => `${v}%` });

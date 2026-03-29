@@ -68,21 +68,14 @@ function recalc() {
   // Loan schedules
   const { loanData, totalInt, totalPrin, totalDS } = computeLoanSchedules();
 
-  // Waterfall simulation for PE/DD
-  let expData = null;
-  try { expData = JSON.parse(localStorage.getItem('gh-expansion-data')); } catch(e) {}
-  const DEBUG_REV = 14200000, DEBUG_EXP = 9700000, GROWTH = 0.05;
-  const rev = YEARS.map((_, i) => expData ? (expData.totalRev[i] || 0) : DEBUG_REV * Math.pow(1 + GROWTH, i));
-  const exps = YEARS.map((_, i) => expData ? (expData.totalExp[i] || 0) : DEBUG_EXP * Math.pow(1 + GROWTH, i));
-  const opInc = rev.map((r, i) => r - exps[i]);
-  const capexRes = rev.map(r => r * 0.02);
-  const distribCash = opInc.map((o, i) => o - totalDS[i] - capexRes[i]);
-  const taxDist = distribCash.map((_, i) => Math.max(0, (opInc[i] - totalInt[i]) * 0.25));
+  // PE/DD — run full model (same tax timing as distributions page)
+  const { rev, exp } = getRevExp(false);
+  const { fedDep, stateDep } = getDepreciation(false);
+  const model = runFullModel({ rev, exp, loanInt: totalInt, loanPrin: totalPrin, totalDS, fedDep, stateDep, tBillRate });
+  const { peddDetail } = model;
 
-  const { peddDetail, peddPayments, tier2, cumPEDD } = runWaterfall(distribCash, taxDist, tBillRate);
-
-  const totalPEDDPrin = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + peddDetail[pe.name].prinPaid[i], 0));
-  const totalPEDDInt = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + peddDetail[pe.name].intPaid[i], 0));
+  const totalPEDDPrin = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + (peddDetail[pe.name]?.prinPaid[i] || 0), 0));
+  const totalPEDDInt = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + (peddDetail[pe.name]?.intPaid[i] || 0), 0));
 
   // Summary cards — PE/DD first, loans second
   let summaryHTML = '<div class="summary-grid pedd">';
