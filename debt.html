@@ -113,46 +113,20 @@ for (let y = 2026; y <= 2035; y++) YEARS.push(y);
 const state = { tBillRate: 4 };
 
 // === DEBT INSTRUMENTS ===
-// FCL: $5,680,000 orig, 7.12%, monthly, started Mar 2024, ~78 months
-// 2 years (24 months) already paid as of Mar 2026
+// FCL: $5,680,000 orig, 7.12%, monthly $91,166, fiscal year Dec-Nov
+// Hardcoded from exact amortization schedule
 const FCL = {
-  name: 'FCL (Lettuce)', origBal: 5680000, rate: 0.0712, termMonths: 78,
-  startDate: new Date(2024, 2, 1), // Mar 2024
-  monthlyPmt: function() {
-    const r = this.rate / 12, n = this.termMonths;
-    return this.origBal * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+  name: 'FCL (Lettuce)', origBal: 5680000, rate: 0.0712,
+  schedule: {
+    2026: { interest: 310725, principal: 783267, endBal: 3935227 },
+    2027: { interest: 253099, principal: 840893, endBal: 3094334 },
+    2028: { interest: 191233, principal: 902759, endBal: 2191576 },
+    2029: { interest: 124819, principal: 969173, endBal: 1222402 },
+    2030: { interest: 53516, principal: 1040476, endBal: 181926 },
+    2031: { interest: 1624, principal: 180708, endBal: 1219 },
   },
-  // Compute remaining balance after N months
-  balanceAfter: function(months) {
-    const r = this.rate / 12, pmt = this.monthlyPmt();
-    let bal = this.origBal;
-    for (let i = 0; i < months; i++) {
-      const intPmt = bal * r;
-      const prinPmt = pmt - intPmt;
-      bal -= prinPmt;
-      if (bal <= 0) return 0;
-    }
-    return bal;
-  },
-  // Annual interest and principal for a given calendar year
   annualSchedule: function(year) {
-    // Months 0 = Mar 2024. For year Y, months are (Y-2024)*12 - 2 through + 9
-    // Mar 2024 = month 0. Jan 2026 = month 22. Dec 2026 = month 33.
-    const monthStart = (year - 2024) * 12 - 2; // Jan of year relative to Mar 2024
-    const r = this.rate / 12, pmt = this.monthlyPmt();
-    let bal = this.balanceAfter(Math.max(0, monthStart));
-    let totalInt = 0, totalPrin = 0;
-    for (let m = 0; m < 12; m++) {
-      const absMonth = monthStart + m;
-      if (absMonth < 0 || bal <= 0) continue;
-      if (absMonth >= this.termMonths) break;
-      const intPmt = bal * r;
-      const prinPmt = Math.min(pmt - intPmt, bal);
-      totalInt += intPmt;
-      totalPrin += prinPmt;
-      bal -= prinPmt;
-    }
-    return { interest: totalInt, principal: totalPrin, endBal: Math.max(0, bal) };
+    return this.schedule[year] || { interest: 0, principal: 0, endBal: 0 };
   }
 };
 
@@ -279,7 +253,7 @@ function recalc() {
   let summaryHTML = '<div class="summary-grid loans">';
   for (const loan of LOANS) {
     const sched2026 = loan.annualSchedule(2026);
-    const startBal = loan.name === 'FCL (Lettuce)' ? loan.balanceAfter(22) :
+    const startBal = loan.name === 'FCL (Lettuce)' ? 4718495 :
                      loan.name === 'BIPAH (Property)' ? loan.balanceAfter(12) :
                      loan.origBal;
     summaryHTML += `<div class="summary-item">
