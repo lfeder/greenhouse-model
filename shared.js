@@ -13,8 +13,15 @@ const OWNERSHIP = {
   2029: { EB: 27.5, JS: 22.5, JJB: 50.0 },
 };
 function getOwnership(year) {
+  // Prefer expansion page ownership (includes dilution from JJB equity investment)
+  if (!getOwnership._cache) {
+    try { getOwnership._cache = JSON.parse(localStorage.getItem('gh-ownership')); } catch(e) {}
+  }
+  if (getOwnership._cache && getOwnership._cache[year]) return getOwnership._cache[year];
   return (year <= 2029 && OWNERSHIP[year]) ? OWNERSHIP[year] : OWNERSHIP[2029];
 }
+// Clear cache on each recalc so it picks up fresh data
+function clearOwnershipCache() { getOwnership._cache = null; }
 
 // PE/DD instruments — repayment order: PE3 → PE1 → PE2 → DD
 // PE/DD as of Jan 1, 2026 (from Excel Debt Schedule tab)

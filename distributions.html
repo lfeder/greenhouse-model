@@ -90,6 +90,7 @@ const JS_BUYOUT_VAL = { 2026: 8000000, 2027: 9750000, 2028: 11500000, 2029: 1325
 const JS_ANNUAL_LOSS = 0.03, EB_ANNUAL_GAIN = 0.005;
 
 function recalc() {
+  clearOwnershipCache();
   const { rev, exp } = getRevExp(state.debug);
   const { totalInt: loanInt, totalPrin: loanPrin, totalDS } = computeLoanSchedules();
   const { fedDep, stateDep } = getDepreciation(state.debug);
