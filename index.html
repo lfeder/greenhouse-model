@@ -206,8 +206,23 @@
     </div>
 
     <div class="panel" id="internalPanel">
-      <div class="panel-title">Scenario A — JJB Funds All Equity, JS Transfers to EB</div>
+      <div class="panel-title">Ownership & Equity Investment</div>
       <div id="internalCapTable"></div>
+    </div>
+
+    <div class="panel" id="distWaterfallPanel">
+      <div class="panel-title">Distribution Waterfall ($K) <a href="distributions.html" style="color:var(--text-muted);font-size:8px;text-decoration:none;letter-spacing:0.05em">[detail]</a></div>
+      <div style="overflow-x:auto"><table class="fin-table" id="distWaterfallTable"></table></div>
+    </div>
+
+    <div class="panel" id="partnerCashPanel">
+      <div class="panel-title">Partner Cash ($K) <a href="distributions.html" style="color:var(--text-muted);font-size:8px;text-decoration:none;letter-spacing:0.05em">[detail]</a></div>
+      <div style="overflow-x:auto"><table class="fin-table" id="partnerCashTable"></table></div>
+    </div>
+
+    <div class="panel" id="valuationPanel">
+      <div class="panel-title">Partner Valuations</div>
+      <div id="valuationTable"></div>
     </div>
 
   </div>
@@ -758,6 +773,93 @@ function recalc() {
       endQ: configs[c.key].endQ,
     })),
   }));
+
+  renderDistTables();
+}
+
+function renderDistTables() {
+  let dist = null;
+  try { dist = JSON.parse(localStorage.getItem('gh-dist-results')); } catch(e) {}
+  if (!dist) {
+    document.getElementById('distWaterfallTable').innerHTML = '<tr><td style="color:var(--text-dim);padding:12px">Visit <a href="distributions.html" style="color:var(--accent)">Distributions</a> page to compute</td></tr>';
+    document.getElementById('partnerCashTable').innerHTML = '';
+    document.getElementById('valuationTable').innerHTML = '';
+    return;
+  }
+
+  const fCell = (n) => {
+    if (Math.abs(n) < 50) return '\u2014';
+    const k = Math.round(Math.abs(n) / 1e3);
+    return `${n < 0 ? '\u2212' : ''}${k.toLocaleString()}`;
+  };
+  const yh = YEARS.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
+  const sr = (label) => `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
+  const row = (label, data, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fCell(v)}</td>`).join('')}</tr>`;
+  const rowYellow = (label, actual, shortfall) => {
+    return `<tr><td>${label}</td>${actual.map((v, i) => {
+      const isShort = shortfall[i] > 50;
+      return `<td${isShort ? ' style="color:var(--yellow)"' : ''}>${fCell(-v)}${isShort ? ' *' : ''}</td>`;
+    }).join('')}</tr>`;
+  };
+
+  // Waterfall
+  let wf = `<thead><tr><th></th>${yh}</tr></thead><tbody>`;
+  wf += row('Distributable Cash', dist.distribCash);
+  wf += sr('Distributions');
+  wf += row('Tax (Fed + HI)', dist.totalTaxDist.map(v => -v));
+  wf += row('Tier 0 (EB)', dist.tier0Actual.map(v => -v));
+  wf += rowYellow('Tier 1 (Partners)', dist.tier1Actual, dist.tier1Shortfall);
+  wf += row('PE/DD Repayment', dist.peddPayments.map(v => -v));
+  wf += row('Tier 2 (Pro-Rata)', dist.tier2.map(v => -v));
+  if (dist.tier1Shortfall.some(v => v > 50)) wf += row('T1 Shortfall \u2192 DD', dist.tier1Shortfall.map(v => -v));
+  wf += '</tbody>';
+  document.getElementById('distWaterfallTable').innerHTML = wf;
+
+  // Partner cash
+  let pt = `<thead><tr><th></th>${yh}</tr></thead><tbody>`;
+  for (const p of ['EB', 'JS', 'JJB']) {
+    pt += sr(p);
+    pt += row('Total', dist.partnerData[p].total, 'subtotal-row');
+  }
+  pt += '</tbody>';
+  document.getElementById('partnerCashTable').innerHTML = pt;
+
+  // Valuation — read ownership from internal cap table data
+  let own = null;
+  try { own = JSON.parse(localStorage.getItem('gh-ownership')); } catch(e) {}
+  if (own) {
+    const lastYear = YEARS[YEARS.length - 1];
+    const lastOwn = own[lastYear] || { JJB: 50, EB: 27.5, JS: 22.5 };
+    const peOptions = [4,5,6,7,8,9,10,11,12];
+    let vHTML = '<table style="width:100%;font-size:11px;font-family:inherit;border-collapse:collapse">';
+    vHTML += '<tr><th style="text-align:left;padding:4px 8px;color:var(--accent);font-size:9px;letter-spacing:0.08em;text-transform:uppercase">P/E</th>';
+    for (const p of ['JJB', 'EB', 'JS']) vHTML += `<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">${p} (${lastOwn[p].toFixed(1)}%)</th>`;
+    vHTML += '<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">Total</th></tr>';
+
+    const lastOpInc = dist.distribCash[YEARS.length - 1] + dist.totalTaxDist[YEARS.length - 1] + dist.tier0Actual[YEARS.length - 1] + dist.tier1Actual[YEARS.length - 1] + dist.peddPayments[YEARS.length - 1] + dist.tier2[YEARS.length - 1];
+    // Approximate op income from distributable cash + DS + capex reserve
+    // Actually, just use the last year's total revenue - expense from expansion data
+    let lastRev = 0, lastExp = 0;
+    try {
+      const ed = JSON.parse(localStorage.getItem('gh-expansion-data'));
+      lastRev = ed.totalRev[YEARS.length - 1];
+      lastExp = ed.totalExp[YEARS.length - 1];
+    } catch(e) {}
+    const opInc = lastRev - lastExp;
+
+    for (const pe of peOptions) {
+      const bizVal = opInc * pe;
+      vHTML += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:4px 8px;color:var(--text-muted)">${pe}x</td>`;
+      for (const p of ['JJB', 'EB', 'JS']) {
+        const val = lastOwn[p] / 100 * bizVal;
+        vHTML += `<td style="text-align:right;padding:4px 8px;color:var(--text-sub)">${fmtK(val)}</td>`;
+      }
+      vHTML += `<td style="text-align:right;padding:4px 8px;color:var(--text)">${fmtK(bizVal)}</td></tr>`;
+    }
+    vHTML += '</table>';
+    vHTML += `<div style="font-size:9px;color:var(--text-dim);margin-top:6px">${lastYear} Op Income: ${fmtK(opInc)} · Ownership from cap table above</div>`;
+    document.getElementById('valuationTable').innerHTML = vHTML;
+  }
 }
 
 // === CHART ===

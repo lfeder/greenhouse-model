@@ -256,6 +256,29 @@ function recalc() {
       endBal: peddDetail[pe.name].endBal, intOwed: peddDetail[pe.name].intOwed,
     })),
   }));
+
+  // Save full waterfall data for expansion page
+  const partnerData = {};
+  for (const partner of ['EB', 'JS', 'JJB']) {
+    const ownArr = YEARS.map(y => getOwnership(y));
+    const taxShare = YEARS.map((_, i) => totalTaxDist[i] * ownArr[i][partner] / 100);
+    const t1Share = YEARS.map((_, i) => tier1Actual[i] * ownArr[i][partner] / 100);
+    const t2Share = YEARS.map((_, i) => tier2[i] * ownArr[i][partner] / 100);
+    const total = YEARS.map((_, i) => {
+      let t = taxShare[i] + t1Share[i] + t2Share[i];
+      if (partner === 'EB') t += tier0Actual[i];
+      if (partner === 'JS' || partner === 'JJB') t += peddPayments[i] * 0.5;
+      if (JS_BUYOUT_VAL[YEARS[i]]) {
+        t += JS_BUYOUT_VAL[YEARS[i]] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2) * (partner === 'JS' ? 1 : partner === 'JJB' ? -1 : 0);
+      }
+      return t;
+    });
+    partnerData[partner] = { taxShare, t1Share, t2Share, total };
+  }
+  localStorage.setItem('gh-dist-results', JSON.stringify({
+    years: YEARS, distribCash, totalTaxDist, tier0Actual, tier1Actual, tier1Shortfall,
+    peddPayments, tier2, partnerData, cumPEDD, grantPct,
+  }));
 }
 
 // Init
