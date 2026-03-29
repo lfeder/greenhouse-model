@@ -234,30 +234,77 @@ function recalc() {
   const fedDep = depData ? depData.totalFed : YEARS.map(() => 0);
   const stateDep = depData ? depData.totalState : YEARS.map(() => 0);
 
-  // === TAX DISTRIBUTIONS ===
-  // Federal: EB share of (taxable - bonus depreciation - NOL) * fed rate, grossed up
+  // === TAX LIABILITY (per tax year) ===
   let fedNOLRemaining = state.fedNOL;
-  const fedTaxDist = [], hiTaxDist = [];
+  const fedTaxLiab = [], hiTaxLiab = [];
   for (let i = 0; i < YEARS.length; i++) {
     const own = getOwnership(YEARS[i]);
 
-    // Federal
+    // Federal: EB share of (taxable - depreciation - NOL), grossed up
     const fedTaxable = taxableInc[i] - fedDep[i];
     const ebFedTaxable = fedTaxable * own.EB / 100;
     const nolUsed = Math.min(fedNOLRemaining, Math.max(0, ebFedTaxable));
     fedNOLRemaining -= nolUsed;
     const ebNetFed = Math.max(0, ebFedTaxable - nolUsed);
     const fedTax = ebNetFed * state.fedTaxRate / 100;
-    // Gross up to entity level: fedTax / EB%
-    fedTaxDist.push(own.EB > 0 ? fedTax / (own.EB / 100) : 0);
+    fedTaxLiab.push(own.EB > 0 ? fedTax / (own.EB / 100) : 0);
 
     // Hawaii
     const hiTaxable = taxableInc[i] - stateDep[i];
     const ebHiTaxable = hiTaxable * own.EB / 100;
     const hiTax = Math.max(0, ebHiTaxable) * state.hiTaxRate / 100;
-    hiTaxDist.push(own.EB > 0 ? hiTax / (own.EB / 100) : 0);
+    hiTaxLiab.push(own.EB > 0 ? hiTax / (own.EB / 100) : 0);
   }
-  const totalTaxDist = fedTaxDist.map((f, i) => f + hiTaxDist[i]);
+  const totalTaxLiab = fedTaxLiab.map((f, i) => f + hiTaxLiab[i]);
+
+  // === TAX CASH DISTRIBUTIONS (quarterly timing) ===
+  // 2025: no tax owed → 2026 has $0 distributions (no safe harbor quarterlies)
+  // 2026 tax: final due 4/15/27, no quarterlies during 2026
+  // 2027: pay 2026 final (4/15) + Q2,Q3 estimates for 2027 (based on 2026 liability)
+  // 2028+: Q4 prior year estimate (1/15) + final settlement (4/15) + Q2,Q3 current estimates
+  //
+  // For each calendar year, cash tax distributions =
+  //   final payment for prior year (liability - estimates already paid)
+  //   + quarterly estimates for current year paid in this calendar year
+  const taxCashDist = [];
+  for (let i = 0; i < YEARS.length; i++) {
+    const year = YEARS[i];
+    const priorIdx = i - 1;
+    // Prior year liability (tax year = calendar year)
+    const priorLiab = priorIdx >= 0 ? totalTaxLiab[priorIdx] : 0;
+    // Two-years-ago liability (for estimating prior year quarterlies)
+    const twoPriorIdx = i - 2;
+    const twoPriorLiab = twoPriorIdx >= 0 ? totalTaxLiab[twoPriorIdx] : 0;
+
+    let cashOut = 0;
+
+    if (year === 2026) {
+      // No tax owed for 2025, no quarterlies needed
+      cashOut = 0;
+    } else if (year === 2027) {
+      // 4/15/27: 2026 final tax (no estimates were made in 2026)
+      const finalPmt2026 = totalTaxLiab[0]; // index 0 = 2026
+      // Q2 estimate (6/15/27) + Q3 estimate (9/15/27) for 2027, based on 2026 liability
+      const quarterlyEst = totalTaxLiab[0] / 4;
+      cashOut = finalPmt2026 + quarterlyEst * 2;
+    } else {
+      // Normal year: Q4 prior est (1/15) + final prior settlement (4/15) + Q2+Q3 current est
+      // Estimates paid for prior year: Q1(4/15 prior yr) + Q2(6/15) + Q3(9/15) = 3 quarters in prior calendar year
+      // Q4 prior year estimate falls in this calendar year (1/15)
+      const priorEstPerQ = twoPriorLiab / 4;
+      const priorEstPaid = priorEstPerQ * 3; // 3 quarters paid in prior calendar year
+      const q4PriorEst = priorEstPerQ; // Q4 paid 1/15 of this year
+      const priorFinalSettlement = Math.max(0, priorLiab - priorEstPaid - q4PriorEst);
+      // Current year estimates: Q1(4/15) + Q2(6/15) + Q3(9/15) = 3 quarters based on prior liability
+      const currentEstPerQ = priorLiab / 4;
+      const currentEstThisYear = currentEstPerQ * 3;
+      cashOut = q4PriorEst + priorFinalSettlement + currentEstThisYear;
+    }
+    taxCashDist.push(cashOut);
+  }
+  const fedTaxDist = taxCashDist; // for backward compat in table labels
+  const hiTaxDist = YEARS.map(() => 0); // already included in taxCashDist
+  const totalTaxDist = taxCashDist;
 
   // === DISTRIBUTABLE CASH ===
   const distribCash = ebitda.map((e, i) => e - totalDS[i] - capexRes[i]);
@@ -319,11 +366,16 @@ function recalc() {
   plHTML += row('Loan Principal', loanPrin.map(v => -v));
   plHTML += row('Capex Reserve (2%)', capexRes.map(v => -v));
   plHTML += row('Distributable Cash', distribCash, 'total-row-table');
-  plHTML += sectionRow('Federal Taxable Income');
+  plHTML += sectionRow('Tax (Liability Year)');
   plHTML += row('EBITDA \u2212 Interest', taxableInc);
-  plHTML += row('Bonus Depreciation', fedDep.map(v => -v));
+  plHTML += row('Fed Bonus Depreciation', fedDep.map(v => -v));
   const fedTaxableNet = taxableInc.map((t, i) => t - fedDep[i]);
-  plHTML += row('Fed Taxable Income', fedTaxableNet, 'subtotal-row');
+  plHTML += row('Fed Taxable Income', fedTaxableNet);
+  plHTML += row('State Depreciation', stateDep.map(v => -v));
+  const hiTaxableNet = taxableInc.map((t, i) => t - stateDep[i]);
+  plHTML += row('HI Taxable Income', hiTaxableNet);
+  plHTML += row('Tax Liability (accrual)', totalTaxLiab);
+  plHTML += row('Tax Cash Dist (paid)', totalTaxDist, 'subtotal-row');
   plHTML += '</tbody>';
   document.getElementById('plTable').innerHTML = plHTML;
 
