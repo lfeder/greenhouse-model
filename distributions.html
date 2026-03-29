@@ -65,6 +65,7 @@
         <a href="depreciation.html">Depreciation</a>
         <a href="distributions.html" class="active">Distributions</a>
       </div>
+      <button id="saveBtn" onclick="saveState()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save</button>
       <button onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer" id="themeToggle">light</button>
       <div id="versionLabel" style="font-size:10px;color:var(--text)"></div>
     </div>
@@ -216,8 +217,11 @@ function recalc() {
   const ebitda = rev.map((r, i) => r - exp[i]);
 
   // === DEBT SERVICE ===
-  const loanInt = debtData ? debtData.loanInterest : YEARS.map(() => 0);
-  const loanPrin = debtData ? debtData.loanPrincipal : YEARS.map(() => 0);
+  const loanInt = debtData ? [...debtData.loanInterest] : YEARS.map(() => 0);
+  const loanPrin = debtData ? [...debtData.loanPrincipal] : YEARS.map(() => 0);
+  // Paid-off loans with small 2026 residuals: AgCredit ($264 int, $37,281 prin), JJB Solar ($2,670 int, $14,620 prin)
+  const idx2026 = YEARS.indexOf(2026);
+  if (idx2026 >= 0) { loanInt[idx2026] += 2934; loanPrin[idx2026] += 51901; }
   const totalDS = loanInt.map((v, i) => v + loanPrin[i]);
 
   // === CAPEX RESERVE ===
@@ -423,6 +427,16 @@ function getOwnership(year) {
   return OWNERSHIP[2029];
 }
 
+function saveState() {
+  localStorage.setItem('gh-dist-state', JSON.stringify(state));
+  const btn = document.getElementById('saveBtn');
+  btn.textContent = 'saved!';
+  setTimeout(() => { btn.textContent = 'save'; }, 1500);
+}
+function loadState() {
+  try { const s = JSON.parse(localStorage.getItem('gh-dist-state')); if (s) Object.assign(state, s); } catch(e) {}
+}
+
 function toggleTheme() {
   document.body.classList.toggle('light');
   document.getElementById('themeToggle').textContent = document.body.classList.contains('light') ? 'dark' : 'light';
@@ -430,6 +444,7 @@ function toggleTheme() {
 }
 
 // Init
+loadState();
 const theme = localStorage.getItem('gh-expansion-theme');
 if (theme === 'light') { document.body.classList.add('light'); document.getElementById('themeToggle').textContent = 'dark'; }
 document.getElementById('versionLabel').textContent = 'v 03-28 04:00';

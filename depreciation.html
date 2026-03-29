@@ -61,6 +61,7 @@
         <a href="depreciation.html" class="active">Depreciation</a>
         <a href="distributions.html">Distributions</a>
       </div>
+      <button id="saveBtn" onclick="saveState()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save</button>
       <button onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer" id="themeToggle">light</button>
       <div id="versionLabel" style="font-size:10px;color:var(--text)"></div>
     </div>
@@ -232,6 +233,16 @@ function recalc() {
   }));
 }
 
+function saveState() {
+  localStorage.setItem('gh-depreciation-state', JSON.stringify(state));
+  const btn = document.getElementById('saveBtn');
+  btn.textContent = 'saved!';
+  setTimeout(() => { btn.textContent = 'save'; }, 1500);
+}
+function loadState() {
+  try { Object.assign(state, JSON.parse(localStorage.getItem('gh-depreciation-state'))); } catch(e) {}
+}
+
 function toggleTheme() {
   document.body.classList.toggle('light');
   document.getElementById('themeToggle').textContent = document.body.classList.contains('light') ? 'dark' : 'light';
@@ -239,6 +250,7 @@ function toggleTheme() {
 }
 
 // Init
+loadState();
 const theme = localStorage.getItem('gh-expansion-theme');
 if (theme === 'light') { document.body.classList.add('light'); document.getElementById('themeToggle').textContent = 'dark'; }
 document.getElementById('versionLabel').textContent = 'v 03-28 04:00';
