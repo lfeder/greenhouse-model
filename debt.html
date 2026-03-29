@@ -351,7 +351,7 @@ function recalc() {
   const row = (label, data, cls) =>
     `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fmtCell(v)}</td>`).join('')}</tr>`;
   const balRow = (label, data) =>
-    `<tr><td>${label}</td>${data.map(v => `<td>${v > 50 ? fmtK(v) : '\u2014'}</td>`).join('')}</tr>`;
+    `<tr><td>${label}</td>${data.map(v => `<td>${v > 50 ? Math.round(v / 1e3).toLocaleString() : '\u2014'}</td>`).join('')}</tr>`;
 
   let html = `<thead><tr><th></th>${yearHeaders}</tr></thead><tbody>`;
 
