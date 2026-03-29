@@ -17,11 +17,12 @@ function getOwnership(year) {
 }
 
 // PE/DD instruments — repayment order: PE3 → PE1 → PE2 → DD
+// PE/DD as of Jan 1, 2026 (from Excel Debt Schedule tab)
 const PEDD_INSTRUMENTS = [
-  { name: 'PE3', label: 'PE Tranche 3', balance: 515000, rateType: 'tbill', rateSpread: 0.025, order: 1 },
-  { name: 'PE1', label: 'PE Tranche 1', balance: 1000000, rate: 0, order: 2 },
-  { name: 'PE2', label: 'PE Tranche 2', balance: 500000, rate: 0.05, order: 3 },
-  { name: 'DD',  label: 'Deferred Dist', balance: 380000, rate: 0, order: 4 },
+  { name: 'PE3', label: 'PE Tranche 3', balance: 685000, accruedInt: 5930, rateType: 'tbill', rateSpread: 0.025, order: 1 },
+  { name: 'PE1', label: 'PE Tranche 1', balance: 1000000, accruedInt: 0, rate: 0, order: 2 },
+  { name: 'PE2', label: 'PE Tranche 2', balance: 500000, accruedInt: 79571, rate: 0.05, order: 3 },
+  { name: 'DD',  label: 'Deferred Dist', balance: 380000, accruedInt: 0, rate: 0, order: 4 },
 ];
 
 // Loan definitions
@@ -231,7 +232,7 @@ function computeLoanSchedules() {
 
 // === WATERFALL SIMULATION ===
 function runWaterfall(distribCash, taxDist, tBillRate) {
-  const peddBal = PEDD_INSTRUMENTS.map(p => ({ ...p, remaining: p.balance, intOwed: 0 }));
+  const peddBal = PEDD_INSTRUMENTS.map(p => ({ ...p, remaining: p.balance, intOwed: p.accruedInt || 0 }));
   const peddDetail = {};
   for (const pe of peddBal) peddDetail[pe.name] = { prinPaid: [], intPaid: [], endBal: [], intOwed: [] };
 
