@@ -294,14 +294,7 @@ const fmt = (n) => {
   const abs = Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   return n < 0 ? `-${abs}` : abs;
 };
-const fmtK = (n) => {
-  if (n == null || isNaN(n)) return "\u2014";
-  const abs = Math.abs(n), sign = n < 0 ? "-" : "";
-  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)}M`;
-  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(0)}K`;
-  return fmt(n);
-};
-const fmtM = (n) => `${n < 0 ? '-' : ''}${(Math.abs(n) / 1e6).toFixed(2)}M`;
+// fmtK and fmtM defined in shared.js
 
 // === QUARTER UTILS ===
 function qLabel(qVal) { return `Q${qVal % 10}-${String(Math.floor(qVal / 10)).slice(2)}`; }
@@ -365,7 +358,7 @@ function sliderBg(pct) {
   return `linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
 }
 
-const sliderOpts = {};
+// sliderOpts defined in shared.js
 
 function createSlider(containerId, key, opts) {
   sliderOpts[key] = opts;
