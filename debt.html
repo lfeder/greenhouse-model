@@ -273,24 +273,24 @@ function createSlider(containerId, key, opts) {
 function recalc() {
   const tBillRate = state.tBillRate / 100;
 
-  // Instrument summary cards — loans first row, PE/DD second row
+  // Instrument summary cards — loans row 1, PE/DD row 2
   const loanMaturities = { 'FCL (Lettuce)': 'Mar 2031', 'BIPAH (Property)': 'Jan 2045', 'JJB Downpayment': 'Jan 2030' };
-  let summaryHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">';
+  let summaryHTML = '<div class="summary-grid">';
   for (const loan of LOANS) {
     const sched2026 = loan.annualSchedule(2026);
     const startBal = loan.name === 'FCL (Lettuce)' ? loan.balanceAfter(22) :
                      loan.name === 'BIPAH (Property)' ? loan.balanceAfter(12) :
                      loan.origBal;
-    summaryHTML += `<div class="summary-item" style="flex:1;min-width:160px">
+    summaryHTML += `<div class="summary-item">
       <div class="summary-label">${loan.name}</div>
       <div class="summary-detail">${(loan.rate * 100).toFixed(2)}% · ${fmtK(startBal)} bal · matures ${loanMaturities[loan.name]}</div>
       <div class="summary-value">${fmtK(sched2026.interest + sched2026.principal)}/yr</div>
     </div>`;
   }
-  summaryHTML += '</div><div style="display:flex;gap:8px;flex-wrap:wrap">';
+  summaryHTML += '</div><div class="summary-grid" style="margin-top:8px">';
   for (const pe of PEDD_INSTRUMENTS) {
     const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
-    summaryHTML += `<div class="summary-item" style="flex:1;min-width:160px">
+    summaryHTML += `<div class="summary-item">
       <div class="summary-label">${pe.name} (#${pe.order})</div>
       <div class="summary-detail">${rate > 0 ? (rate * 100).toFixed(1) + '%' : 'no interest'} · ${fmtK(pe.balance)} bal</div>
       <div class="summary-value">via waterfall</div>
