@@ -315,6 +315,11 @@ function recalc() {
   plHTML += row('Loan Principal', loanPrin.map(v => -v));
   plHTML += row('Capex Reserve (2%)', capexRes.map(v => -v));
   plHTML += row('Distributable Cash', distribCash, 'total-row-table');
+  plHTML += sectionRow('Federal Taxable Income');
+  plHTML += row('EBITDA \u2212 Interest', taxableInc);
+  plHTML += row('Bonus Depreciation', fedDep.map(v => -v));
+  const fedTaxableNet = taxableInc.map((t, i) => t - fedDep[i]);
+  plHTML += row('Fed Taxable Income', fedTaxableNet, 'subtotal-row');
   plHTML += '</tbody>';
   document.getElementById('plTable').innerHTML = plHTML;
 
