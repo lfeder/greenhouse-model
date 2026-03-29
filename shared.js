@@ -164,6 +164,15 @@ function initTheme() {
     const btn = document.getElementById('themeToggle');
     if (btn) btn.textContent = 'dark';
   }
+  // Sync theme across open tabs
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'gh-expansion-theme') {
+      const isLight = e.newValue === 'light';
+      document.body.classList.toggle('light', isLight);
+      const btn = document.getElementById('themeToggle');
+      if (btn) btn.textContent = isLight ? 'dark' : 'light';
+    }
+  });
 }
 
 function toggleTheme() {

@@ -9,20 +9,20 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --text: #f2faf2; --text-sub: #b8d8b8; --text-muted: #7aaa7a; --text-dim: #4a7a4a;
-    --green: #7dd17a; --green-bright: #9adf97; --red: #e08888; --yellow: #e0c860;
-    --border: #2a4a2a; --bg: #0d1a0d; --panel: #111f11; --panel-dark: #090f09; --accent: #5a9e55;
+    --text: #d8e8d8; --text-sub: #b0d0b0; --text-muted: #88b888; --text-dim: #5a8a5a;
+    --green: #7dd17a; --green-bright: #9adf97; --yellow: #e0c860;
+    --border: #2a4a2a; --bg: #0d1a0d; --panel: #121f12; --panel-dark: #0a100a; --accent: #6aae66;
     --header-bg: linear-gradient(135deg, #0d1a0d, #162816, #0d1a0d);
     --slider-track: #243624; --slider-fill: #5a9e55; --slider-thumb: #5a9e55; --slider-thumb-border: #0d1a0d;
-    --chart-grid: #162416; --chart-tick: #4a7a4a;
+    --chart-grid: #162416; --chart-tick: #5a8a5a;
   }
   body.light {
-    --text: #1a2a1a; --text-sub: #2a4a2a; --text-muted: #3a6a3a; --text-dim: #7a9a7a;
-    --green: #3a8a38; --green-bright: #2a7a28; --red: #b84040; --yellow: #a08820;
-    --border: #b0b8b0; --bg: #e0e2e0; --panel: #eaecea; --panel-dark: #d4d6d4; --accent: #3a7a38;
-    --header-bg: linear-gradient(135deg, #d4d6d4, #e0e2e0, #d4d6d4);
-    --slider-track: #a8cca8; --slider-fill: #3a7a38; --slider-thumb: #3a7a38; --slider-thumb-border: #d8e4d8;
-    --chart-grid: #c0ccc0; --chart-tick: #5a7a5a;
+    --text: #1a2a1a; --text-sub: #2a4a2a; --text-muted: #2a5a2a; --text-dim: #5a8a5a;
+    --green: #2a7a28; --green-bright: #1a6a18; --yellow: #8a7018;
+    --border: #a0b0a0; --bg: #e8eae8; --panel: #f0f2f0; --panel-dark: #dce0dc; --accent: #2a6a28;
+    --header-bg: linear-gradient(135deg, #d8dcd8, #e4e8e4, #d8dcd8);
+    --slider-track: #a0c8a0; --slider-fill: #2a6a28; --slider-thumb: #2a6a28; --slider-thumb-border: #e0e8e0;
+    --chart-grid: #c0ccc0; --chart-tick: #3a6a3a;
   }
   body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; padding-bottom: 60px; }
 
@@ -177,14 +177,6 @@
       <div class="panel-title">Scenario A — JS→EB Transfer</div>
       <div id="sl-jsTransferPct"></div>
     </div>
-    <div class="panel">
-      <div class="panel-title">Scenario B — External Investor</div>
-      <div id="sl-preMoneyVal"></div>
-      <div id="sl-externalEquity"></div>
-      <div id="sl-ebTargetPct"></div>
-      <div id="sl-jsTargetPct"></div>
-      <div id="sl-exitPE"></div>
-    </div>
   </div>
 
   <div style="min-width:0">
@@ -218,10 +210,6 @@
       <div id="internalCapTable"></div>
     </div>
 
-    <div class="panel" id="capTablePanel">
-      <div class="panel-title">Scenario B — External Investor</div>
-      <div id="capTable"></div>
-    </div>
   </div>
 </div>
 
@@ -270,10 +258,8 @@ const state = {
   financingPct: 80, interestRate: 7, loanTermYears: 7, interestOnly: true,
   revInflation: 4, costInflation: 3,
   // Investor / cap table
-  preMoneyVal: 40000000, externalEquity: 15000000,
-  ebTargetPct: 27.5, jsTargetPct: 22.5,
-  exitPE: 8, jsTransferPct: 0,
-  yearPE: {}, // per-year PE overrides for Scenario B
+  jsTransferPct: 0,
+  yearPE: {}, // per-year PE overrides for cap table
 };
 
 // === FORMATTERS ===
@@ -538,27 +524,6 @@ function buildSliders() {
     label: 'Cost Escalation', min: 0, max: 8, step: 2, format: v => `${v.toFixed(0)}%/yr`
   });
 
-  // Investor / cap table
-  createSlider('sl-preMoneyVal', 'preMoneyVal', {
-    label: 'Pre-Money Valuation', min: 20000000, max: 80000000, step: 10000000,
-    format: v => fmtM(v)
-  });
-  createSlider('sl-externalEquity', 'externalEquity', {
-    label: 'New External Equity', min: 10000000, max: 35000000, step: 5000000,
-    format: v => fmtM(v)
-  });
-  createSlider('sl-ebTargetPct', 'ebTargetPct', {
-    label: 'EB Target Ownership', min: 0, max: 30, step: 2.5,
-    format: v => `${v.toFixed(1)}%`
-  });
-  createSlider('sl-jsTargetPct', 'jsTargetPct', {
-    label: 'JS Target Ownership', min: 0, max: 25, step: 2.5,
-    format: v => `${v.toFixed(1)}%`
-  });
-  createSlider('sl-exitPE', 'exitPE', {
-    label: 'Exit P/E Multiple', min: 4, max: 12, step: 1,
-    format: v => `${v}x`
-  });
   createSlider('sl-jsTransferPct', 'jsTransferPct', {
     label: 'JS→EB Transfer/yr', min: 0, max: 2, step: 0.5,
     format: v => `${v.toFixed(1)}%`
@@ -780,7 +745,6 @@ function recalc() {
   updateChart(activeCrops, yearData, existKJ, existL);
   updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt);
   updateROI(allCrops, configs);
-  updateCapTable(equity, steadyOpInc);
   updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt, existKJ, existL, existDebt);
 
   // Export data for other pages
@@ -1093,93 +1057,6 @@ function showCropCF(key) {
     </table>`;
 }
 
-// === CAP TABLE ===
-function updateCapTable(equityNeeded, steadyOpInc) {
-  const s = state;
-  const preMoney = s.preMoneyVal;
-  const extEquity = Math.min(s.externalEquity, equityNeeded);
-  const postMoney = preMoney + equityNeeded;
-
-  // Pre-ownership
-  // Pre-ownership as of 2029 (when base schedule completes)
-  const pre = { JJB: 50, EB: 27.5, JS: 22.5, External: 0 };
-
-  // EB and JS investment based on target ownership
-  // Positive = investing, negative = selling shares
-  const ebInv = (s.ebTargetPct / 100) * postMoney - (27.5 / 100) * preMoney;
-  const jsInv = (s.jsTargetPct / 100) * postMoney - (22.5 / 100) * preMoney;
-
-  // JJB covers: construction equity gap + buying any sold shares
-  // Construction equity not covered by external and participating partners:
-  const ebContrib = Math.max(0, ebInv); // EB's cash into the business (if positive)
-  const jsContrib = Math.max(0, jsInv);
-  const constructionGap = equityNeeded - extEquity - ebContrib - jsContrib;
-  // Buying shares from sellers:
-  const ebSale = ebInv < 0 ? -ebInv : 0;
-  const jsSale = jsInv < 0 ? -jsInv : 0;
-  const jjbInv = constructionGap + ebSale + jsSale;
-
-  // Post-ownership
-  const post = {
-    JJB: ((50 / 100) * preMoney + jjbInv) / postMoney * 100,
-    EB: ((27.5 / 100) * preMoney + ebInv) / postMoney * 100,
-    JS: ((22.5 / 100) * preMoney + jsInv) / postMoney * 100,
-    External: extEquity / postMoney * 100,
-  };
-
-  // Exit valuation = steady-state op income × exit PE
-  const exitVal = steadyOpInc * s.exitPE;
-
-  // Per-partner exit value and IRR
-  const partners = ['JJB', 'EB', 'JS', 'External'];
-  const investments = { JJB: jjbInv, EB: Math.max(0, ebInv), JS: Math.max(0, jsInv), External: extEquity };
-  // Negative investment = sale proceeds received
-  const saleProceeds = { JJB: 0, EB: ebInv < 0 ? -ebInv : 0, JS: jsInv < 0 ? -jsInv : 0, External: 0 };
-
-  // Find investment year (earliest crop start)
-  let investYear = 2030;
-  for (const key in lastROIConfigs) {
-    const cfg = lastROIConfigs[key];
-    if (cfg && cfg.startQ) {
-      const yr = Math.floor(cfg.startQ / 10);
-      if (yr < investYear) investYear = yr;
-    }
-  }
-  const holdYears = YEARS[YEARS.length - 1] - investYear;
-
-  let rows = '';
-  for (const p of partners) {
-    const inv = investments[p];
-    const proceeds = saleProceeds[p];
-    const exitShare = (post[p] / 100) * exitVal;
-    // IRR: invest now, get exitShare in holdYears
-    // For sellers: they receive proceeds now and give up future value
-    let irr = '\u2014';
-    if (inv > 0 && holdYears > 0) {
-      const annReturn = Math.pow(exitShare / inv, 1 / holdYears) - 1;
-      irr = (annReturn * 100).toFixed(1) + '%';
-    } else if (proceeds > 0) {
-      irr = 'sold';
-    }
-
-    rows += `<tr>
-      <td style="color:var(--text-sub)">${p}</td>
-      <td>${pre[p].toFixed(1)}%</td>
-      <td>${inv > 0 ? fmtK(inv) : proceeds > 0 ? '\u2212' + fmtK(proceeds) : '\u2014'}</td>
-      <td>${post[p].toFixed(1)}%</td>
-      <td>${fmtK(exitShare)}</td>
-      <td>${irr}</td>
-    </tr>`;
-  }
-
-  document.getElementById('capTable').innerHTML = `
-    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">Pre-money: ${fmtK(preMoney)} · Post-money: ${fmtK(postMoney)} · Equity needed: ${fmtK(equityNeeded)} · Exit val (${s.exitPE}x): ${fmtK(exitVal)}</div>
-    <table class="fin-table" style="font-size:11px">
-      <thead><tr><th style="text-align:left">Investor</th><th>Pre %</th><th>Investment</th><th>Post %</th><th>Exit Value</th><th>IRR</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-}
-
 // === INTERNAL FUNDING SCENARIO ===
 function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt, existKJ, existL, existDebt) {
   const s = state;
@@ -1229,7 +1106,7 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
 
     const eqDeploy = equityByYear[year] || 0;
     const opInc = totalRev[i] - totalExp[i];
-    const pe = s.yearPE[year] || s.exitPE;
+    const pe = s.yearPE[year] || 8;
     const bizValue = opInc * pe;
 
     // JJB equity investment → dilutes EB/JS, locks in new percentages
@@ -1302,7 +1179,7 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
   // Set dropdown values and bind events
   document.querySelectorAll('.pe-select').forEach(sel => {
     const year = Number(sel.dataset.year);
-    sel.value = s.yearPE[year] || exitPE;
+    sel.value = s.yearPE[year] || 8;
     sel.addEventListener('change', () => {
       s.yearPE[year] = Number(sel.value);
       recalc();
