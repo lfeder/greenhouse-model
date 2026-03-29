@@ -782,6 +782,18 @@ function recalc() {
   updateROI(allCrops, configs);
   updateCapTable(equity, steadyOpInc);
   updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt, existKJ, existL, existDebt);
+
+  // Export data for other pages
+  localStorage.setItem('gh-expansion-data', JSON.stringify({
+    years: YEARS,
+    totalRev, totalExp, totalDebt,
+    existDebt: existDebt,
+    crops: activeCrops.map(c => ({
+      key: c.key, label: c.label,
+      capex: configs[c.key].fullCapex || configs[c.key].capex,
+      endQ: configs[c.key].endQ,
+    })),
+  }));
 }
 
 // === CHART ===

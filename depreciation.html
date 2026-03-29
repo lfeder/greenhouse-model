@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Depreciation Schedule</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --text: #f2faf2; --text-sub: #b8d8b8; --text-muted: #7aaa7a; --text-dim: #4a7a4a;
+    --green: #7dd17a; --border: #2a4a2a; --bg: #0d1a0d; --panel: #111f11; --panel-dark: #090f09; --accent: #5a9e55;
+    --header-bg: linear-gradient(135deg, #0d1a0d, #162816, #0d1a0d);
+    --slider-track: #243624; --slider-fill: #5a9e55; --slider-thumb: #5a9e55; --slider-thumb-border: #0d1a0d;
+  }
+  body.light {
+    --text: #1a2a1a; --text-sub: #2a4a2a; --text-muted: #3a6a3a; --text-dim: #7a9a7a;
+    --green: #3a8a38; --border: #b0b8b0; --bg: #e0e2e0; --panel: #eaecea; --panel-dark: #d4d6d4; --accent: #3a7a38;
+    --header-bg: linear-gradient(135deg, #d4d6d4, #e0e2e0, #d4d6d4);
+    --slider-track: #a8cca8; --slider-fill: #3a7a38; --slider-thumb: #3a7a38; --slider-thumb-border: #d8e4d8;
+  }
+  body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; padding-bottom: 60px; }
+  .header { background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 22px 32px 18px; }
+  .header-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: baseline; }
+  .header-title { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--text); }
+  .nav-links { display: flex; gap: 16px; font-size: 10px; }
+  .nav-links a { color: var(--text-muted); text-decoration: none; text-transform: uppercase; letter-spacing: 0.1em; }
+  .nav-links a.active { color: var(--accent); font-weight: 700; }
+  .content { max-width: 1200px; margin: 0 auto; padding: 20px 32px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+  .panel-title { font-size: 9px; letter-spacing: 0.16em; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; font-weight: 700; }
+  .slider-group { margin-bottom: 0; padding-top: 10px; }
+  .slider-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0; }
+  .slider-label { font-size: 10px; letter-spacing: 0.08em; color: var(--text-sub); text-transform: uppercase; line-height: 1; }
+  .slider-sublabel { font-size: 9px; color: var(--text-muted); margin-top: 1px; line-height: 1.1; }
+  .slider-sublabel:empty { display: none; }
+  .slider-value { font-size: 14px; color: var(--text); font-weight: 700; white-space: nowrap; line-height: 1; }
+  input[type=range] { width: 100%; appearance: none; -webkit-appearance: none; height: 3px; border-radius: 2px; outline: none; cursor: pointer; margin-top: 7px; margin-bottom: 0; padding: 0; display: block; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: inherit; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); margin-top: -5px; }
+  input[type=range]::-moz-range-track { height: 3px; border-radius: 2px; background: inherit; border: none; }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); }
+  .fin-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'DM Mono', monospace; }
+  .fin-table th { font-size: 14px; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 700; }
+  .fin-table th:first-child { text-align: left; }
+  .fin-table td { text-align: right; padding: 5px 8px; border-bottom: 1px solid #1a2e1a; color: var(--text-sub); }
+  .fin-table td:first-child { text-align: left; color: var(--text-muted); }
+  .fin-table tr.section-header td { color: var(--accent); font-weight: 700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding-top: 12px; border-bottom: 1px solid var(--border); }
+  .fin-table tr.subtotal-row td { color: var(--green); font-weight: 700; border-bottom: 1px solid var(--border); }
+  .fin-table tr.total-row-table td { color: var(--text); font-weight: 700; border-top: 1px solid var(--border); border-bottom: 2px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">Depreciation Schedule</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div class="nav-links">
+        <a href="index.html">Expansion</a>
+        <a href="debt.html">Debt</a>
+        <a href="depreciation.html" class="active">Depreciation</a>
+        <a href="distributions.html">Distributions</a>
+      </div>
+      <button onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer" id="themeToggle">light</button>
+      <div id="versionLabel" style="font-size:10px;color:var(--text)"></div>
+    </div>
+  </div>
+</div>
+
+<div class="content">
+  <div style="display:grid;grid-template-columns:280px 1fr;gap:16px">
+    <div>
+      <div class="panel">
+        <div class="panel-title">Existing Assets</div>
+        <div id="sl-existFedYearsLeft"></div>
+        <div id="sl-existFedAnnual"></div>
+        <div id="sl-existStateEndYear"></div>
+        <div id="sl-existStateAnnual"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">New Investments</div>
+        <div id="sl-fedBonusPct"></div>
+        <div id="sl-stateUsefulLife"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="panel-title">Federal Depreciation ($K)</div>
+        <div style="overflow-x:auto"><table class="fin-table" id="fedTable"></table></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">State (HI) Depreciation ($K)</div>
+        <div style="overflow-x:auto"><table class="fin-table" id="stateTable"></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const YEARS = [];
+for (let y = 2026; y <= 2035; y++) YEARS.push(y);
+
+const state = {
+  existFedYearsLeft: 8, existFedAnnual: 200000,
+  existStateEndYear: 2029, existStateAnnual: 1000000,
+  fedBonusPct: 100, stateUsefulLife: 20,
+};
+
+function sliderBg(pct) {
+  const s = getComputedStyle(document.documentElement);
+  return `linear-gradient(to right,${s.getPropertyValue('--slider-fill').trim()} 0%,${s.getPropertyValue('--slider-fill').trim()} ${pct}%,${s.getPropertyValue('--slider-track').trim()} ${pct}%,${s.getPropertyValue('--slider-track').trim()} 100%)`;
+}
+
+const sliderOpts = {};
+function createSlider(containerId, key, opts) {
+  sliderOpts[key] = opts;
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const fill = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
+  container.innerHTML = `
+    <div class="slider-group">
+      <div class="slider-header">
+        <div style="flex:1;padding-right:10px">
+          <div class="slider-label">${opts.label}</div>
+          <div class="slider-sublabel" id="${key}-sublabel">${opts.sublabel ? opts.sublabel() : ''}</div>
+        </div>
+        <span class="slider-value" id="${key}-display">${opts.format(state[key])}</span>
+      </div>
+      <input type="range" id="${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${state[key]}">
+    </div>`;
+  const input = document.getElementById(key);
+  input.style.background = sliderBg(fill);
+  input.addEventListener('input', (e) => {
+    state[key] = Number(e.target.value);
+    const pct = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
+    input.style.background = sliderBg(pct);
+    document.getElementById(`${key}-display`).textContent = opts.format(state[key]);
+    if (opts.sublabel) document.getElementById(`${key}-sublabel`).innerHTML = opts.sublabel();
+    recalc();
+  });
+}
+
+const fmtCell = (n) => {
+  if (Math.abs(n) < 50) return '\u2014';
+  const k = Math.round(n / 1e3);
+  return k.toLocaleString();
+};
+
+function recalc() {
+  // Load crop data from expansion model
+  let crops = [];
+  try { crops = JSON.parse(localStorage.getItem('gh-expansion-data')).crops || []; } catch(e) {}
+
+  const yearHeaders = YEARS.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
+  const sectionRow = (label) => `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
+  const row = (label, data, cls) =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fmtCell(v)}</td>`).join('')}</tr>`;
+
+  // === FEDERAL DEPRECIATION ===
+  // Existing: $existFedAnnual/yr for existFedYearsLeft years starting 2026
+  const existFed = YEARS.map((y, i) => i < state.existFedYearsLeft ? state.existFedAnnual : 0);
+
+  // New investments: 100% bonus in placed-in-service year (endQ year)
+  // Remaining basis (if bonus < 100%) depreciated straight-line over 20yr
+  const cropFed = {};
+  const bonusPct = state.fedBonusPct / 100;
+  for (const crop of crops) {
+    const pisYear = Math.floor(crop.endQ / 10); // placed-in-service year
+    const bonusAmt = crop.capex * bonusPct;
+    const remainBasis = crop.capex - bonusAmt;
+    const slAnnual = remainBasis > 0 ? remainBasis / 20 : 0; // 20yr MACRS for ag structures
+
+    cropFed[crop.key] = YEARS.map(y => {
+      let dep = 0;
+      if (y === pisYear) dep += bonusAmt;
+      if (y >= pisYear && slAnnual > 0) dep += slAnnual;
+      return dep;
+    });
+  }
+
+  const totalNewFed = YEARS.map((_, i) => crops.reduce((s, c) => s + (cropFed[c.key]?.[i] || 0), 0));
+  const totalFed = YEARS.map((_, i) => existFed[i] + totalNewFed[i]);
+
+  let fedHTML = `<thead><tr><th></th>${yearHeaders}</tr></thead><tbody>`;
+  fedHTML += sectionRow('Existing Assets');
+  fedHTML += row('Existing Operations', existFed);
+  fedHTML += sectionRow('New Investments (Bonus ' + state.fedBonusPct + '%)');
+  for (const crop of crops) {
+    fedHTML += row(crop.label, cropFed[crop.key]);
+  }
+  fedHTML += row('Total New', totalNewFed, 'subtotal-row');
+  fedHTML += row('Total Federal', totalFed, 'total-row-table');
+  fedHTML += '</tbody>';
+  document.getElementById('fedTable').innerHTML = fedHTML;
+
+  // === STATE (HI) DEPRECIATION ===
+  // Existing: $existStateAnnual/yr through existStateEndYear
+  const existState = YEARS.map(y => y <= state.existStateEndYear ? state.existStateAnnual : 0);
+
+  // New investments: straight-line over useful life, no bonus
+  const ul = state.stateUsefulLife;
+  const cropState = {};
+  for (const crop of crops) {
+    const pisYear = Math.floor(crop.endQ / 10);
+    const slAnnual = crop.capex / ul;
+    cropState[crop.key] = YEARS.map(y => {
+      if (y < pisYear) return 0;
+      if (y >= pisYear + ul) return 0;
+      return slAnnual;
+    });
+  }
+
+  const totalNewState = YEARS.map((_, i) => crops.reduce((s, c) => s + (cropState[c.key]?.[i] || 0), 0));
+  const totalState = YEARS.map((_, i) => existState[i] + totalNewState[i]);
+
+  let stateHTML = `<thead><tr><th></th>${yearHeaders}</tr></thead><tbody>`;
+  stateHTML += sectionRow('Existing Assets');
+  stateHTML += row('Farm Depreciation', existState);
+  stateHTML += sectionRow('New Investments (SL ' + ul + 'yr)');
+  for (const crop of crops) {
+    stateHTML += row(crop.label, cropState[crop.key]);
+  }
+  stateHTML += row('Total New', totalNewState, 'subtotal-row');
+  stateHTML += row('Total State', totalState, 'total-row-table');
+  stateHTML += '</tbody>';
+  document.getElementById('stateTable').innerHTML = stateHTML;
+
+  // Save for distributions page
+  localStorage.setItem('gh-depreciation', JSON.stringify({
+    years: YEARS, totalFed, totalState,
+  }));
+}
+
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  document.getElementById('themeToggle').textContent = document.body.classList.contains('light') ? 'dark' : 'light';
+  localStorage.setItem('gh-expansion-theme', document.body.classList.contains('light') ? 'light' : 'dark');
+}
+
+// Init
+const theme = localStorage.getItem('gh-expansion-theme');
+if (theme === 'light') { document.body.classList.add('light'); document.getElementById('themeToggle').textContent = 'dark'; }
+document.getElementById('versionLabel').textContent = 'v 03-28 04:00';
+
+createSlider('sl-existFedYearsLeft', 'existFedYearsLeft', {
+  label: 'Fed Remaining Years', min: 0, max: 15, step: 1, format: v => `${v} yr`
+});
+createSlider('sl-existFedAnnual', 'existFedAnnual', {
+  label: 'Fed Annual Amount', min: 0, max: 500000, step: 50000, format: v => `$${(v/1e3).toFixed(0)}K`
+});
+createSlider('sl-existStateEndYear', 'existStateEndYear', {
+  label: 'State Ends', min: 2026, max: 2035, step: 1, format: v => `${v}`
+});
+createSlider('sl-existStateAnnual', 'existStateAnnual', {
+  label: 'State Annual Amount', min: 0, max: 2000000, step: 100000, format: v => `$${(v/1e3).toFixed(0)}K`
+});
+createSlider('sl-fedBonusPct', 'fedBonusPct', {
+  label: 'Federal Bonus %', min: 0, max: 100, step: 20, format: v => `${v}%`
+});
+createSlider('sl-stateUsefulLife', 'stateUsefulLife', {
+  label: 'State Useful Life', min: 10, max: 30, step: 5, format: v => `${v} yr`
+});
+
+recalc();
+</script>
+</body>
+</html>
