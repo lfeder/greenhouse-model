@@ -5,62 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Debt & PE/DD Schedule</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --text: #f2faf2; --text-sub: #b8d8b8; --text-muted: #7aaa7a; --text-dim: #4a7a4a;
-    --green: #7dd17a; --green-bright: #9adf97; --red: #e08888; --yellow: #e0c860;
-    --border: #2a4a2a; --bg: #0d1a0d; --panel: #111f11; --panel-dark: #090f09; --accent: #5a9e55;
-    --header-bg: linear-gradient(135deg, #0d1a0d, #162816, #0d1a0d);
-    --slider-track: #243624; --slider-fill: #5a9e55; --slider-thumb: #5a9e55; --slider-thumb-border: #0d1a0d;
-  }
-  body.light {
-    --text: #1a2a1a; --text-sub: #2a4a2a; --text-muted: #3a6a3a; --text-dim: #7a9a7a;
-    --green: #3a8a38; --green-bright: #2a7a28; --red: #b84040; --yellow: #a08820;
-    --border: #b0b8b0; --bg: #e0e2e0; --panel: #eaecea; --panel-dark: #d4d6d4; --accent: #3a7a38;
-    --header-bg: linear-gradient(135deg, #d4d6d4, #e0e2e0, #d4d6d4);
-    --slider-track: #a8cca8; --slider-fill: #3a7a38; --slider-thumb: #3a7a38; --slider-thumb-border: #d8e4d8;
-  }
-  body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; padding-bottom: 60px; }
-
-  .header { background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 22px 32px 18px; }
-  .header-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: baseline; }
-  .header-title { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--text); }
-  .nav-links { display: flex; gap: 16px; font-size: 10px; }
-  .nav-links a { color: var(--text-muted); text-decoration: none; text-transform: uppercase; letter-spacing: 0.1em; }
-  .nav-links a:hover { color: var(--green); }
-  .nav-links a.active { color: var(--accent); font-weight: 700; }
-
-  .content { max-width: 1200px; margin: 0 auto; padding: 20px 32px; }
-
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
-  .panel-title { font-size: 9px; letter-spacing: 0.16em; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; font-weight: 700; }
-
-  .slider-group { margin-bottom: 0; padding-top: 10px; }
-  .slider-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0; }
-  .slider-label { font-size: 10px; letter-spacing: 0.08em; color: var(--text-sub); text-transform: uppercase; line-height: 1; }
-  .slider-sublabel { font-size: 9px; color: var(--text-muted); margin-top: 1px; line-height: 1.1; }
-  .slider-sublabel:empty { display: none; }
-  .slider-value { font-size: 14px; color: var(--text); font-weight: 700; white-space: nowrap; flex-shrink: 0; line-height: 1; }
-
-  input[type=range] { width: 100%; appearance: none; -webkit-appearance: none; height: 3px; border-radius: 2px; outline: none; cursor: pointer; margin-top: 7px; margin-bottom: 0; padding: 0; display: block; }
-  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: inherit; }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); margin-top: -5px; }
-  input[type=range]::-moz-range-track { height: 3px; border-radius: 2px; background: inherit; border: none; }
-  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); }
-
-  .fin-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'DM Mono', monospace; }
-  .fin-table th { font-size: 14px; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 700; }
-  .fin-table th:first-child { text-align: left; }
-  .fin-table td { text-align: right; padding: 5px 8px; border-bottom: 1px solid #1a2e1a; color: var(--text-sub); }
-  .fin-table td:first-child { text-align: left; color: var(--text-muted); }
-  .fin-table tr.section-header td { color: var(--accent); font-weight: 700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding-top: 12px; border-bottom: 1px solid var(--border); }
-  .fin-table tr.total-row-table td { color: var(--text); font-weight: 700; border-top: 1px solid var(--border); border-bottom: 2px solid var(--border); }
-  .fin-table tr.subtotal-row td { color: var(--green); font-weight: 700; border-bottom: 1px solid var(--border); }
-
   .summary-grid { display: grid; gap: 8px; margin-bottom: 8px; }
-  .summary-grid.loans { grid-template-columns: repeat(3, 1fr); }
   .summary-grid.pedd { grid-template-columns: repeat(4, 1fr); }
+  .summary-grid.loans { grid-template-columns: repeat(3, 1fr); }
   .summary-item { background: var(--panel-dark); border-radius: 5px; padding: 8px 12px; }
   .summary-label { font-size: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
   .summary-detail { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
@@ -79,14 +28,14 @@
         <a href="depreciation.html">Depreciation</a>
         <a href="distributions.html">Distributions</a>
       </div>
-      <button id="saveBtn" onclick="saveState()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save</button>
-      <button onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer" id="themeToggle">light</button>
+      <button id="saveBtn" onclick="saveLoad.save()" class="btn">save</button>
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
       <div id="versionLabel" style="font-size:10px;color:var(--text)"></div>
     </div>
   </div>
 </div>
 
-<div class="content">
+<div style="max-width:1200px;margin:0 auto;padding:20px 32px">
   <div style="display:flex;gap:16px;margin-bottom:16px">
     <div class="panel" style="flex:0 0 280px">
       <div class="panel-title">PE/DD Settings</div>
@@ -94,7 +43,7 @@
     </div>
     <div style="flex:1">
       <div class="panel-title" style="margin-bottom:8px">Instrument Summary</div>
-      <div class="summary-grid" id="instrumentSummary"></div>
+      <div id="instrumentSummary"></div>
     </div>
   </div>
 
@@ -106,193 +55,20 @@
   </div>
 </div>
 
+<script src="shared.js"></script>
 <script>
-// === CONSTANTS ===
-const YEARS = [];
-for (let y = 2026; y <= 2035; y++) YEARS.push(y);
-
 const state = { tBillRate: 4 };
+window._pageState = state;
+const saveLoad = makeSaveLoad('gh-debt-state', state);
+saveLoad.load();
 
-// === DEBT INSTRUMENTS ===
-// FCL: $5,680,000 orig, 7.12%, monthly $91,166, fiscal year Dec-Nov
-// Hardcoded from exact amortization schedule
-const FCL = {
-  name: 'FCL (Lettuce)', origBal: 5680000, rate: 0.0712,
-  schedule: {
-    2026: { interest: 310725, principal: 783267, endBal: 3935227 },
-    2027: { interest: 253099, principal: 840893, endBal: 3094334 },
-    2028: { interest: 191233, principal: 902759, endBal: 2191576 },
-    2029: { interest: 124819, principal: 969173, endBal: 1222402 },
-    2030: { interest: 53516, principal: 1040476, endBal: 181926 },
-    2031: { interest: 1624, principal: 180708, endBal: 1219 },
-  },
-  annualSchedule: function(year) {
-    return this.schedule[year] || { interest: 0, principal: 0, endBal: 0 };
-  }
-};
-
-// BIPAH: $4,665,000 at 6.50%, 240 months (20yr), started Jan 2025
-const BIPAH = {
-  name: 'BIPAH (Property)', origBal: 4665000, rate: 0.065, termMonths: 240,
-  monthlyPmt: function() {
-    const r = this.rate / 12, n = this.termMonths;
-    return this.origBal * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-  },
-  balanceAfter: function(months) {
-    const r = this.rate / 12, pmt = this.monthlyPmt();
-    let bal = this.origBal;
-    for (let i = 0; i < months; i++) {
-      const intPmt = bal * r;
-      const prinPmt = pmt - intPmt;
-      bal -= prinPmt;
-      if (bal <= 0) return 0;
-    }
-    return bal;
-  },
-  annualSchedule: function(year) {
-    // Started Jan 2025. Month 0 = Jan 2025. Jan 2026 = month 12.
-    const monthStart = (year - 2025) * 12;
-    const r = this.rate / 12, pmt = this.monthlyPmt();
-    let bal = this.balanceAfter(Math.max(0, monthStart));
-    let totalInt = 0, totalPrin = 0;
-    for (let m = 0; m < 12; m++) {
-      const absMonth = monthStart + m;
-      if (absMonth < 0 || bal <= 0) continue;
-      if (absMonth >= this.termMonths) break;
-      const intPmt = bal * r;
-      const prinPmt = Math.min(pmt - intPmt, bal);
-      totalInt += intPmt;
-      totalPrin += prinPmt;
-      bal -= prinPmt;
-    }
-    return { interest: totalInt, principal: totalPrin, endBal: Math.max(0, bal) };
-  }
-};
-
-// JJB Downpayment: $500,000 at 7.50%, annual, 5yr, first payment Jan 2026
-const JJBDP = {
-  name: 'JJB Downpayment', origBal: 500000, rate: 0.075, maturity: 'Jan 2030',
-  schedule: {
-    2026: { interest: 37500, principal: 86082, endBal: 413918 },
-    2027: { interest: 31044, principal: 92539, endBal: 321379 },
-    2028: { interest: 24103, principal: 99479, endBal: 221900 },
-    2029: { interest: 16643, principal: 106940, endBal: 114960 },
-    2030: { interest: 8622, principal: 114960, endBal: 0 },
-  },
-  annualSchedule: function(year) {
-    return this.schedule[year] || { interest: 0, principal: 0, endBal: 0 };
-  }
-};
-
-const LOANS = [FCL, BIPAH, JJBDP];
-
-// === PE/DD INSTRUMENTS ===
-// Repayment order: PE3 → PE1 → PE2 → DD
-// Interest paid per instrument AFTER all principal for that tranche is repaid
-const PEDD_INSTRUMENTS = [
-  { name: 'PE Tranche 3', balance: 515000, rateType: 'tbill', rateSpread: 0.025, order: 1 },
-  { name: 'PE Tranche 1', balance: 1000000, rate: 0, order: 2 },
-  { name: 'PE Tranche 2', balance: 500000, rate: 0.05, order: 3 },
-  { name: 'Deferred Dist', balance: 380000, rate: 0, order: 4 },
-];
-
-// === FORMATTERS ===
-const fmtK = (n) => {
-  if (n == null || isNaN(n)) return "\u2014";
-  const abs = Math.abs(n), sign = n < 0 ? "\u2212" : "";
-  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)}M`;
-  if (abs >= 1e3) return `${sign}${Math.round(abs / 1e3).toLocaleString()}K`;
-  return `${sign}${Math.round(abs).toLocaleString()}`;
-};
-
-// Table cells in $K, no red coloring
-const fmtCell = (n) => {
-  if (Math.abs(n) < 50) return '\u2014';
-  const k = Math.round(Math.abs(n) / 1e3);
-  return `${n < 0 ? '\u2212' : ''}${k.toLocaleString()}`;
-};
-
-// === SLIDER ===
-function sliderBg(pct) {
-  const s = getComputedStyle(document.documentElement);
-  return `linear-gradient(to right,${s.getPropertyValue('--slider-fill').trim()} 0%,${s.getPropertyValue('--slider-fill').trim()} ${pct}%,${s.getPropertyValue('--slider-track').trim()} ${pct}%,${s.getPropertyValue('--slider-track').trim()} 100%)`;
-}
-
-function createSlider(containerId, key, opts) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const fill = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
-  container.innerHTML = `
-    <div class="slider-group">
-      <div class="slider-header">
-        <div style="flex:1;padding-right:10px">
-          <div class="slider-label">${opts.label}</div>
-          <div class="slider-sublabel" id="${key}-sublabel">${opts.sublabel ? opts.sublabel() : ''}</div>
-        </div>
-        <span class="slider-value" id="${key}-display">${opts.format(state[key])}</span>
-      </div>
-      <input type="range" id="${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${state[key]}">
-    </div>`;
-  const input = document.getElementById(key);
-  input.style.background = sliderBg(fill);
-  input.addEventListener('input', (e) => {
-    state[key] = Number(e.target.value);
-    const pct = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
-    input.style.background = sliderBg(pct);
-    document.getElementById(`${key}-display`).textContent = opts.format(state[key]);
-    if (opts.sublabel) document.getElementById(`${key}-sublabel`).innerHTML = opts.sublabel();
-    recalc();
-  });
-}
-
-// === RECALC ===
 function recalc() {
   const tBillRate = state.tBillRate / 100;
 
-  // Instrument summary cards — loans row 1, PE/DD row 2
-  const loanMaturities = { 'FCL (Lettuce)': 'Mar 2031', 'BIPAH (Property)': 'Jan 2045', 'JJB Downpayment': 'Jan 2030' };
-  let summaryHTML = '<div class="summary-grid pedd">';
-  for (const pe of PEDD_INSTRUMENTS) {
-    const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
-    summaryHTML += `<div class="summary-item">
-      <div class="summary-label">${pe.name} (#${pe.order})</div>
-      <div class="summary-detail">${rate > 0 ? (rate * 100).toFixed(1) + '%' : 'no interest'} · ${fmtK(pe.balance)} bal</div>
-      <div class="summary-value">via waterfall</div>
-    </div>`;
-  }
-  summaryHTML += '</div><div class="summary-grid loans">';
-  for (const loan of LOANS) {
-    const sched2026 = loan.annualSchedule(2026);
-    const startBal = loan.name === 'FCL (Lettuce)' ? 4718495 :
-                     loan.name === 'BIPAH (Property)' ? loan.balanceAfter(12) :
-                     loan.origBal;
-    summaryHTML += `<div class="summary-item">
-      <div class="summary-label">${loan.name}</div>
-      <div class="summary-detail">${(loan.rate * 100).toFixed(2)}% · ${fmtK(startBal)} bal · matures ${loanMaturities[loan.name]}</div>
-      <div class="summary-value">${fmtK(sched2026.interest + sched2026.principal)}/yr</div>
-    </div>`;
-  }
-  summaryHTML += '</div>';
-  document.getElementById('instrumentSummary').innerHTML = summaryHTML;
-
-  // Build consolidated schedule
-  const yearHeaders = YEARS.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
-  const sectionRow = (label) => `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
-
   // Loan schedules
-  const loanData = {};
-  for (const loan of LOANS) {
-    loanData[loan.name] = { interest: [], principal: [], endBal: [] };
-    for (const year of YEARS) {
-      const s = loan.annualSchedule(year);
-      loanData[loan.name].interest.push(s.interest);
-      loanData[loan.name].principal.push(s.principal);
-      loanData[loan.name].endBal.push(s.endBal);
-    }
-  }
+  const { loanData, totalInt, totalPrin, totalDS } = computeLoanSchedules();
 
-  // PE/DD — run waterfall simulation inline
-  // Pull rev/exp from expansion model or use debug defaults
+  // Waterfall simulation for PE/DD
   let expData = null;
   try { expData = JSON.parse(localStorage.getItem('gh-expansion-data')); } catch(e) {}
   const DEBUG_REV = 14200000, DEBUG_EXP = 9700000, GROWTH = 0.05;
@@ -301,98 +77,64 @@ function recalc() {
   const opInc = rev.map((r, i) => r - exps[i]);
   const capexRes = rev.map(r => r * 0.02);
   const distribCash = opInc.map((o, i) => o - totalDS[i] - capexRes[i]);
+  const taxDist = distribCash.map((_, i) => Math.max(0, (opInc[i] - totalInt[i]) * 0.25));
 
-  // Simplified tax estimate (30% fed, 10% HI on taxable income)
-  const taxDist = distribCash.map((_, i) => {
-    const taxable = opInc[i] - totalInt[i];
-    return Math.max(0, taxable * 0.25); // ~25% blended effective rate
-  });
-  const TIER0 = 300000;
-  const TIER1_SCHED = { 2026: 500000, 2027: 600000 };
+  const { peddDetail, peddPayments, tier2, cumPEDD } = runWaterfall(distribCash, taxDist, tBillRate);
 
-  // Waterfall → PE/DD
-  const peddBal = PEDD_INSTRUMENTS.map(p => ({ ...p, remaining: p.balance, intOwed: 0 }));
-  const peddData = {};
-  for (const pe of peddBal) peddData[pe.name] = { prinPaid: [], intPaid: [], endBal: [], intOwed: [] };
+  const totalPEDDPrin = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + peddDetail[pe.name].prinPaid[i], 0));
+  const totalPEDDInt = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + peddDetail[pe.name].intPaid[i], 0));
 
-  for (let i = 0; i < YEARS.length; i++) {
-    const tier1 = TIER1_SCHED[YEARS[i]] || 750000;
-    let remaining = distribCash[i] - taxDist[i] - TIER0 - tier1;
-
-    for (const pe of peddBal) {
-      if (remaining <= 0) break;
-      if (pe.remaining > 0) {
-        const prinPay = Math.min(remaining, pe.remaining);
-        pe.remaining -= prinPay;
-        remaining -= prinPay;
-        peddData[pe.name].prinPaid.push(prinPay);
-      } else {
-        peddData[pe.name].prinPaid.push(0);
-      }
-      if (pe.remaining <= 0 && pe.intOwed > 0 && remaining > 0) {
-        const intPay = Math.min(remaining, pe.intOwed);
-        pe.intOwed -= intPay;
-        remaining -= intPay;
-        peddData[pe.name].intPaid.push(intPay);
-      } else {
-        // Only push if prinPaid didn't already push
-      }
-    }
-    // Ensure all instruments have entries, accrue interest
-    for (const pe of peddBal) {
-      if (peddData[pe.name].prinPaid.length <= i) peddData[pe.name].prinPaid.push(0);
-      if (peddData[pe.name].intPaid.length <= i) peddData[pe.name].intPaid.push(0);
-      if (pe.remaining > 0) {
-        const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
-        pe.intOwed += pe.remaining * rate;
-      }
-      peddData[pe.name].endBal.push(pe.remaining);
-      peddData[pe.name].intOwed.push(pe.intOwed);
-    }
-  }
-
-  // Total debt service
-  const totalInt = YEARS.map((_, i) => LOANS.reduce((s, l) => s + loanData[l.name].interest[i], 0));
-  const totalPrin = YEARS.map((_, i) => LOANS.reduce((s, l) => s + loanData[l.name].principal[i], 0));
-  const totalDS = YEARS.map((_, i) => totalInt[i] + totalPrin[i]);
-
-  const totalPEDDPrin = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + peddData[pe.name].prinPaid[i], 0));
-  const totalPEDDInt = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + peddData[pe.name].intPaid[i], 0));
-
-  const row = (label, data, cls) =>
-    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fmtCell(v)}</td>`).join('')}</tr>`;
-  const balRow = (label, data) =>
-    `<tr><td>${label}</td>${data.map(v => `<td>${v > 50 ? Math.round(v / 1e3).toLocaleString() : '\u2014'}</td>`).join('')}</tr>`;
-
-  let html = `<thead><tr><th></th>${yearHeaders}</tr></thead><tbody>`;
-
-  // PE/DD section first
-  html += sectionRow('PE/DD Principal Repayment (via Waterfall)');
+  // Summary cards — PE/DD first, loans second
+  let summaryHTML = '<div class="summary-grid pedd">';
   for (const pe of PEDD_INSTRUMENTS) {
-    html += row(pe.name, peddData[pe.name].prinPaid.map(v => -v));
+    const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
+    summaryHTML += `<div class="summary-item">
+      <div class="summary-label">${pe.label} (#${pe.order})</div>
+      <div class="summary-detail">${rate > 0 ? (rate * 100).toFixed(1) + '%' : 'no interest'} · ${fmtK(pe.balance)} bal</div>
+      <div class="summary-value">via waterfall</div>
+    </div>`;
   }
+  summaryHTML += '</div><div class="summary-grid loans">';
+  for (const loan of LOANS) {
+    const sched = loan.annualSchedule(2026);
+    summaryHTML += `<div class="summary-item">
+      <div class="summary-label">${loan.name}</div>
+      <div class="summary-detail">${(loan.rate * 100).toFixed(2)}% · ${fmtK(loan.startBal)} bal · matures ${loan.maturity}</div>
+      <div class="summary-value">${fmtK(sched.interest + sched.principal)}/yr</div>
+    </div>`;
+  }
+  summaryHTML += '</div>';
+  document.getElementById('instrumentSummary').innerHTML = summaryHTML;
+
+  // Table — PE/DD first, loans below
+  const row = (label, data, cls) => tableRow(label, data, fmtCellK, cls);
+
+  let html = `<thead><tr><th></th>${yearHeaders()}</tr></thead><tbody>`;
+
+  // PE/DD
+  html += sectionRow('PE/DD Principal Repayment (via Waterfall)');
+  for (const pe of PEDD_INSTRUMENTS) html += row(pe.label, peddDetail[pe.name].prinPaid.map(v => -v));
   html += row('Total PE/DD Principal', totalPEDDPrin.map(v => -v), 'subtotal-row');
 
   html += sectionRow('PE/DD Interest Paid');
   for (const pe of PEDD_INSTRUMENTS) {
     const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
-    if (rate > 0) html += row(`${pe.name} (${(rate * 100).toFixed(1)}%)`, peddData[pe.name].intPaid.map(v => -v));
+    if (rate > 0) html += row(`${pe.label} (${(rate * 100).toFixed(1)}%)`, peddDetail[pe.name].intPaid.map(v => -v));
   }
   html += row('Total PE/DD Interest', totalPEDDInt.map(v => -v), 'subtotal-row');
 
   html += sectionRow('PE/DD Balances (End of Year)');
-  for (const pe of PEDD_INSTRUMENTS) {
-    html += balRow(pe.name, peddData[pe.name].endBal);
-  }
-  const hasIntOwed = PEDD_INSTRUMENTS.some(pe => peddData[pe.name].intOwed.some(v => v > 50));
+  for (const pe of PEDD_INSTRUMENTS) html += balRow(pe.label, peddDetail[pe.name].endBal);
+
+  const hasIntOwed = PEDD_INSTRUMENTS.some(pe => peddDetail[pe.name].intOwed.some(v => v > 50));
   if (hasIntOwed) {
     html += sectionRow('PE/DD Accrued Interest Owed');
     for (const pe of PEDD_INSTRUMENTS) {
-      if (peddData[pe.name].intOwed.some(v => v > 50)) html += balRow(pe.name, peddData[pe.name].intOwed);
+      if (peddDetail[pe.name].intOwed.some(v => v > 50)) html += balRow(pe.label, peddDetail[pe.name].intOwed);
     }
   }
 
-  // Loan section
+  // Loans
   html += sectionRow('Loan Interest');
   for (const loan of LOANS) html += row(loan.name, loanData[loan.name].interest.map(v => -v));
   html += row('Total Interest', totalInt.map(v => -v), 'subtotal-row');
@@ -409,52 +151,18 @@ function recalc() {
   html += '</tbody>';
   document.getElementById('scheduleTable').innerHTML = html;
 
-  // Save to localStorage for other pages
-  localStorage.setItem('gh-debt-schedule', JSON.stringify({
-    years: YEARS,
-    loanInterest: totalInt,
-    loanPrincipal: totalPrin,
-    totalDS: totalDS,
-    peddBalances: PEDD_INSTRUMENTS.map(pe => ({ name: pe.name, balance: pe.balance, rate: pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0) })),
-    peddInterest: totalPEDDInt,
-  }));
+  // Save for other pages
+  localStorage.setItem('gh-debt-schedule', JSON.stringify({ years: YEARS, loanInterest: totalInt, loanPrincipal: totalPrin, totalDS }));
 }
 
-// === SAVE / LOAD ===
-function saveState() {
-  localStorage.setItem('gh-debt-state', JSON.stringify(state));
-  const btn = document.getElementById('saveBtn');
-  btn.textContent = 'saved!';
-  setTimeout(() => { btn.textContent = 'save'; }, 1500);
-}
-function loadState() {
-  try { Object.assign(state, JSON.parse(localStorage.getItem('gh-debt-state'))); } catch(e) {}
-}
-
-// === THEME ===
-function toggleTheme() {
-  document.body.classList.toggle('light');
-  document.getElementById('themeToggle').textContent = document.body.classList.contains('light') ? 'dark' : 'light';
-  const theme = localStorage.getItem('gh-expansion-theme');
-  localStorage.setItem('gh-expansion-theme', document.body.classList.contains('light') ? 'light' : 'dark');
-}
-
-// === INIT ===
-loadState();
-const theme = localStorage.getItem('gh-expansion-theme');
-if (theme === 'light') {
-  document.body.classList.add('light');
-  document.getElementById('themeToggle').textContent = 'dark';
-}
-
-document.getElementById('versionLabel').textContent = 'v 03-28 02:00';
-
-createSlider('sl-tBillRate', 'tBillRate', {
+// Init
+initTheme();
+document.getElementById('versionLabel').textContent = 'v 03-28 06:00';
+createSlider('sl-tBillRate', 'tBillRate', state, {
   label: '3-Mo T-Bill Rate', min: 2, max: 6, step: 0.5,
   format: v => `${v.toFixed(1)}%`,
   sublabel: () => `PE3 rate: ${(state.tBillRate + 2.5).toFixed(1)}%`
 });
-
 recalc();
 </script>
 </body>

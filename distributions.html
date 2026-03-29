@@ -5,53 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Distributions & Partner Cash</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --text: #f2faf2; --text-sub: #b8d8b8; --text-muted: #7aaa7a; --text-dim: #4a7a4a;
-    --green: #7dd17a; --border: #2a4a2a; --bg: #0d1a0d; --panel: #111f11; --panel-dark: #090f09; --accent: #5a9e55;
-    --header-bg: linear-gradient(135deg, #0d1a0d, #162816, #0d1a0d);
-    --slider-track: #243624; --slider-fill: #5a9e55; --slider-thumb: #5a9e55; --slider-thumb-border: #0d1a0d;
-  }
-  body.light {
-    --text: #1a2a1a; --text-sub: #2a4a2a; --text-muted: #3a6a3a; --text-dim: #7a9a7a;
-    --green: #3a8a38; --border: #b0b8b0; --bg: #e0e2e0; --panel: #eaecea; --panel-dark: #d4d6d4; --accent: #3a7a38;
-    --header-bg: linear-gradient(135deg, #d4d6d4, #e0e2e0, #d4d6d4);
-    --slider-track: #a8cca8; --slider-fill: #3a7a38; --slider-thumb: #3a7a38; --slider-thumb-border: #d8e4d8;
-  }
-  body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; padding-bottom: 60px; }
-  .header { background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 22px 32px 18px; }
-  .header-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: baseline; }
-  .header-title { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--text); }
-  .nav-links { display: flex; gap: 16px; font-size: 10px; }
-  .nav-links a { color: var(--text-muted); text-decoration: none; text-transform: uppercase; letter-spacing: 0.1em; }
-  .nav-links a.active { color: var(--accent); font-weight: 700; }
-  .content { max-width: 1200px; margin: 0 auto; padding: 20px 32px; }
   .layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 10px; }
-  .panel-title { font-size: 9px; letter-spacing: 0.16em; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; font-weight: 700; }
-  .slider-group { margin-bottom: 0; padding-top: 10px; }
-  .slider-header { display: flex; justify-content: space-between; align-items: flex-end; }
-  .slider-label { font-size: 10px; letter-spacing: 0.08em; color: var(--text-sub); text-transform: uppercase; line-height: 1; }
-  .slider-sublabel { font-size: 9px; color: var(--text-muted); margin-top: 1px; line-height: 1.1; }
-  .slider-sublabel:empty { display: none; }
-  .slider-value { font-size: 14px; color: var(--text); font-weight: 700; white-space: nowrap; line-height: 1; }
-  input[type=range] { width: 100%; appearance: none; -webkit-appearance: none; height: 3px; border-radius: 2px; outline: none; cursor: pointer; margin-top: 7px; margin-bottom: 0; padding: 0; display: block; }
-  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: inherit; }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); margin-top: -5px; }
-  input[type=range]::-moz-range-track { height: 3px; border-radius: 2px; background: inherit; border: none; }
-  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); }
-  .fin-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'DM Mono', monospace; }
-  .fin-table th { font-size: 14px; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 700; }
-  .fin-table th:first-child { text-align: left; }
-  .fin-table td { text-align: right; padding: 5px 8px; border-bottom: 1px solid #1a2e1a; color: var(--text-sub); }
-  .fin-table td:first-child { text-align: left; color: var(--text-muted); }
-  .fin-table tr.section-header td { color: var(--accent); font-weight: 700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding-top: 12px; border-bottom: 1px solid var(--border); }
-  .fin-table tr.subtotal-row td { color: var(--green); font-weight: 700; border-bottom: 1px solid var(--border); }
-  .fin-table tr.total-row-table td { color: var(--text); font-weight: 700; border-top: 1px solid var(--border); border-bottom: 2px solid var(--border); }
-  .toggle-row { display: flex; align-items: center; gap: 8px; padding: 10px 0 4px; }
-  .toggle-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
-  .toggle-row label { font-size: 10px; color: var(--text-sub); cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; }
 </style>
 </head>
 <body>
@@ -65,14 +21,14 @@
         <a href="depreciation.html">Depreciation</a>
         <a href="distributions.html" class="active">Distributions</a>
       </div>
-      <button id="saveBtn" onclick="saveState()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save</button>
-      <button onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer" id="themeToggle">light</button>
+      <button id="saveBtn" onclick="saveLoad.save()" class="btn">save</button>
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
       <div id="versionLabel" style="font-size:10px;color:var(--text)"></div>
     </div>
   </div>
 </div>
 
-<div class="content">
+<div style="max-width:1200px;margin:0 auto;padding:20px 32px">
   <div class="layout">
     <div>
       <div class="panel">
@@ -125,132 +81,60 @@
   </div>
 </div>
 
+<script src="shared.js"></script>
 <script>
-const YEARS = [];
-for (let y = 2026; y <= 2035; y++) YEARS.push(y);
+const state = { debug: false, fedTaxRate: 30, hiTaxRate: 10, fedNOL: 1189000 };
+window._pageState = state;
+const saveLoad = makeSaveLoad('gh-dist-state', state);
+saveLoad.load();
 
-const state = {
-  debug: false,
-  fedTaxRate: 30, hiTaxRate: 10, fedNOL: 1189000,
-};
-
-// Fixed schedules
-const TIER1 = { 2026: 500000, 2027: 600000 }; // 2028+ = 750000
-const TIER0 = 300000;
-const OWNERSHIP = {
-  2026: { EB: 26.0, JS: 31.5, JJB: 42.5 },
-  2027: { EB: 26.5, JS: 28.5, JJB: 45.0 },
-  2028: { EB: 27.0, JS: 25.5, JJB: 47.5 },
-  2029: { EB: 27.5, JS: 22.5, JJB: 50.0 },
-};
-// JJB buying from JS: fixed valuation schedule
+const DEBUG_REV = 14200000, DEBUG_EXP = 9700000, DEBUG_GROWTH = 0.05;
 const JS_BUYOUT_VAL = { 2026: 8000000, 2027: 9750000, 2028: 11500000, 2029: 13250000 };
-// JS loses ~3%/yr, EB gains 0.5%/yr, so JJB buys (3%-0.5%/2) = net from JS
-const JS_ANNUAL_LOSS = 0.03; // JS loses 3%/yr to JJB (net)
-const EB_ANNUAL_GAIN = 0.005; // EB gains 0.5%/yr
-
-// PE/DD instruments (initial balances, repayment order)
-const PEDD_INIT = [
-  { name: 'PE3', balance: 515000, rateType: 'tbill' },
-  { name: 'PE1', balance: 1000000, rate: 0 },
-  { name: 'PE2', balance: 500000, rate: 0.05 },
-  { name: 'DD', balance: 380000, rate: 0 },
-];
-
-// Debug revenue/expense (Excel assumptions)
-const DEBUG_REV_2026 = 14200000, DEBUG_EXP_2026 = 9700000, DEBUG_GROWTH = 0.05;
-
-function sliderBg(pct) {
-  const s = getComputedStyle(document.documentElement);
-  return `linear-gradient(to right,${s.getPropertyValue('--slider-fill').trim()} 0%,${s.getPropertyValue('--slider-fill').trim()} ${pct}%,${s.getPropertyValue('--slider-track').trim()} ${pct}%,${s.getPropertyValue('--slider-track').trim()} 100%)`;
-}
-const sliderOpts = {};
-function createSlider(containerId, key, opts) {
-  sliderOpts[key] = opts;
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const fill = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
-  container.innerHTML = `<div class="slider-group"><div class="slider-header"><div style="flex:1;padding-right:10px"><div class="slider-label">${opts.label}</div><div class="slider-sublabel" id="${key}-sublabel">${opts.sublabel ? opts.sublabel() : ''}</div></div><span class="slider-value" id="${key}-display">${opts.format(state[key])}</span></div><input type="range" id="${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${state[key]}"></div>`;
-  const input = document.getElementById(key);
-  input.style.background = sliderBg(fill);
-  input.addEventListener('input', (e) => {
-    state[key] = Number(e.target.value);
-    const pct = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
-    input.style.background = sliderBg(pct);
-    document.getElementById(`${key}-display`).textContent = opts.format(state[key]);
-    if (opts.sublabel) document.getElementById(`${key}-sublabel`).innerHTML = opts.sublabel();
-    recalc();
-  });
-}
-
-const fmtCell = (n) => {
-  if (Math.abs(n) < 50) return '\u2014';
-  const k = Math.round(n / 1e3);
-  return (n < 0 ? '\u2212' : '') + Math.abs(k).toLocaleString();
-};
+const JS_ANNUAL_LOSS = 0.03, EB_ANNUAL_GAIN = 0.005;
 
 function recalc() {
-  // Load data from other pages
-  let expData = null, debtData = null, depData = null;
+  let expData = null, depData = null;
   try { expData = JSON.parse(localStorage.getItem('gh-expansion-data')); } catch(e) {}
-  try { debtData = JSON.parse(localStorage.getItem('gh-debt-schedule')); } catch(e) {}
   try { depData = JSON.parse(localStorage.getItem('gh-depreciation')); } catch(e) {}
 
-  const yearHeaders = YEARS.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
-  const sectionRow = (label) => `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
-  const row = (label, data, cls) =>
-    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fmtCell(v)}</td>`).join('')}</tr>`;
+  const row = (label, data, cls) => tableRow(label, data, fmtCellK, cls);
   const rowTip = (label, data, tips, cls) =>
-    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map((v, i) => `<td title="${(tips[i]||'').replace(/"/g,'&quot;')}" style="cursor:help">${fmtCell(v)}</td>`).join('')}</tr>`;
+    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map((v, i) => `<td title="${(tips[i]||'').replace(/"/g,'&quot;')}" style="cursor:help">${fmtCellK(v)}</td>`).join('')}</tr>`;
+  const fK = (v) => '$' + Math.round(v / 1e3).toLocaleString() + 'K';
 
-  // === REVENUE & EXPENSE ===
+  // Revenue & Expense
   const rev = [], exp = [];
   for (let i = 0; i < YEARS.length; i++) {
     if (state.debug) {
-      rev.push(DEBUG_REV_2026 * Math.pow(1 + DEBUG_GROWTH, i));
-      exp.push(DEBUG_EXP_2026 * Math.pow(1 + DEBUG_GROWTH, i));
+      rev.push(DEBUG_REV * Math.pow(1 + DEBUG_GROWTH, i));
+      exp.push(DEBUG_EXP * Math.pow(1 + DEBUG_GROWTH, i));
     } else if (expData) {
       rev.push(expData.totalRev[i] || 0);
       exp.push(expData.totalExp[i] || 0);
-    } else {
-      rev.push(0); exp.push(0);
-    }
+    } else { rev.push(0); exp.push(0); }
   }
-  const ebitda = rev.map((r, i) => r - exp[i]);
+  const opInc = rev.map((r, i) => r - exp[i]);
 
-  // === DEBT SERVICE ===
-  const loanInt = debtData ? [...debtData.loanInterest] : YEARS.map(() => 0);
-  const loanPrin = debtData ? [...debtData.loanPrincipal] : YEARS.map(() => 0);
-  // Paid-off loans with small 2026 residuals: AgCredit ($264 int, $37,281 prin), JJB Solar ($2,670 int, $14,620 prin)
-  const idx2026 = YEARS.indexOf(2026);
-  if (idx2026 >= 0) { loanInt[idx2026] += 2934; loanPrin[idx2026] += 51901; }
-  const totalDS = loanInt.map((v, i) => v + loanPrin[i]);
-
-  // === CAPEX RESERVE ===
+  // Debt service
+  const { totalInt: loanInt, totalPrin: loanPrin, totalDS } = computeLoanSchedules();
   const capexRes = rev.map(r => r * 0.02);
+  const taxableInc = opInc.map((e, i) => e - loanInt[i]);
 
-  // === TAXABLE INCOME ===
-  const taxableInc = ebitda.map((e, i) => e - loanInt[i]);
-
-  // === DEPRECIATION ===
-  // Debug mode: only existing asset depreciation, no new investments
+  // Depreciation
   let fedDep, stateDep;
   if (state.debug) {
-    fedDep = YEARS.map((_, i) => i < 8 ? 200000 : 0);       // $200K/yr for 8 remaining years
-    stateDep = YEARS.map(y => y <= 2029 ? 1000000 : 0);      // $1M/yr through 2029
+    fedDep = YEARS.map((_, i) => i < 8 ? 200000 : 0);
+    stateDep = YEARS.map(y => y <= 2029 ? 1000000 : 0);
   } else {
     fedDep = depData ? depData.totalFed : YEARS.map(() => 0);
     stateDep = depData ? depData.totalState : YEARS.map(() => 0);
   }
 
-  // === TAX LIABILITY (per tax year) ===
-  const fK = (v) => '$' + (Math.round(v / 1e3)).toLocaleString() + 'K';
+  // Tax liability
   let fedNOLRemaining = state.fedNOL;
   const fedTaxLiab = [], hiTaxLiab = [], taxLiabTips = [];
   for (let i = 0; i < YEARS.length; i++) {
     const own = getOwnership(YEARS[i]);
-
-    // Federal
     const fedTaxable = taxableInc[i] - fedDep[i];
     const ebFedTaxable = fedTaxable * own.EB / 100;
     const nolUsed = Math.min(fedNOLRemaining, Math.max(0, ebFedTaxable));
@@ -260,213 +144,103 @@ function recalc() {
     const fedDist = own.EB > 0 ? fedTax / (own.EB / 100) : 0;
     fedTaxLiab.push(fedDist);
 
-    // Hawaii
     const hiTaxable = taxableInc[i] - stateDep[i];
     const ebHiTaxable = hiTaxable * own.EB / 100;
     const hiTax = Math.max(0, ebHiTaxable) * state.hiTaxRate / 100;
     const hiDist = own.EB > 0 ? hiTax / (own.EB / 100) : 0;
     hiTaxLiab.push(hiDist);
 
-    // Build tooltip
-    let tip = `--- ${YEARS[i]} TAX LIABILITY ---\n`;
-    tip += `FEDERAL:\n`;
-    tip += `  EBITDA - Interest = ${fK(taxableInc[i])}\n`;
-    tip += `  - Bonus Depr = ${fK(fedDep[i])}\n`;
-    tip += `  = Fed Taxable = ${fK(fedTaxable)}\n`;
+    let tip = `--- ${YEARS[i]} TAX LIABILITY ---\nFEDERAL:\n`;
+    tip += `  Taxable Inc = ${fK(taxableInc[i])}\n  - Bonus Depr = ${fK(fedDep[i])}\n  = ${fK(fedTaxable)}\n`;
     tip += `  x EB ${own.EB.toFixed(1)}% = ${fK(ebFedTaxable)}\n`;
-    if (nolUsed > 0) tip += `  - NOL used = ${fK(nolUsed)}\n`;
-    tip += `  = EB Net Taxable = ${fK(ebNetFed)}\n`;
-    tip += `  x ${state.fedTaxRate}% = EB Tax ${fK(fedTax)}\n`;
-    tip += `  / ${own.EB.toFixed(1)}% = Farm Dist ${fK(fedDist)}\n`;
-    tip += `HAWAII:\n`;
-    tip += `  EBITDA - Interest = ${fK(taxableInc[i])}\n`;
-    tip += `  - State Depr = ${fK(stateDep[i])}\n`;
-    tip += `  = HI Taxable = ${fK(hiTaxable)}\n`;
-    tip += `  x EB ${own.EB.toFixed(1)}% = ${fK(ebHiTaxable)}\n`;
-    tip += `  x ${state.hiTaxRate}% = EB Tax ${fK(hiTax)}\n`;
-    tip += `  / ${own.EB.toFixed(1)}% = Farm Dist ${fK(hiDist)}\n`;
-    tip += `TOTAL: ${fK(fedDist + hiDist)}`;
+    if (nolUsed > 0) tip += `  - NOL = ${fK(nolUsed)}\n`;
+    tip += `  = Net ${fK(ebNetFed)} x ${state.fedTaxRate}% = ${fK(fedTax)}\n  / ${own.EB.toFixed(1)}% = ${fK(fedDist)}\n`;
+    tip += `HAWAII:\n  Taxable = ${fK(hiTaxable)}\n  x EB ${own.EB.toFixed(1)}% = ${fK(ebHiTaxable)}\n`;
+    tip += `  x ${state.hiTaxRate}% = ${fK(hiTax)} / ${own.EB.toFixed(1)}% = ${fK(hiDist)}\nTOTAL: ${fK(fedDist + hiDist)}`;
     taxLiabTips.push(tip);
   }
   const totalTaxLiab = fedTaxLiab.map((f, i) => f + hiTaxLiab[i]);
 
-  // === TAX CASH DISTRIBUTIONS (quarterly timing) ===
-  // 2025: no tax owed → 2026 has $0 distributions (no safe harbor quarterlies)
-  // 2026 tax: final due 4/15/27, no quarterlies during 2026
-  // 2027: pay 2026 final (4/15) + Q2,Q3 estimates for 2027 (based on 2026 liability)
-  // 2028+: Q4 prior year estimate (1/15) + final settlement (4/15) + Q2,Q3 current estimates
-  //
-  // For each calendar year, cash tax distributions =
-  //   final payment for prior year (liability - estimates already paid)
-  //   + quarterly estimates for current year paid in this calendar year
+  // Tax cash distributions (quarterly timing)
   const taxCashDist = [], taxCashTips = [];
   for (let i = 0; i < YEARS.length; i++) {
     const year = YEARS[i];
-    const priorIdx = i - 1;
-    const priorLiab = priorIdx >= 0 ? totalTaxLiab[priorIdx] : 0;
-    const twoPriorIdx = i - 2;
-    const twoPriorLiab = twoPriorIdx >= 0 ? totalTaxLiab[twoPriorIdx] : 0;
-
+    const priorLiab = i > 0 ? totalTaxLiab[i-1] : 0;
+    const twoPriorLiab = i > 1 ? totalTaxLiab[i-2] : 0;
     let cashOut = 0, tip = `--- ${year} CASH TAX DIST ---\n`;
 
     if (year === 2026) {
-      cashOut = 0;
-      tip += 'No 2025 liability → $0 quarterlies\n$0 total';
+      cashOut = 0; tip += 'No 2025 liability';
     } else if (year === 2027) {
-      const finalPmt2026 = totalTaxLiab[0];
-      const quarterlyEst = totalTaxLiab[0] / 4;
-      cashOut = finalPmt2026 + quarterlyEst * 2;
-      tip += `4/15: '26 final = ${fK(finalPmt2026)}\n`;
-      tip += `6/15: '27 Q2 est = ${fK(quarterlyEst)}\n`;
-      tip += `9/15: '27 Q3 est = ${fK(quarterlyEst)}\n`;
-      tip += `Total: ${fK(cashOut)}`;
+      const final26 = totalTaxLiab[0], qEst = totalTaxLiab[0] / 4;
+      cashOut = final26 + qEst * 2;
+      tip += `4/15: '26 final = ${fK(final26)}\n6/15+9/15: 2x ${fK(qEst)}\nTotal: ${fK(cashOut)}`;
     } else {
       const priorEstPerQ = twoPriorLiab / 4;
-      const q4PriorEst = priorEstPerQ;
-      const priorEstPaid = priorEstPerQ * 4; // all 4 quarters of estimates
-      const priorFinalSettlement = Math.max(0, priorLiab - priorEstPaid);
-      const currentEstPerQ = priorLiab / 4;
-      const currentEstThisYear = currentEstPerQ * 3;
-      cashOut = q4PriorEst + priorFinalSettlement + currentEstThisYear;
-      tip += `1/15: '${String(year-1).slice(2)} Q4 est = ${fK(q4PriorEst)}\n`;
-      tip += `4/15: '${String(year-1).slice(2)} final settle = ${fK(priorFinalSettlement)}\n`;
-      tip += `  ('${String(year-1).slice(2)} liab ${fK(priorLiab)} - est paid ${fK(priorEstPaid)})\n`;
-      tip += `4/15+6/15+9/15: '${String(year).slice(2)} Q1-3 est = 3x${fK(currentEstPerQ)} = ${fK(currentEstThisYear)}\n`;
-      tip += `Total: ${fK(cashOut)}`;
+      const q4 = priorEstPerQ, settle = Math.max(0, priorLiab - priorEstPerQ * 4);
+      const curEst = priorLiab / 4 * 3;
+      cashOut = q4 + settle + curEst;
+      tip += `1/15: Q4 est ${fK(q4)}\n4/15: settle ${fK(settle)}\nQ1-3 est: ${fK(curEst)}\nTotal: ${fK(cashOut)}`;
     }
-    taxCashDist.push(cashOut);
-    taxCashTips.push(tip);
+    taxCashDist.push(cashOut); taxCashTips.push(tip);
   }
   const totalTaxDist = taxCashDist;
 
-  // === DISTRIBUTABLE CASH ===
-  const distribCash = ebitda.map((e, i) => e - totalDS[i] - capexRes[i]);
+  // Distributable cash
+  const distribCash = opInc.map((o, i) => o - totalDS[i] - capexRes[i]);
 
-  // === WATERFALL ===
-  const tier0 = YEARS.map(() => TIER0);
-  const tier1 = YEARS.map(y => TIER1[y] || 750000);
-  const peddPaid = [];
-  let cumPEDD = 0;
+  // Waterfall
+  const { peddDetail, peddPayments, tier2, cumPEDD } = runWaterfall(distribCash, totalTaxDist, 0.065);
+  const tier0Arr = YEARS.map(() => TIER0);
+  const tier1Arr = YEARS.map(y => getTier1(y));
 
-  // PE/DD repayment simulation — track per-instrument detail
-  const peddBal = PEDD_INIT.map(p => ({ ...p, remaining: p.balance, intOwed: 0 }));
-  const peddPayments = YEARS.map(() => 0);
-  const peddDetail = {}; // name -> { prinPaid: [], intPaid: [], endBal: [], intOwed: [] }
-  for (const pe of peddBal) peddDetail[pe.name] = { prinPaid: [], intPaid: [], endBal: [], intOwed: [] };
-  const tier2 = [];
-
-  for (let i = 0; i < YEARS.length; i++) {
-    let remaining = distribCash[i] - totalTaxDist[i] - tier0[i] - tier1[i];
-
-    let peddThisYear = 0;
-    // Reset per-year tracking
-    const yearPrin = {}, yearInt = {};
-    for (const pe of peddBal) { yearPrin[pe.name] = 0; yearInt[pe.name] = 0; }
-
-    for (const pe of peddBal) {
-      if (remaining <= 0) break;
-      // Pay principal first
-      if (pe.remaining > 0) {
-        const prinPay = Math.min(remaining, pe.remaining);
-        pe.remaining -= prinPay;
-        remaining -= prinPay;
-        peddThisYear += prinPay;
-        cumPEDD += prinPay;
-        yearPrin[pe.name] += prinPay;
-      }
-      // After principal is fully repaid, pay accrued interest
-      if (pe.remaining <= 0 && pe.intOwed > 0) {
-        const intPay = Math.min(remaining, pe.intOwed);
-        pe.intOwed -= intPay;
-        remaining -= intPay;
-        peddThisYear += intPay;
-        cumPEDD += intPay;
-        yearInt[pe.name] += intPay;
-      }
-    }
-    // Accrue interest on remaining balances for next year
-    for (const pe of peddBal) {
-      if (pe.remaining > 0) {
-        const rate = pe.rateType === 'tbill' ? 0.065 : (pe.rate || 0);
-        pe.intOwed += pe.remaining * rate;
-      }
-      peddDetail[pe.name].prinPaid.push(yearPrin[pe.name]);
-      peddDetail[pe.name].intPaid.push(yearInt[pe.name]);
-      peddDetail[pe.name].endBal.push(pe.remaining);
-      peddDetail[pe.name].intOwed.push(pe.intOwed);
-    }
-    peddPayments[i] = peddThisYear;
-    tier2.push(Math.max(0, remaining));
-  }
-
-  // === P&L TABLE ===
-  let plHTML = `<thead><tr><th></th>${yearHeaders}</tr></thead><tbody>`;
+  // P&L Table
+  let plHTML = `<thead><tr><th></th>${yearHeaders()}</tr></thead><tbody>`;
   plHTML += sectionRow('P&L');
   plHTML += row('Revenue', rev);
   plHTML += row('Operating Expense', exp.map(v => -v));
-  plHTML += row('Operating Income', ebitda, 'subtotal-row');
+  plHTML += row('Operating Income', opInc, 'subtotal-row');
   plHTML += sectionRow('Cash Adjustments');
   plHTML += row('Loan Interest', loanInt.map(v => -v));
   plHTML += row('Loan Principal', loanPrin.map(v => -v));
   plHTML += row('Capex Reserve (2%)', capexRes.map(v => -v));
   plHTML += row('Distributable Cash', distribCash, 'total-row-table');
   plHTML += sectionRow('Tax (Liability Year)');
-  plHTML += row('EBITDA \u2212 Interest', taxableInc);
-  plHTML += row('Fed Bonus Depreciation', fedDep.map(v => -v));
-  const fedTaxableNet = taxableInc.map((t, i) => t - fedDep[i]);
-  plHTML += row('Fed Taxable Income', fedTaxableNet);
-  plHTML += row('State Depreciation', stateDep.map(v => -v));
-  const hiTaxableNet = taxableInc.map((t, i) => t - stateDep[i]);
-  plHTML += row('HI Taxable Income', hiTaxableNet);
-  plHTML += rowTip('Tax Liability (accrual)', totalTaxLiab, taxLiabTips);
-  plHTML += rowTip('Tax Cash Dist (paid)', totalTaxDist, taxCashTips, 'subtotal-row');
+  plHTML += row('Taxable Inc \u2212 Int', taxableInc);
+  plHTML += row('Fed Bonus Depr', fedDep.map(v => -v));
+  plHTML += row('Fed Taxable', taxableInc.map((t, i) => t - fedDep[i]));
+  plHTML += row('State Depr', stateDep.map(v => -v));
+  plHTML += row('HI Taxable', taxableInc.map((t, i) => t - stateDep[i]));
+  plHTML += rowTip('Tax Liability', totalTaxLiab, taxLiabTips);
+  plHTML += rowTip('Tax Cash Dist', totalTaxDist, taxCashTips, 'subtotal-row');
   plHTML += '</tbody>';
   document.getElementById('plTable').innerHTML = plHTML;
 
-  // === WATERFALL TABLE ===
-  let wfHTML = `<thead><tr><th></th>${yearHeaders}</tr></thead><tbody>`;
+  // Waterfall Table
+  let wfHTML = `<thead><tr><th></th>${yearHeaders()}</tr></thead><tbody>`;
   wfHTML += row('Distributable Cash', distribCash);
   wfHTML += sectionRow('Distributions');
   wfHTML += rowTip('Tax (Fed + HI)', totalTaxDist.map(v => -v), taxCashTips);
-  wfHTML += row('Tier 0 (EB)', tier0.map(v => -v));
-  wfHTML += row('Tier 1 (Partner Draws)', tier1.map(v => -v));
+  wfHTML += row('Tier 0 (EB)', tier0Arr.map(v => -v));
+  wfHTML += row('Tier 1 (Partner Draws)', tier1Arr.map(v => -v));
   wfHTML += row('PE/DD Repayment', peddPayments.map(v => -v));
   wfHTML += row('Tier 2 (Pro-Rata)', tier2.map(v => -v));
-  const checkSum = YEARS.map((_, i) => distribCash[i] - totalTaxDist[i] - tier0[i] - tier1[i] - peddPayments[i] - tier2[i]);
-  wfHTML += row('Remaining', checkSum);
   wfHTML += '</tbody>';
   document.getElementById('waterfallTable').innerHTML = wfHTML;
 
-  // === PARTNER CASH ===
-  let ptHTML = `<thead><tr><th></th>${yearHeaders}</tr></thead><tbody>`;
+  // Partner Cash Table
+  let ptHTML = `<thead><tr><th></th>${yearHeaders()}</tr></thead><tbody>`;
   for (const partner of ['EB', 'JS', 'JJB']) {
     ptHTML += sectionRow(partner);
-    const own = YEARS.map(y => getOwnership(y));
-
-    // Tax share
-    const taxShare = YEARS.map((_, i) => totalTaxDist[i] * own[i][partner] / 100);
+    const ownArr = YEARS.map(y => getOwnership(y));
+    const taxShare = YEARS.map((_, i) => totalTaxDist[i] * ownArr[i][partner] / 100);
     ptHTML += row('Tax Dist', taxShare);
-
-    // Tier 0 (EB only)
-    if (partner === 'EB') {
-      ptHTML += row('Tier 0', tier0);
-    }
-
-    // Tier 1
-    const t1Share = YEARS.map((_, i) => tier1[i] * own[i][partner] / 100);
+    if (partner === 'EB') ptHTML += row('Tier 0', tier0Arr);
+    const t1Share = YEARS.map((_, i) => tier1Arr[i] * ownArr[i][partner] / 100);
     ptHTML += row('Tier 1', t1Share);
-
-    // PE/DD (JS and JJB split 50/50)
-    if (partner === 'JS' || partner === 'JJB') {
-      const peddShare = peddPayments.map(v => v * 0.5);
-      ptHTML += row('PE/DD', peddShare);
-    }
-
-    // Tier 2
-    const t2Share = YEARS.map((_, i) => tier2[i] * own[i][partner] / 100);
+    if (partner === 'JS' || partner === 'JJB') ptHTML += row('PE/DD', peddPayments.map(v => v * 0.5));
+    const t2Share = YEARS.map((_, i) => tier2[i] * ownArr[i][partner] / 100);
     ptHTML += row('Tier 2', t2Share);
-
-    // Equity buy/sell (2026-2029 only)
     if (partner === 'JS' || partner === 'JJB') {
       const eqPay = YEARS.map(y => {
         if (!JS_BUYOUT_VAL[y]) return 0;
@@ -475,11 +249,9 @@ function recalc() {
       });
       ptHTML += row('Equity Buy/Sell', eqPay);
     }
-
-    // Total
     const total = YEARS.map((_, i) => {
       let t = taxShare[i] + t1Share[i] + t2Share[i];
-      if (partner === 'EB') t += tier0[i];
+      if (partner === 'EB') t += TIER0;
       if (partner === 'JS' || partner === 'JJB') t += peddPayments[i] * 0.5;
       if (JS_BUYOUT_VAL[YEARS[i]]) {
         const pmt = JS_BUYOUT_VAL[YEARS[i]] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2);
@@ -492,23 +264,19 @@ function recalc() {
   ptHTML += '</tbody>';
   document.getElementById('partnerTable').innerHTML = ptHTML;
 
-  // === OWNERSHIP DISPLAY ===
-  let ownHTML = '<table style="width:100%;font-size:9px;color:var(--text-sub)">';
+  // Ownership sidebar
   const distYears = [2026, 2027, 2028, 2029];
+  let ownHTML = '<table style="width:100%;font-size:9px;color:var(--text-sub)">';
   ownHTML += '<tr><td></td>' + distYears.map(y => `<td style="text-align:right;padding:2px 4px">'${String(y).slice(2)}</td>`).join('') + '</tr>';
   for (const p of ['EB', 'JS', 'JJB']) {
     ownHTML += `<tr><td style="color:var(--text-muted)">${p}</td>`;
-    for (const y of distYears) {
-      const own = getOwnership(y);
-      ownHTML += `<td style="text-align:right;padding:2px 4px">${own[p].toFixed(1)}%</td>`;
-    }
+    for (const y of distYears) ownHTML += `<td style="text-align:right;padding:2px 4px">${getOwnership(y)[p].toFixed(1)}%</td>`;
     ownHTML += '</tr>';
   }
   ownHTML += '</table>';
   document.getElementById('ownershipDisplay').innerHTML = ownHTML;
 
-  // === EB GRANT DISPLAY ===
-  // For each $500K cumulative PE/DD P&I, EB gets +0.5%, up to 2%
+  // EB Grant
   const grantPct = Math.min(2, Math.floor(cumPEDD / 500000) * 0.5);
   document.getElementById('ebGrantDisplay').innerHTML = `
     <div style="font-size:9px;color:var(--text-sub);line-height:1.6">
@@ -520,56 +288,21 @@ function recalc() {
   // Save PE/DD detail for debt page
   localStorage.setItem('gh-pedd-detail', JSON.stringify({
     years: YEARS,
-    instruments: PEDD_INIT.map(pe => ({
-      name: pe.name,
-      initBalance: pe.balance,
-      prinPaid: peddDetail[pe.name].prinPaid,
-      intPaid: peddDetail[pe.name].intPaid,
-      endBal: peddDetail[pe.name].endBal,
-      intOwed: peddDetail[pe.name].intOwed,
+    instruments: PEDD_INSTRUMENTS.map(pe => ({
+      name: pe.name, initBalance: pe.balance,
+      prinPaid: peddDetail[pe.name].prinPaid, intPaid: peddDetail[pe.name].intPaid,
+      endBal: peddDetail[pe.name].endBal, intOwed: peddDetail[pe.name].intOwed,
     })),
   }));
 }
 
-function getOwnership(year) {
-  if (year <= 2029 && OWNERSHIP[year]) return OWNERSHIP[year];
-  // After 2029, locked at 2029 values
-  return OWNERSHIP[2029];
-}
-
-function saveState() {
-  localStorage.setItem('gh-dist-state', JSON.stringify(state));
-  const btn = document.getElementById('saveBtn');
-  btn.textContent = 'saved!';
-  setTimeout(() => { btn.textContent = 'save'; }, 1500);
-}
-function loadState() {
-  try { const s = JSON.parse(localStorage.getItem('gh-dist-state')); if (s) Object.assign(state, s); } catch(e) {}
-}
-
-function toggleTheme() {
-  document.body.classList.toggle('light');
-  document.getElementById('themeToggle').textContent = document.body.classList.contains('light') ? 'dark' : 'light';
-  localStorage.setItem('gh-expansion-theme', document.body.classList.contains('light') ? 'light' : 'dark');
-}
-
 // Init
-loadState();
-const theme = localStorage.getItem('gh-expansion-theme');
-if (theme === 'light') { document.body.classList.add('light'); document.getElementById('themeToggle').textContent = 'dark'; }
-document.getElementById('versionLabel').textContent = 'v 03-28 04:00';
-
-createSlider('sl-fedTaxRate', 'fedTaxRate', {
-  label: 'Federal Tax Rate', min: 20, max: 37, step: 1, format: v => `${v}%`
-});
-createSlider('sl-hiTaxRate', 'hiTaxRate', {
-  label: 'Hawaii Tax Rate', min: 7, max: 11, step: 1, format: v => `${v}%`
-});
-createSlider('sl-fedNOL', 'fedNOL', {
-  label: 'Fed NOL Carryforward', min: 0, max: 2000000, step: 100000,
-  format: v => `$${(v/1e3).toFixed(0)}K`
-});
-
+initTheme();
+document.getElementById('versionLabel').textContent = 'v 03-28 06:00';
+document.getElementById('debugToggle').checked = state.debug;
+createSlider('sl-fedTaxRate', 'fedTaxRate', state, { label: 'Federal Tax Rate', min: 20, max: 37, step: 1, format: v => `${v}%` });
+createSlider('sl-hiTaxRate', 'hiTaxRate', state, { label: 'Hawaii Tax Rate', min: 7, max: 11, step: 1, format: v => `${v}%` });
+createSlider('sl-fedNOL', 'fedNOL', state, { label: 'Fed NOL Carryforward', min: 0, max: 2000000, step: 100000, format: v => `$${(v/1e3).toFixed(0)}K` });
 recalc();
 </script>
 </body>
