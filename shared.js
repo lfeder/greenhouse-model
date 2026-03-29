@@ -19,7 +19,7 @@ function getOwnership(year) {
 // PE/DD instruments — repayment order: PE3 → PE1 → PE2 → DD
 // PE/DD as of Jan 1, 2026 (from Excel Debt Schedule tab)
 const PEDD_INSTRUMENTS = [
-  { name: 'PE3', label: 'PE Tranche 3', balance: 685000, accruedInt: 147120, rateType: 'tbill', rateSpread: 0.025, order: 1 },
+  { name: 'PE3', label: 'PE Tranche 3', balance: 515000, accruedInt: 147120, rateType: 'tbill', rateSpread: 0.025, order: 1 },
   { name: 'PE1', label: 'PE Tranche 1', balance: 1000000, accruedInt: 0, rate: 0, order: 2 },
   { name: 'PE2', label: 'PE Tranche 2', balance: 500000, accruedInt: 79571, rate: 0.05, order: 3 },
   { name: 'DD',  label: 'Deferred Dist', balance: 380000, accruedInt: 0, rate: 0, order: 4 },
