@@ -386,7 +386,7 @@ function recalc() {
   plHTML += sectionRow('P&L');
   plHTML += row('Revenue', rev);
   plHTML += row('Operating Expense', exp.map(v => -v));
-  plHTML += row('EBITDA', ebitda, 'subtotal-row');
+  plHTML += row('Operating Income', ebitda, 'subtotal-row');
   plHTML += sectionRow('Cash Adjustments');
   plHTML += row('Loan Interest', loanInt.map(v => -v));
   plHTML += row('Loan Principal', loanPrin.map(v => -v));
