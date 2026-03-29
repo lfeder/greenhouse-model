@@ -1196,50 +1196,48 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     equityByYear[startYear] = (equityByYear[startYear] || 0) + cropEquity;
   }
 
-  // Vesting schedule: percentages of the PRE-EXPANSION business
-  const baseOwnership = {
-    2026: { EB: 26.0, JS: 31.5, JJB: 42.5 },
-    2027: { EB: 26.5, JS: 28.5, JJB: 45.0 },
-    2028: { EB: 27.0, JS: 25.5, JJB: 47.5 },
-    2029: { EB: 27.5, JS: 22.5, JJB: 50.0 },
+  // Vesting deltas: annual changes from base schedule
+  // 2026→2027: JJB +2.5, EB +0.5, JS -3.0
+  // Applied at start of each year through 2029
+  const vestingDeltas = {
+    2027: { JJB: 2.5, EB: 0.5, JS: -3.0 },
+    2028: { JJB: 2.5, EB: 0.5, JS: -3.0 },
+    2029: { JJB: 2.5, EB: 0.5, JS: -3.0 },
   };
-  // Post-2029 vesting base for JS→EB slider transfer
-  let vestEB = 27.5, vestJS = 22.5, vestJJB = 50.0;
   const jsTransferPct = s.jsTransferPct;
-  let jjbCumInv = 0;
+
+  // Start with 2026 base — percentages that lock and persist
+  let jjbPct = 42.5, ebPct = 26.0, jsPct = 31.5;
 
   const d = { jjbInv: [], jjbPct: [], ebPct: [], jsPct: [], bizVal: [], jjbVal: [], ebVal: [], jsVal: [], transfer: [], pe: [], opInc: [] };
 
   for (let i = 0; i < YEARS.length; i++) {
     const year = YEARS[i];
-    const eqDeploy = equityByYear[year] || 0;
-    jjbCumInv += eqDeploy;
 
+    // Apply vesting delta (contractual transfer, in % points)
+    if (vestingDeltas[year]) {
+      jjbPct += vestingDeltas[year].JJB;
+      ebPct += vestingDeltas[year].EB;
+      jsPct += vestingDeltas[year].JS;
+    }
+
+    // Post-2029: JS→EB slider transfer
+    if (year > 2029 && jsTransferPct > 0 && jsPct > jsTransferPct) {
+      jsPct -= jsTransferPct;
+      ebPct += jsTransferPct;
+    }
+
+    const eqDeploy = equityByYear[year] || 0;
     const opInc = totalRev[i] - totalExp[i];
     const pe = s.yearPE[year] || s.exitPE;
     const bizValue = opInc * pe;
 
-    // Get vesting percentages (apply to pre-expansion value)
-    if (baseOwnership[year]) {
-      vestEB = baseOwnership[year].EB;
-      vestJS = baseOwnership[year].JS;
-      vestJJB = baseOwnership[year].JJB;
-    } else if (year > 2029 && jsTransferPct > 0 && vestJS > jsTransferPct) {
-      // Post-2029: JS→EB slider transfer on vesting base
-      vestJS -= jsTransferPct;
-      vestEB += jsTransferPct;
-    }
-
-    // Ownership = vesting% of pre-expansion value + JJB's cumulative equity
-    // Total value = bizValue (market) + cumulative equity invested
-    const totalVal = bizValue + jjbCumInv;
-    let jjbPct, ebPct, jsPct;
-    if (totalVal > 0) {
-      jjbPct = (vestJJB / 100 * bizValue + jjbCumInv) / totalVal * 100;
-      ebPct = vestEB / 100 * bizValue / totalVal * 100;
-      jsPct = vestJS / 100 * bizValue / totalVal * 100;
-    } else {
-      jjbPct = vestJJB; ebPct = vestEB; jsPct = vestJS;
+    // JJB equity investment → dilutes EB/JS, locks in new percentages
+    if (eqDeploy > 0 && bizValue > 0) {
+      const postMoney = bizValue + eqDeploy;
+      jjbPct = (jjbPct / 100 * bizValue + eqDeploy) / postMoney * 100;
+      ebPct = ebPct / 100 * bizValue / postMoney * 100;
+      jsPct = jsPct / 100 * bizValue / postMoney * 100;
     }
 
     // JS→EB transfer (in % points, applied after base schedule ends in 2029)
