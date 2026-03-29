@@ -159,6 +159,7 @@
       </div>
       <div id="tomatoBuySliders" style="display:none">
         <div id="sl-tomatoPurchasePrice"></div>
+        <div id="sl-tomatoHardAssets"></div>
       </div>
     </div>
     <div class="panel">
@@ -259,7 +260,7 @@ const state = {
   lettuceLbs: 600000, lettucePrice: 7.00,
   cucumberCostPerAc: 1000000, tomatoCostPerAc: 1500000, lettuceCostPerAc: 4500000,
   landCostPerAc: 125000, packhouseSF: 30000, packhouseCostPerSF: 100, housingPeople: 25,
-  buyTomatoFacility: false, tomatoPurchasePrice: 8000000,
+  buyTomatoFacility: false, tomatoPurchasePrice: 8000000, tomatoHardAssets: 5000000,
   cukeExpPct: 70, tomatoExpPct: 70, lettuceExpPct: 70,
   kPhase: 1, kStartQ: 20271, kBuildMonths: 12, kRampYears: 2,
   jPhase: 1, jStartQ: 20271, jBuildMonths: 12, jRampYears: 2,
@@ -504,6 +505,15 @@ function buildSliders() {
     label: 'Purchase Price (6ac)', min: 3000000, max: 15000000, step: 2500000,
     format: v => fmtM(v)
   });
+  createSlider('sl-tomatoHardAssets', 'tomatoHardAssets', {
+    label: 'Hard Asset Value', min: 2000000, max: 10000000, step: 1000000,
+    format: v => fmtM(v),
+    sublabel: () => {
+      const loan = state.tomatoHardAssets * state.financingPct / 100;
+      const eq = state.tomatoPurchasePrice - loan;
+      return `Loan: ${fmtK(loan)} · Equity: ${fmtK(eq)}`;
+    }
+  });
 
   // Operating expenses
   createSlider('sl-cukeExpPct', 'cukeExpPct', {
@@ -654,7 +664,10 @@ function recalc() {
   let totalCropCapex = buildCropCapex;
   if (s.buyTomatoFacility) totalCropCapex += configs.TB.capex;
   const totalCapex = totalCropCapex + sharedCapex;
-  const equity = totalCapex * (1 - s.financingPct / 100);
+  // TB equity: purchase price - (hard assets × LTV); others: capex × (1 - LTV)
+  const buildEquity = (buildCropCapex + sharedCapex) * (1 - s.financingPct / 100);
+  const tbEquity = s.buyTomatoFacility ? configs.TB.capex - Math.min(s.tomatoHardAssets, configs.TB.capex) * s.financingPct / 100 : 0;
+  const equity = buildEquity + tbEquity;
 
   // Allocate shared capex to built crops only, not TB
   for (const c of allCrops) {
@@ -962,7 +975,9 @@ function simulateCombinedCF(crops, configs, s) {
 function simulateCropCF(cfg, cDef) {
   const s = state;
   const totalCap = cfg.fullCapex || cfg.capex;
-  const cropLoan = totalCap * s.financingPct / 100;
+  // For purchased facility: can only finance hard assets, not full purchase price
+  const loanBase = (cDef && cDef.isBuy) ? Math.min(s.tomatoHardAssets, totalCap) : totalCap;
+  const cropLoan = loanBase * s.financingPct / 100;
   const cropEquity = totalCap - cropLoan;
   const piAnnual = annualDebtSvc(cropLoan, s.interestRate, s.loanTermYears);
   const ioAnnual = cropLoan * s.interestRate / 100;
