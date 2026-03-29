@@ -99,10 +99,17 @@ function recalc() {
     fedTaxRate: state.fedTaxRate, hiTaxRate: state.hiTaxRate,
     fedNOL: state.fedNOL, tBillRate: 0.065,
   });
-  const { opInc, capexRes, taxableInc, totalTaxLiab, taxCashDist, distribCash, peddDetail, peddPayments, tier2, cumPEDD } = model;
+  const { opInc, capexRes, taxableInc, totalTaxLiab, taxCashDist, distribCash, peddDetail, peddPayments, tier2, cumPEDD, tier0Actual, tier1Actual, tier1Shortfall } = model;
   const totalTaxDist = taxCashDist;
 
   const row = (label, data, cls) => tableRow(label, data, fmtCellK, cls);
+  // Row with red highlighting on shortfall cells
+  const rowShortfall = (label, actualData, shortfallData, cls) => {
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${actualData.map((v, i) => {
+      const isShort = shortfallData[i] > 50;
+      return `<td${isShort ? ' style="color:var(--yellow)"' : ''}>${fmtCellK(-v)}${isShort ? ' *' : ''}</td>`;
+    }).join('')}</tr>`;
+  };
   const fK = (v) => '$' + Math.round(v / 1e3).toLocaleString() + 'K';
 
   // Build tooltips for tax cells
@@ -176,10 +183,13 @@ function recalc() {
   wfHTML += row('Distributable Cash', distribCash);
   wfHTML += sectionRow('Distributions');
   wfHTML += rowTip('Tax (Fed + HI)', totalTaxDist.map(v => -v), taxCashTips);
-  wfHTML += row('Tier 0 (EB)', tier0Arr.map(v => -v));
-  wfHTML += row('Tier 1 (Partner Draws)', tier1Arr.map(v => -v));
+  wfHTML += row('Tier 0 (EB)', tier0Actual.map(v => -v));
+  wfHTML += rowShortfall('Tier 1 (Partner Draws)', tier1Actual, tier1Shortfall);
   wfHTML += linkRow('PE/DD Repayment', peddPayments.map(v => -v), 'debt.html');
   wfHTML += row('Tier 2 (Pro-Rata)', tier2.map(v => -v));
+  // Show shortfall row if any
+  const hasShortfall = tier1Shortfall.some(v => v > 50);
+  if (hasShortfall) wfHTML += row('T1 Shortfall \u2192 DD', tier1Shortfall.map(v => -v));
   wfHTML += '</tbody>';
   document.getElementById('waterfallTable').innerHTML = wfHTML;
 
@@ -190,8 +200,8 @@ function recalc() {
     const ownArr = YEARS.map(y => getOwnership(y));
     const taxShare = YEARS.map((_, i) => totalTaxDist[i] * ownArr[i][partner] / 100);
     ptHTML += row('Tax Dist', taxShare);
-    if (partner === 'EB') ptHTML += row('Tier 0', tier0Arr);
-    const t1Share = YEARS.map((_, i) => tier1Arr[i] * ownArr[i][partner] / 100);
+    if (partner === 'EB') ptHTML += row('Tier 0', tier0Actual);
+    const t1Share = YEARS.map((_, i) => tier1Actual[i] * ownArr[i][partner] / 100);
     ptHTML += row('Tier 1', t1Share);
     if (partner === 'JS' || partner === 'JJB') ptHTML += row('PE/DD', peddPayments.map(v => v * 0.5));
     const t2Share = YEARS.map((_, i) => tier2[i] * ownArr[i][partner] / 100);
@@ -205,7 +215,7 @@ function recalc() {
     }
     const total = YEARS.map((_, i) => {
       let t = taxShare[i] + t1Share[i] + t2Share[i];
-      if (partner === 'EB') t += TIER0;
+      if (partner === 'EB') t += tier0Actual[i];
       if (partner === 'JS' || partner === 'JJB') t += peddPayments[i] * 0.5;
       if (JS_BUYOUT_VAL[YEARS[i]]) {
         t += JS_BUYOUT_VAL[YEARS[i]] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2) * (partner === 'JS' ? 1 : partner === 'JJB' ? -1 : 0);

@@ -306,20 +306,45 @@ function getDepreciation(debug) {
 // === WATERFALL SIMULATION ===
 function runWaterfall(distribCash, taxDist, tBillRate) {
   const peddBal = PEDD_INSTRUMENTS.map(p => ({ ...p, remaining: p.balance, intOwed: p.accruedInt || 0 }));
+  // Add a dynamic "T1 Shortfall" deferred distribution (0% interest, last in order)
+  const t1ShortfallPE = { name: 'T1Short', label: 'T1 Shortfall DD', balance: 0, rate: 0, order: 99, remaining: 0, intOwed: 0 };
+  peddBal.push(t1ShortfallPE);
+
   const peddDetail = {};
   for (const pe of peddBal) peddDetail[pe.name] = { prinPaid: [], intPaid: [], endBal: [], intOwed: [] };
 
   const peddPayments = [], tier2 = [];
+  const tier0Actual = [], tier1Actual = [], tier1Shortfall = [];
   let cumPEDD = 0;
 
   for (let i = 0; i < YEARS.length; i++) {
-    const tier1 = getTier1(YEARS[i]);
-    let remaining = distribCash[i] - taxDist[i] - TIER0 - tier1;
+    const tier1Full = getTier1(YEARS[i]);
+
+    // Available after tax
+    let remaining = distribCash[i] - taxDist[i];
+
+    // Tier 0 — always paid (assumed priority)
+    const t0 = Math.min(TIER0, Math.max(0, remaining));
+    remaining -= t0;
+    tier0Actual.push(t0);
+
+    // Tier 1 — pay what we can
+    const t1 = Math.min(tier1Full, Math.max(0, remaining));
+    remaining -= t1;
+    tier1Actual.push(t1);
+    const shortfall = tier1Full - t1;
+    tier1Shortfall.push(shortfall);
+
+    // Any Tier 1 shortfall becomes new deferred distribution
+    if (shortfall > 0) {
+      t1ShortfallPE.remaining += shortfall;
+    }
+
+    // Accrue interest at start of year on opening balances
     let peddThisYear = 0;
     const yearPrin = {}, yearInt = {};
     for (const pe of peddBal) { yearPrin[pe.name] = 0; yearInt[pe.name] = 0; }
 
-    // Accrue interest at start of year on opening balances
     for (const pe of peddBal) {
       if (pe.remaining > 0) {
         const rate = pe.rateType === 'tbill' ? (tBillRate || 0.065) : (pe.rate || 0);
@@ -327,7 +352,7 @@ function runWaterfall(distribCash, taxDist, tBillRate) {
       }
     }
 
-    // Pay in order: principal first per instrument, then interest after principal is done
+    // Pay PE/DD in order: principal first, then interest after principal done
     for (const pe of peddBal) {
       if (remaining <= 0) break;
       if (pe.remaining > 0) {
@@ -355,5 +380,5 @@ function runWaterfall(distribCash, taxDist, tBillRate) {
     tier2.push(Math.max(0, remaining));
   }
 
-  return { peddDetail, peddPayments, tier2, cumPEDD };
+  return { peddDetail, peddPayments, tier2, cumPEDD, tier0Actual, tier1Actual, tier1Shortfall };
 }
