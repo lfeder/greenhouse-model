@@ -245,6 +245,15 @@ function runWaterfall(distribCash, taxDist, tBillRate) {
     const yearPrin = {}, yearInt = {};
     for (const pe of peddBal) { yearPrin[pe.name] = 0; yearInt[pe.name] = 0; }
 
+    // Accrue interest at start of year on opening balances
+    for (const pe of peddBal) {
+      if (pe.remaining > 0) {
+        const rate = pe.rateType === 'tbill' ? (tBillRate || 0.065) : (pe.rate || 0);
+        pe.intOwed += pe.remaining * rate;
+      }
+    }
+
+    // Pay in order: principal first per instrument, then interest after principal is done
     for (const pe of peddBal) {
       if (remaining <= 0) break;
       if (pe.remaining > 0) {
@@ -264,10 +273,6 @@ function runWaterfall(distribCash, taxDist, tBillRate) {
     for (const pe of peddBal) {
       peddDetail[pe.name].prinPaid.push(yearPrin[pe.name]);
       peddDetail[pe.name].intPaid.push(yearInt[pe.name]);
-      if (pe.remaining > 0) {
-        const rate = pe.rateType === 'tbill' ? (tBillRate || 0.065) : (pe.rate || 0);
-        pe.intOwed += pe.remaining * rate;
-      }
       peddDetail[pe.name].endBal.push(pe.remaining);
       peddDetail[pe.name].intOwed.push(pe.intOwed);
     }
