@@ -99,7 +99,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-title">Ownership Schedule</div>
+        <div class="panel-title">Dist Schedule</div>
         <div id="ownershipDisplay"></div>
       </div>
       <div class="panel">
@@ -483,11 +483,12 @@ function recalc() {
 
   // === OWNERSHIP DISPLAY ===
   let ownHTML = '<table style="width:100%;font-size:9px;color:var(--text-sub)">';
-  ownHTML += '<tr><td></td>' + YEARS.slice(0, 6).map(y => `<td style="text-align:right;padding:2px 4px">'${String(y).slice(2)}</td>`).join('') + '</tr>';
+  const distYears = [2026, 2027, 2028, 2029];
+  ownHTML += '<tr><td></td>' + distYears.map(y => `<td style="text-align:right;padding:2px 4px">'${String(y).slice(2)}</td>`).join('') + '</tr>';
   for (const p of ['EB', 'JS', 'JJB']) {
     ownHTML += `<tr><td style="color:var(--text-muted)">${p}</td>`;
-    for (let i = 0; i < 6; i++) {
-      const own = getOwnership(YEARS[i]);
+    for (const y of distYears) {
+      const own = getOwnership(y);
       ownHTML += `<td style="text-align:right;padding:2px 4px">${own[p].toFixed(1)}%</td>`;
     }
     ownHTML += '</tr>';
