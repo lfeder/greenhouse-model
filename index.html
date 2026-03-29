@@ -1084,6 +1084,7 @@ function updateCapTable(equityNeeded, steadyOpInc) {
   const postMoney = preMoney + equityNeeded;
 
   // Pre-ownership
+  // Pre-ownership as of 2029 (when base schedule completes)
   const pre = { JJB: 50, EB: 27.5, JS: 22.5, External: 0 };
 
   // EB and JS investment based on target ownership
@@ -1178,9 +1179,16 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
     equityByYear[startYear] = (equityByYear[startYear] || 0) + cropEquity;
   }
 
-  // Collect per-year data with dilution tracking
-  // Ownership tracked as percentages; dilution computed at market value (PE × opInc)
-  let jjbPct = 50, ebPct = 27.5, jsPct = 22.5;
+  // Pre-existing ownership schedule (vesting/transfer already in motion)
+  const baseOwnership = {
+    2026: { EB: 26.0, JS: 31.5, JJB: 42.5 },
+    2027: { EB: 26.5, JS: 28.5, JJB: 45.0 },
+    2028: { EB: 27.0, JS: 25.5, JJB: 47.5 },
+    2029: { EB: 27.5, JS: 22.5, JJB: 50.0 },
+  };
+
+  // Start from 2026 base
+  let jjbPct = 42.5, ebPct = 26.0, jsPct = 31.5;
   const jsTransferPct = s.jsTransferPct;
   let jjbTotalInv = 0;
 
@@ -1188,6 +1196,14 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
 
   for (let i = 0; i < YEARS.length; i++) {
     const year = YEARS[i];
+
+    // Use pre-existing ownership schedule for 2026-2029 as base
+    if (baseOwnership[year]) {
+      jjbPct = baseOwnership[year].JJB;
+      ebPct = baseOwnership[year].EB;
+      jsPct = baseOwnership[year].JS;
+    }
+
     const eqDeploy = equityByYear[year] || 0;
     jjbTotalInv += eqDeploy;
 
@@ -1203,9 +1219,9 @@ function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt
       jsPct = jsPct / 100 * bizValue / postMoney * 100;
     }
 
-    // JS→EB transfer (in % points of ownership)
+    // JS→EB transfer (in % points, applied after base schedule ends in 2029)
     let transfer = 0;
-    if (jjbTotalInv > 0 && jsPct > jsTransferPct && jsTransferPct > 0) {
+    if (year > 2029 && jsPct > jsTransferPct && jsTransferPct > 0) {
       jsPct -= jsTransferPct;
       ebPct += jsTransferPct;
       transfer = jsTransferPct / 100 * bizValue;
