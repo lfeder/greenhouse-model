@@ -153,14 +153,8 @@
     </div>
     <div class="panel">
       <div class="panel-title">Buy 6ac Tomato Facility</div>
-      <div class="toggle-row">
-        <input type="checkbox" id="buyTomatoToggle" onchange="toggleTomatoBuy()">
-        <label for="buyTomatoToggle">Enable</label>
-      </div>
-      <div id="tomatoBuySliders" style="display:none">
-        <div id="sl-tomatoPurchasePrice"></div>
-        <div id="sl-tomatoHardAssets"></div>
-      </div>
+      <div id="sl-tomatoPurchasePrice"></div>
+      <div id="sl-tomatoHardAssets"></div>
     </div>
     <div class="panel">
       <div class="panel-title">Financing</div>
@@ -260,7 +254,7 @@ const state = {
   lettuceLbs: 600000, lettucePrice: 7.00,
   cucumberCostPerAc: 1000000, tomatoCostPerAc: 1500000, lettuceCostPerAc: 4500000,
   landCostPerAc: 125000, packhouseSF: 30000, packhouseCostPerSF: 100, housingPeople: 25,
-  buyTomatoFacility: false, tomatoPurchasePrice: 8000000, tomatoHardAssets: 5000000,
+  buyTomatoFacility: true, tomatoPurchasePrice: 8000000, tomatoHardAssets: 5000000,
   cukeExpPct: 70, tomatoExpPct: 70, lettuceExpPct: 70,
   kPhase: 1, kStartQ: 20271, kBuildMonths: 12, kRampYears: 2,
   jPhase: 1, jStartQ: 20271, jBuildMonths: 12, jRampYears: 2,
@@ -419,12 +413,6 @@ function buildPhaseGrid() {
   });
 }
 
-function toggleTomatoBuy() {
-  state.buyTomatoFacility = document.getElementById('buyTomatoToggle').checked;
-  document.getElementById('tomatoBuySliders').style.display = state.buyTomatoFacility ? 'block' : 'none';
-  buildPhaseGrid();
-  recalc();
-}
 
 
 
@@ -572,8 +560,6 @@ function buildSliders() {
   });
 
   // Phase grid & toggle
-  document.getElementById('buyTomatoToggle').checked = state.buyTomatoFacility;
-  document.getElementById('tomatoBuySliders').style.display = state.buyTomatoFacility ? 'block' : 'none';
   buildPhaseGrid();
 }
 
