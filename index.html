@@ -107,7 +107,6 @@
         <a href="index.html" style="color:var(--accent);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em;font-weight:700">Expansion</a>
         <a href="debt.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Debt</a>
         <a href="depreciation.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Depreciation</a>
-        <a href="distributions.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Distributions</a>
       </div>
       <button id="saveBtn" onclick="saveModel()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save model</button>
       <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">light</button>
@@ -174,8 +173,20 @@
       <div id="sl-costInflation"></div>
     </div>
     <div class="panel">
-      <div class="panel-title">Scenario A — JS→EB Transfer</div>
+      <div class="panel-title">JS→EB Transfer</div>
       <div id="sl-jsTransferPct"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Mode</div>
+      <div class="toggle-row">
+        <input type="checkbox" id="debugToggle" onchange="state.debug=this.checked;recalc()">
+        <label for="debugToggle">Debug (existing ops only)</label>
+      </div>
+      <div style="font-size:9px;color:var(--text-dim);padding-top:4px">
+        Fed tax: brackets · HI: brackets · NOL: $600K<br>
+        Tier 0: $300K · Tier 1: $500K/$600K/$750K<br>
+        Capex reserve: 2% of rev
+      </div>
     </div>
   </div>
 
@@ -210,13 +221,13 @@
       <div id="internalCapTable"></div>
     </div>
 
-    <div class="panel" id="distWaterfallPanel">
-      <div class="panel-title">Distribution Waterfall ($K) <a href="distributions.html" style="color:var(--text-muted);font-size:8px;text-decoration:none;letter-spacing:0.05em">[detail]</a></div>
+    <div class="panel">
+      <div class="panel-title">P&L, Distributions &amp; Tax ($K)</div>
       <div style="overflow-x:auto"><table class="fin-table" id="distWaterfallTable"></table></div>
     </div>
 
-    <div class="panel" id="partnerCashPanel">
-      <div class="panel-title">Partner Cash ($K) <a href="distributions.html" style="color:var(--text-muted);font-size:8px;text-decoration:none;letter-spacing:0.05em">[detail]</a></div>
+    <div class="panel">
+      <div class="panel-title">Partner Cash ($K)</div>
       <div style="overflow-x:auto"><table class="fin-table" id="partnerCashTable"></table></div>
     </div>
 
@@ -228,6 +239,7 @@
   </div>
 </div>
 
+<script src="shared.js"></script>
 <script>
 // === CONSTANTS ===
 const BASE_REV_PER_AC = 11500000 / 12; // ~$958K/ac from 12ac K+J in 2026
@@ -238,8 +250,7 @@ const EXISTING_DEBT_LETTUCE = 1000000;  // $1M/yr, pays off 3/2031
 const EXISTING_DEBT_LETTUCE_END = 2031; // last year of lettuce debt (Q1 payoff = partial year)
 const EXISTING_DEBT_LAND = 430000;      // $430K/yr through 2045
 const EXISTING_DEBT_LAND_END = 2045;
-const YEARS = [];
-for (let y = 2026; y <= 2035; y++) YEARS.push(y);
+// YEARS defined in shared.js
 
 const QUARTERS = [];
 for (let y = 2026; y <= 2035; y++)
@@ -262,7 +273,7 @@ const state = {
   lettuceLbs: 600000, lettucePrice: 7.00,
   cucumberCostPerAc: 1000000, tomatoCostPerAc: 1500000, lettuceCostPerAc: 4500000,
   landCostPerAc: 125000, packhouseSF: 30000, packhouseCostPerSF: 100, housingPeople: 25,
-  buyTomatoFacility: true, tomatoPurchasePrice: 8000000, tomatoHardAssets: 5000000,
+  tomatoPurchasePrice: 8000000, tomatoHardAssets: 5000000,
   cukeExpPct: 70, tomatoExpPct: 70, lettuceExpPct: 70,
   kPhase: 1, kStartQ: 20271, kBuildMonths: 12, kRampYears: 2,
   jPhase: 1, jStartQ: 20271, jBuildMonths: 12, jRampYears: 2,
@@ -273,7 +284,7 @@ const state = {
   financingPct: 80, interestRate: 7, loanTermYears: 7, interestOnly: true,
   revInflation: 4, costInflation: 3,
   // Investor / cap table
-  jsTransferPct: 0,
+  jsTransferPct: 0, debug: false,
   yearPE: {}, // per-year PE overrides for cap table
 };
 
@@ -773,92 +784,133 @@ function recalc() {
     })),
   }));
 
-  renderDistTables();
+  renderDistTables(totalRev, totalExp);
 }
 
-function renderDistTables() {
-  let dist = null;
-  try { dist = JSON.parse(localStorage.getItem('gh-dist-results')); } catch(e) {}
-  if (!dist) {
-    document.getElementById('distWaterfallTable').innerHTML = '<tr><td style="color:var(--text-dim);padding:12px">Visit <a href="distributions.html" style="color:var(--accent)">Distributions</a> page to compute</td></tr>';
-    document.getElementById('partnerCashTable').innerHTML = '';
-    document.getElementById('valuationTable').innerHTML = '';
-    return;
-  }
+function renderDistTables(totalRev, totalExp) {
+  const rev = totalRev, exp = totalExp;
+  const { totalInt: loanInt, totalPrin: loanPrin, totalDS } = computeLoanSchedules();
+  const dep = getDepreciation(state.debug);
+  const model = runFullModel({ rev, exp, loanInt, loanPrin, totalDS, fedDep: dep.fedDep, stateDep: dep.stateDep, tBillRate: 0.065 });
+  const { opInc, capexRes, taxableInc, totalTaxLiab, taxCashDist, distribCash, peddDetail, peddPayments, tier2, cumPEDD, tier0Actual, tier1Actual, tier1Shortfall, taxDetail } = model;
+  const totalTaxDist = taxCashDist;
 
-  const fCell = (n) => {
-    if (Math.abs(n) < 50) return '\u2014';
-    const k = Math.round(Math.abs(n) / 1e3);
-    return `${n < 0 ? '\u2212' : ''}${k.toLocaleString()}`;
-  };
+  const JS_BUYOUT_VAL = { 2026: 8000000, 2027: 9750000, 2028: 11500000, 2029: 13250000 };
+  const JS_ANNUAL_LOSS = 0.03, EB_ANNUAL_GAIN = 0.005;
+
+  const fC = (n) => { if (Math.abs(n) < 50) return '\u2014'; const k = Math.round(Math.abs(n) / 1e3); return `${n < 0 ? '\u2212' : ''}${k.toLocaleString()}`; };
   const yh = YEARS.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
   const sr = (label) => `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
-  const row = (label, data, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fCell(v)}</td>`).join('')}</tr>`;
-  const rowYellow = (label, actual, shortfall) => {
-    return `<tr><td>${label}</td>${actual.map((v, i) => {
-      const isShort = shortfall[i] > 50;
-      return `<td${isShort ? ' style="color:var(--yellow)"' : ''}>${fCell(-v)}${isShort ? ' *' : ''}</td>`;
-    }).join('')}</tr>`;
-  };
+  const rw = (label, data, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fC(v)}</td>`).join('')}</tr>`;
+  const rwLink = (label, data, href) => `<tr><td><a href="${href}" style="color:inherit;text-decoration:underline;text-decoration-style:dotted">${label}</a></td>${data.map(v => `<td>${fC(v)}</td>`).join('')}</tr>`;
+  const rwYellow = (label, actual, shortfall) => `<tr><td>${label}</td>${actual.map((v, i) => { const s = shortfall[i] > 50; return `<td${s ? ' style="color:var(--yellow)"' : ''}>${fC(-v)}${s ? ' *' : ''}</td>`; }).join('')}</tr>`;
 
-  // Waterfall
+  // Build tax tooltips
+  const fK2 = (v) => '$' + Math.round(v / 1e3).toLocaleString() + 'K';
+  const taxTips = taxDetail.map((td, i) => {
+    const own = getOwnership(YEARS[i]);
+    let t = `--- ${YEARS[i]} TAX ---\nFed: ${fK2(td.fedTaxable)} x EB ${own.EB.toFixed(1)}% = ${fK2(td.ebFedTaxable)}`;
+    if (td.nolUsed > 0) t += ` - NOL ${fK2(td.nolUsed)}`;
+    t += ` = ${fK2(td.ebNetFed)} \u2192 tax ${fK2(td.fedTax)} / ${own.EB.toFixed(1)}% = ${fK2(td.fedDist)}`;
+    t += `\nHI: ${fK2(td.ebHiTaxable)} \u2192 tax ${fK2(td.hiTax)} / ${own.EB.toFixed(1)}% = ${fK2(td.hiDist)}`;
+    t += `\nTotal: ${fK2(td.fedDist + td.hiDist)}`;
+    return t;
+  });
+  const rwTip = (label, data, tips, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map((v, i) => `<td title="${(tips[i]||'').replace(/"/g,'&quot;')}" style="cursor:help">${fC(v)}</td>`).join('')}</tr>`;
+
+  // P&L + Waterfall combined
   let wf = `<thead><tr><th></th>${yh}</tr></thead><tbody>`;
-  wf += row('Distributable Cash', dist.distribCash);
-  wf += sr('Distributions');
-  wf += row('Tax (Fed + HI)', dist.totalTaxDist.map(v => -v));
-  wf += row('Tier 0 (EB)', dist.tier0Actual.map(v => -v));
-  wf += rowYellow('Tier 1 (Partners)', dist.tier1Actual, dist.tier1Shortfall);
-  wf += row('PE/DD Repayment', dist.peddPayments.map(v => -v));
-  wf += row('Tier 2 (Pro-Rata)', dist.tier2.map(v => -v));
-  if (dist.tier1Shortfall.some(v => v > 50)) wf += row('T1 Shortfall \u2192 DD', dist.tier1Shortfall.map(v => -v));
+  wf += sr('P&L');
+  wf += rw('Revenue', rev);
+  wf += rw('Operating Expense', exp.map(v => -v));
+  wf += rw('Operating Income', opInc, 'subtotal-row');
+  wf += sr('Cash Adjustments');
+  wf += rwLink('Loan Interest', loanInt.map(v => -v), 'debt.html');
+  wf += rwLink('Loan Principal', loanPrin.map(v => -v), 'debt.html');
+  wf += rw('Capex Reserve (2%)', capexRes.map(v => -v));
+  wf += rw('Distributable Cash', distribCash, 'total-row-table');
+  wf += sr('Distribution Waterfall');
+  wf += rwTip('Tax (Fed + HI)', totalTaxDist.map(v => -v), taxTips);
+  wf += rw('Tier 0 (EB)', tier0Actual.map(v => -v));
+  wf += rwYellow('Tier 1 (Partners)', tier1Actual, tier1Shortfall);
+  wf += rwLink('PE/DD Repayment', peddPayments.map(v => -v), 'debt.html');
+  wf += rw('Tier 2 (Pro-Rata)', tier2.map(v => -v));
+  if (tier1Shortfall.some(v => v > 50)) wf += rw('T1 Shortfall \u2192 DD', tier1Shortfall.map(v => -v));
+  wf += sr('Tax Detail (Liability Year)');
+  wf += rwLink('Fed Bonus Depr', dep.fedDep.map(v => -v), 'depreciation.html');
+  wf += rw('Fed Taxable', taxableInc.map((t, i) => t - dep.fedDep[i]));
+  wf += rwLink('State Depr', dep.stateDep.map(v => -v), 'depreciation.html');
+  wf += rw('HI Taxable', taxableInc.map((t, i) => t - dep.stateDep[i]));
+  wf += rwTip('Tax Liability (accrual)', totalTaxLiab, taxTips);
   wf += '</tbody>';
   document.getElementById('distWaterfallTable').innerHTML = wf;
 
   // Partner cash
+  const tier1Arr = YEARS.map(y => getTier1(y));
   let pt = `<thead><tr><th></th>${yh}</tr></thead><tbody>`;
-  for (const p of ['EB', 'JS', 'JJB']) {
-    pt += sr(p);
-    pt += row('Total', dist.partnerData[p].total, 'subtotal-row');
+  for (const partner of ['EB', 'JS', 'JJB']) {
+    pt += sr(partner);
+    const ownArr = YEARS.map(y => getOwnership(y));
+    const taxShare = YEARS.map((_, i) => totalTaxDist[i] * ownArr[i][partner] / 100);
+    pt += rw('Tax Dist', taxShare);
+    if (partner === 'EB') pt += rw('Tier 0', tier0Actual);
+    const t1Share = YEARS.map((_, i) => tier1Actual[i] * ownArr[i][partner] / 100);
+    pt += rw('Tier 1', t1Share);
+    if (partner === 'JS' || partner === 'JJB') pt += rw('PE/DD', peddPayments.map(v => v * 0.5));
+    const t2Share = YEARS.map((_, i) => tier2[i] * ownArr[i][partner] / 100);
+    pt += rw('Tier 2', t2Share);
+    if (partner === 'JS' || partner === 'JJB') {
+      const eqPay = YEARS.map(y => {
+        if (!JS_BUYOUT_VAL[y]) return 0;
+        return JS_BUYOUT_VAL[y] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2) * (partner === 'JS' ? 1 : -1);
+      });
+      pt += rw('Equity Buy/Sell', eqPay);
+    }
+    const total = YEARS.map((_, i) => {
+      let t = taxShare[i] + t1Share[i] + t2Share[i];
+      if (partner === 'EB') t += tier0Actual[i];
+      if (partner === 'JS' || partner === 'JJB') t += peddPayments[i] * 0.5;
+      if (JS_BUYOUT_VAL[YEARS[i]]) t += JS_BUYOUT_VAL[YEARS[i]] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2) * (partner === 'JS' ? 1 : partner === 'JJB' ? -1 : 0);
+      return t;
+    });
+    pt += rw('Total ' + partner, total, 'subtotal-row');
   }
+  // EB grant
+  const grantPct = Math.min(2, Math.floor(cumPEDD / 500000) * 0.5);
+  pt += sr('EB Equity Grant');
+  pt += `<tr><td colspan="${YEARS.length + 1}" style="color:var(--text-sub);font-size:10px">PE/DD repaid: ${fmtK(cumPEDD)} · Grant: +${grantPct.toFixed(1)}% (max +2.0%)</td></tr>`;
   pt += '</tbody>';
   document.getElementById('partnerCashTable').innerHTML = pt;
 
-  // Valuation — read ownership from internal cap table data
+  // Valuation
   let own = null;
   try { own = JSON.parse(localStorage.getItem('gh-ownership')); } catch(e) {}
-  if (own) {
-    const lastYear = YEARS[YEARS.length - 1];
-    const lastOwn = own[lastYear] || { JJB: 50, EB: 27.5, JS: 22.5 };
-    const peOptions = [4,5,6,7,8,9,10,11,12];
-    let vHTML = '<table style="width:100%;font-size:11px;font-family:inherit;border-collapse:collapse">';
-    vHTML += '<tr><th style="text-align:left;padding:4px 8px;color:var(--accent);font-size:9px;letter-spacing:0.08em;text-transform:uppercase">P/E</th>';
-    for (const p of ['JJB', 'EB', 'JS']) vHTML += `<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">${p} (${lastOwn[p].toFixed(1)}%)</th>`;
-    vHTML += '<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">Total</th></tr>';
-
-    const lastOpInc = dist.distribCash[YEARS.length - 1] + dist.totalTaxDist[YEARS.length - 1] + dist.tier0Actual[YEARS.length - 1] + dist.tier1Actual[YEARS.length - 1] + dist.peddPayments[YEARS.length - 1] + dist.tier2[YEARS.length - 1];
-    // Approximate op income from distributable cash + DS + capex reserve
-    // Actually, just use the last year's total revenue - expense from expansion data
-    let lastRev = 0, lastExp = 0;
-    try {
-      const ed = JSON.parse(localStorage.getItem('gh-expansion-data'));
-      lastRev = ed.totalRev[YEARS.length - 1];
-      lastExp = ed.totalExp[YEARS.length - 1];
-    } catch(e) {}
-    const opInc = lastRev - lastExp;
-
-    for (const pe of peOptions) {
-      const bizVal = opInc * pe;
-      vHTML += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:4px 8px;color:var(--text-muted)">${pe}x</td>`;
-      for (const p of ['JJB', 'EB', 'JS']) {
-        const val = lastOwn[p] / 100 * bizVal;
-        vHTML += `<td style="text-align:right;padding:4px 8px;color:var(--text-sub)">${fmtK(val)}</td>`;
-      }
-      vHTML += `<td style="text-align:right;padding:4px 8px;color:var(--text)">${fmtK(bizVal)}</td></tr>`;
-    }
-    vHTML += '</table>';
-    vHTML += `<div style="font-size:9px;color:var(--text-dim);margin-top:6px">${lastYear} Op Income: ${fmtK(opInc)} · Ownership from cap table above</div>`;
-    document.getElementById('valuationTable').innerHTML = vHTML;
+  const lastYear = YEARS[YEARS.length - 1];
+  const lastOwn = own && own[lastYear] ? own[lastYear] : { JJB: 50, EB: 27.5, JS: 22.5 };
+  const lastOpInc = rev[YEARS.length - 1] - exp[YEARS.length - 1];
+  const peOptions = [4,5,6,7,8,9,10,11,12];
+  let vHTML = '<table style="width:100%;font-size:11px;font-family:inherit;border-collapse:collapse">';
+  vHTML += '<tr><th style="text-align:left;padding:4px 8px;color:var(--accent);font-size:9px;text-transform:uppercase">P/E</th>';
+  for (const p of ['JJB', 'EB', 'JS']) vHTML += `<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">${p} (${lastOwn[p].toFixed(1)}%)</th>`;
+  vHTML += '<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">Total</th></tr>';
+  for (const pe of peOptions) {
+    const bizVal = lastOpInc * pe;
+    vHTML += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:4px 8px;color:var(--text-muted)">${pe}x</td>`;
+    for (const p of ['JJB', 'EB', 'JS']) vHTML += `<td style="text-align:right;padding:4px 8px;color:var(--text-sub)">${fmtK(lastOwn[p] / 100 * bizVal)}</td>`;
+    vHTML += `<td style="text-align:right;padding:4px 8px;color:var(--text)">${fmtK(bizVal)}</td></tr>`;
   }
+  vHTML += '</table>';
+  vHTML += `<div style="font-size:9px;color:var(--text-dim);margin-top:6px">${lastYear} Op Income: ${fmtK(lastOpInc)}</div>`;
+  document.getElementById('valuationTable').innerHTML = vHTML;
+
+  // Save for debt page
+  localStorage.setItem('gh-pedd-detail', JSON.stringify({
+    years: YEARS,
+    instruments: PEDD_INSTRUMENTS.map(pe => ({
+      name: pe.name, prinPaid: peddDetail[pe.name]?.prinPaid || [], intPaid: peddDetail[pe.name]?.intPaid || [],
+      endBal: peddDetail[pe.name]?.endBal || [], intOwed: peddDetail[pe.name]?.intOwed || [],
+    })),
+  }));
 }
 
 // === CHART ===
@@ -1355,6 +1407,8 @@ function toggleTheme() {
 // === INIT ===
 document.getElementById('versionLabel').textContent = 'v 03-27 15:00';
 loadSavedModel();
+document.getElementById('debugToggle').checked = state.debug;
+window._pageState = state;
 buildSliders();
 recalc();
 </script>

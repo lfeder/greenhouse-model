@@ -124,6 +124,70 @@ function sliderBg(pct) {
   return `linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
 }
 
+// === TAX BRACKETS ===
+// Federal 2026 (married filing jointly, estimated)
+const FED_BRACKETS = [
+  { limit: 23850, rate: 0.10 },
+  { limit: 96950, rate: 0.12 },
+  { limit: 206700, rate: 0.22 },
+  { limit: 394600, rate: 0.24 },
+  { limit: 501050, rate: 0.32 },
+  { limit: 751600, rate: 0.35 },
+  { limit: Infinity, rate: 0.37 },
+];
+
+// Hawaii 2026 (married filing jointly)
+const HI_BRACKETS = [
+  { limit: 4800, rate: 0.014 },
+  { limit: 9600, rate: 0.032 },
+  { limit: 19200, rate: 0.055 },
+  { limit: 28800, rate: 0.064 },
+  { limit: 38400, rate: 0.068 },
+  { limit: 48000, rate: 0.072 },
+  { limit: 72000, rate: 0.076 },
+  { limit: 96000, rate: 0.079 },
+  { limit: 300000, rate: 0.0825 },
+  { limit: 350000, rate: 0.09 },
+  { limit: 400000, rate: 0.10 },
+  { limit: Infinity, rate: 0.11 },
+];
+
+const FED_NOL = 600000;
+
+function calcTaxFromBrackets(taxableIncome, brackets) {
+  if (taxableIncome <= 0) return 0;
+  let tax = 0, prev = 0;
+  for (const b of brackets) {
+    const slice = Math.min(taxableIncome, b.limit) - prev;
+    if (slice <= 0) break;
+    tax += slice * b.rate;
+    prev = b.limit;
+  }
+  return tax;
+}
+
+function calcEffectiveRate(taxableIncome, brackets) {
+  if (taxableIncome <= 0) return 0;
+  return calcTaxFromBrackets(taxableIncome, brackets) / taxableIncome;
+}
+
+// Compute entity-level tax distribution for a given year
+function calcTaxDistForYear(taxableInc, fedDep, stateDep, ownership, fedNOLRemaining) {
+  const fedTaxable = taxableInc - fedDep;
+  const ebFedTaxable = fedTaxable * ownership.EB / 100;
+  const nolUsed = Math.min(fedNOLRemaining, Math.max(0, ebFedTaxable));
+  const ebNetFed = Math.max(0, ebFedTaxable - nolUsed);
+  const fedTax = calcTaxFromBrackets(ebNetFed, FED_BRACKETS);
+  const fedDist = ownership.EB > 0 ? fedTax / (ownership.EB / 100) : 0;
+
+  const hiTaxable = taxableInc - stateDep;
+  const ebHiTaxable = Math.max(0, hiTaxable * ownership.EB / 100);
+  const hiTax = calcTaxFromBrackets(ebHiTaxable, HI_BRACKETS);
+  const hiDist = ownership.EB > 0 ? hiTax / (ownership.EB / 100) : 0;
+
+  return { fedDist, hiDist, fedTax, hiTax, ebNetFed, ebHiTaxable, nolUsed, fedTaxable, hiTaxable, ebFedTaxable, fedNOLRemaining: fedNOLRemaining - nolUsed };
+}
+
 const sliderOpts = {};
 function createSlider(containerId, key, state, opts) {
   sliderOpts[key] = opts;
@@ -248,30 +312,20 @@ function computeLoanSchedules() {
 
 // === FULL MODEL: rev/exp → tax → waterfall ===
 function runFullModel(opts) {
-  // opts: { rev, exp, loanInt, loanPrin, totalDS, fedDep, stateDep, fedTaxRate, hiTaxRate, fedNOL, tBillRate }
+  // opts: { rev, exp, loanInt, loanPrin, totalDS, fedDep, stateDep, tBillRate }
   const opInc = opts.rev.map((r, i) => r - opts.exp[i]);
   const capexRes = opts.rev.map(r => r * 0.02);
   const taxableInc = opInc.map((e, i) => e - opts.loanInt[i]);
 
-  // Tax liability per year
-  let fedNOLRemaining = opts.fedNOL || 0;
-  const totalTaxLiab = [];
+  // Tax liability per year using bracket-based calculation
+  let fedNOLRemaining = FED_NOL;
+  const totalTaxLiab = [], taxDetail = [];
   for (let i = 0; i < YEARS.length; i++) {
     const own = getOwnership(YEARS[i]);
-    const fedTaxable = taxableInc[i] - (opts.fedDep[i] || 0);
-    const ebFedTaxable = fedTaxable * own.EB / 100;
-    const nolUsed = Math.min(fedNOLRemaining, Math.max(0, ebFedTaxable));
-    fedNOLRemaining -= nolUsed;
-    const ebNetFed = Math.max(0, ebFedTaxable - nolUsed);
-    const fedTax = ebNetFed * (opts.fedTaxRate || 30) / 100;
-    const fedDist = own.EB > 0 ? fedTax / (own.EB / 100) : 0;
-
-    const hiTaxable = taxableInc[i] - (opts.stateDep[i] || 0);
-    const ebHiTaxable = hiTaxable * own.EB / 100;
-    const hiTax = Math.max(0, ebHiTaxable) * (opts.hiTaxRate || 10) / 100;
-    const hiDist = own.EB > 0 ? hiTax / (own.EB / 100) : 0;
-
-    totalTaxLiab.push(fedDist + hiDist);
+    const td = calcTaxDistForYear(taxableInc[i], opts.fedDep[i] || 0, opts.stateDep[i] || 0, own, fedNOLRemaining);
+    fedNOLRemaining = td.fedNOLRemaining;
+    totalTaxLiab.push(td.fedDist + td.hiDist);
+    taxDetail.push(td);
   }
 
   // Tax cash distributions (quarterly timing)
@@ -289,7 +343,7 @@ function runFullModel(opts) {
   const distribCash = opInc.map((o, i) => o - opts.totalDS[i] - capexRes[i]);
   const wf = runWaterfall(distribCash, taxCashDist, opts.tBillRate || 0.065);
 
-  return { opInc, capexRes, taxableInc, totalTaxLiab, taxCashDist, distribCash, ...wf };
+  return { opInc, capexRes, taxableInc, totalTaxLiab, taxCashDist, distribCash, taxDetail, ...wf };
 }
 
 // Get rev/exp from localStorage or debug defaults

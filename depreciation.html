@@ -16,7 +16,6 @@
         <a href="index.html">Expansion</a>
         <a href="debt.html">Debt</a>
         <a href="depreciation.html" class="active">Depreciation</a>
-        <a href="distributions.html">Distributions</a>
       </div>
       <button id="saveBtn" onclick="saveLoad.save()" class="btn">save</button>
       <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
@@ -49,6 +48,20 @@
       <div class="panel">
         <div class="panel-title">State (HI) Depreciation ($K)</div>
         <div style="overflow-x:auto"><table class="fin-table" id="stateTable"></table></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="panel">
+          <div class="panel-title">Federal Tax Brackets (MFJ 2026)</div>
+          <div id="fedBracketTable"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Hawaii Tax Brackets (MFJ 2026)</div>
+          <div id="hiBracketTable"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Effective Tax Rates by Taxable Income</div>
+        <div id="effectiveRateTable"></div>
       </div>
     </div>
   </div>
@@ -123,6 +136,34 @@ function recalc() {
   document.getElementById('stateTable').innerHTML = stateHTML;
 
   localStorage.setItem('gh-depreciation', JSON.stringify({ years: YEARS, totalFed, totalState }));
+
+  // Render bracket tables
+  const bracketTable = (brackets) => {
+    let h = '<table style="width:100%;font-size:10px;font-family:inherit;border-collapse:collapse">';
+    h += '<tr><th style="text-align:left;padding:3px 6px;color:var(--accent);font-size:9px">Up To</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">Rate</th></tr>';
+    let prev = 0;
+    for (const b of brackets) {
+      const label = b.limit === Infinity ? `${fmtK(prev)}+` : `${fmtK(prev)} \u2013 ${fmtK(b.limit)}`;
+      h += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:3px 6px;color:var(--text-sub)">${label}</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${(b.rate * 100).toFixed(1)}%</td></tr>`;
+      prev = b.limit;
+    }
+    h += '</table>';
+    return h;
+  };
+  document.getElementById('fedBracketTable').innerHTML = bracketTable(FED_BRACKETS);
+  document.getElementById('hiBracketTable').innerHTML = bracketTable(HI_BRACKETS);
+
+  // Effective rate table
+  const incomes = [250000, 500000, 750000, 1000000, 1500000, 2000000, 3000000, 5000000];
+  let eHTML = '<table style="width:100%;font-size:10px;font-family:inherit;border-collapse:collapse">';
+  eHTML += '<tr><th style="text-align:left;padding:3px 6px;color:var(--accent);font-size:9px">Taxable Income</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">Fed Eff</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">HI Eff</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">Combined</th></tr>';
+  for (const inc of incomes) {
+    const fedEff = calcEffectiveRate(inc, FED_BRACKETS) * 100;
+    const hiEff = calcEffectiveRate(inc, HI_BRACKETS) * 100;
+    eHTML += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:3px 6px;color:var(--text-sub)">${fmtK(inc)}</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${fedEff.toFixed(1)}%</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${hiEff.toFixed(1)}%</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${(fedEff + hiEff).toFixed(1)}%</td></tr>`;
+  }
+  eHTML += '</table>';
+  document.getElementById('effectiveRateTable').innerHTML = eHTML;
 }
 
 // Init
