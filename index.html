@@ -610,9 +610,8 @@ function recalc() {
     const acres = s[c.acresKey] || 0;
     return acres > 0;
   });
-  // All crops including TB for ROI panel
+  // All crops including TB for ROI panel (always include TB)
   const allCrops = CROP_DEFS.filter(c => {
-    if (c.isBuy && !s.buyTomatoFacility) return false;
     const acres = c.fixedAcres || s[c.acresKey] || 0;
     return acres > 0;
   });
@@ -988,16 +987,36 @@ function updateROI(crops, configs) {
   const s = state;
   let html = '';
 
+  // Merge K and J into one card if both exist with same IRR
+  const kCfg = configs['K'], jCfg = configs['J'];
+  const hasK = kCfg && kCfg.capex > 0, hasJ = jCfg && jCfg.capex > 0;
+  let mergedKJ = false;
+
   for (const c of crops) {
     const cfg = configs[c.key];
     if (cfg.capex <= 0) continue;
 
+    // Skip J if merged with K
+    if (c.key === 'J' && mergedKJ) continue;
+
+    let label = c.label, capex = cfg.fullCapex || cfg.capex, clickKey = c.key;
     const roi = calcCropROI(cfg, c);
-    const isSelected = c.key === selectedROICrop;
-    html += `<div class="roi-item${isSelected ? ' roi-highlight' : ''}" style="cursor:pointer" onclick="showCropCF('${c.key}')">
+
+    // Merge K+J
+    if (c.key === 'K' && hasJ) {
+      const jRoi = calcCropROI(jCfg, crops.find(x => x.key === 'J'));
+      if (Math.abs(roi.pct - jRoi.pct) < 0.5) {
+        label = 'Keiki + Japanese';
+        capex += (jCfg.fullCapex || jCfg.capex);
+        mergedKJ = true;
+      }
+    }
+
+    const isSelected = c.key === selectedROICrop || (mergedKJ && c.key === 'K' && selectedROICrop === 'J');
+    html += `<div class="roi-item${isSelected ? ' roi-highlight' : ''}" style="cursor:pointer" onclick="showCropCF('${clickKey}')">
       <div>
-        <div class="roi-label">${c.label}</div>
-        <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.fullCapex || cfg.capex)} capex | ${fmtK(roi.equity)} equity</div>
+        <div class="roi-label">${label}</div>
+        <div style="font-size:8px;color:var(--text-dim)">${fmtK(capex)} capex | ${fmtK(roi.equity)} equity</div>
       </div>
       <div class="roi-value" style="color:var(--green)">${roi.pct.toFixed(1)}%</div>
     </div>`;
