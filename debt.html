@@ -57,9 +57,10 @@
   .fin-table tr.section-header td { color: var(--accent); font-weight: 700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding-top: 12px; border-bottom: 1px solid var(--border); }
   .fin-table tr.total-row-table td { color: var(--text); font-weight: 700; border-top: 1px solid var(--border); border-bottom: 2px solid var(--border); }
   .fin-table tr.subtotal-row td { color: var(--green); font-weight: 700; border-bottom: 1px solid var(--border); }
-  .fin-table .neg { color: var(--red); }
 
-  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .summary-grid { display: grid; gap: 8px; margin-bottom: 8px; }
+  .summary-grid.loans { grid-template-columns: repeat(3, 1fr); }
+  .summary-grid.pedd { grid-template-columns: repeat(4, 1fr); }
   .summary-item { background: var(--panel-dark); border-radius: 5px; padding: 8px 12px; }
   .summary-label { font-size: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
   .summary-detail { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
@@ -275,7 +276,7 @@ function recalc() {
 
   // Instrument summary cards — loans row 1, PE/DD row 2
   const loanMaturities = { 'FCL (Lettuce)': 'Mar 2031', 'BIPAH (Property)': 'Jan 2045', 'JJB Downpayment': 'Jan 2030' };
-  let summaryHTML = '<div class="summary-grid">';
+  let summaryHTML = '<div class="summary-grid loans">';
   for (const loan of LOANS) {
     const sched2026 = loan.annualSchedule(2026);
     const startBal = loan.name === 'FCL (Lettuce)' ? loan.balanceAfter(22) :
@@ -287,7 +288,7 @@ function recalc() {
       <div class="summary-value">${fmtK(sched2026.interest + sched2026.principal)}/yr</div>
     </div>`;
   }
-  summaryHTML += '</div><div class="summary-grid" style="margin-top:8px">';
+  summaryHTML += '</div><div class="summary-grid pedd">';
   for (const pe of PEDD_INSTRUMENTS) {
     const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
     summaryHTML += `<div class="summary-item">

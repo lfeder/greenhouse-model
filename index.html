@@ -68,7 +68,6 @@
   .fin-table tr.section-header td { color: var(--accent); font-weight: 700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding-top: 12px; border-bottom: 1px solid var(--border); }
   .fin-table tr.total-row-table td { color: var(--text); font-weight: 700; border-top: 1px solid var(--border); border-bottom: 2px solid var(--border); }
   .fin-table tr.subtotal-row td { color: var(--green); font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-  .fin-table .neg { color: var(--red); }
 
   .phase-grid { width: 100%; border-collapse: collapse; margin-top: 8px; }
   .phase-grid th { font-size: 8px; color: var(--text-muted); text-transform: uppercase; padding: 4px 2px; text-align: center; letter-spacing: 0.05em; }
@@ -856,7 +855,7 @@ function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDe
     if (Math.abs(n) < 500) return '\u2014';
     const inM = Math.abs(n) / 1e6;
     const str = inM >= 0.05 ? inM.toFixed(1) : inM.toFixed(2);
-    if (n < 0) return `<span class="neg">\u2212${str}</span>`;
+    if (n < 0) return `\u2212${str}`;
     return str;
   };
 
@@ -922,7 +921,7 @@ function updateROI(crops, configs) {
         <div class="roi-label">${c.label}</div>
         <div style="font-size:8px;color:var(--text-dim)">${fmtK(cfg.fullCapex || cfg.capex)} capex | ${fmtK(roi.equity)} equity</div>
       </div>
-      <div class="roi-value" style="color:${roi.pct >= 0 ? 'var(--green)' : 'var(--red)'}">${roi.pct.toFixed(1)}%</div>
+      <div class="roi-value" style="color:var(--green)">${roi.pct.toFixed(1)}%</div>
     </div>`;
   }
 
@@ -1154,7 +1153,7 @@ function updateCapTable(equityNeeded, steadyOpInc) {
     rows += `<tr>
       <td style="color:var(--text-sub)">${p}</td>
       <td>${pre[p].toFixed(1)}%</td>
-      <td>${inv > 0 ? fmtK(inv) : proceeds > 0 ? '<span class="neg">\u2212' + fmtK(proceeds) + '</span>' : '\u2014'}</td>
+      <td>${inv > 0 ? fmtK(inv) : proceeds > 0 ? '\u2212' + fmtK(proceeds) : '\u2014'}</td>
       <td>${post[p].toFixed(1)}%</td>
       <td>${fmtK(exitShare)}</td>
       <td>${irr}</td>
