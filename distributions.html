@@ -93,7 +93,7 @@
         <div class="panel-title">Fixed Parameters</div>
         <div style="font-size:9px;color:var(--text-sub);line-height:1.6">
           Tier 0 (EB salary): $300K/yr<br>
-          Tier 1: $400K '26 · $500K '27 · $600K '28 · $750K '29+<br>
+          Tier 1: $500K '26 · $600K '27 · $750K '28+<br>
           Capex reserve: 2% of revenue<br>
           PE/DD order: PE3 → PE1 → PE2 → DD
         </div>
@@ -135,7 +135,7 @@ const state = {
 };
 
 // Fixed schedules
-const TIER1 = { 2026: 400000, 2027: 500000, 2028: 600000 }; // 2029+ = 750000
+const TIER1 = { 2026: 500000, 2027: 600000 }; // 2028+ = 750000
 const TIER0 = 300000;
 const OWNERSHIP = {
   2026: { EB: 26.0, JS: 31.5, JJB: 42.5 },
