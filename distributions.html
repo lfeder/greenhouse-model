@@ -348,16 +348,21 @@ function recalc() {
   const peddPaid = [];
   let cumPEDD = 0;
 
-  // PE/DD repayment simulation
+  // PE/DD repayment simulation — track per-instrument detail
   const peddBal = PEDD_INIT.map(p => ({ ...p, remaining: p.balance, intOwed: 0 }));
   const peddPayments = YEARS.map(() => 0);
+  const peddDetail = {}; // name -> { prinPaid: [], intPaid: [], endBal: [], intOwed: [] }
+  for (const pe of peddBal) peddDetail[pe.name] = { prinPaid: [], intPaid: [], endBal: [], intOwed: [] };
   const tier2 = [];
 
   for (let i = 0; i < YEARS.length; i++) {
     let remaining = distribCash[i] - totalTaxDist[i] - tier0[i] - tier1[i];
 
-    // PE/DD: pay in order PE3→PE1→PE2→DD, principal first, then interest after principal is done
     let peddThisYear = 0;
+    // Reset per-year tracking
+    const yearPrin = {}, yearInt = {};
+    for (const pe of peddBal) { yearPrin[pe.name] = 0; yearInt[pe.name] = 0; }
+
     for (const pe of peddBal) {
       if (remaining <= 0) break;
       // Pay principal first
@@ -367,6 +372,7 @@ function recalc() {
         remaining -= prinPay;
         peddThisYear += prinPay;
         cumPEDD += prinPay;
+        yearPrin[pe.name] += prinPay;
       }
       // After principal is fully repaid, pay accrued interest
       if (pe.remaining <= 0 && pe.intOwed > 0) {
@@ -375,14 +381,19 @@ function recalc() {
         remaining -= intPay;
         peddThisYear += intPay;
         cumPEDD += intPay;
+        yearInt[pe.name] += intPay;
       }
     }
     // Accrue interest on remaining balances for next year
     for (const pe of peddBal) {
       if (pe.remaining > 0) {
-        const rate = pe.rateType === 'tbill' ? 0.065 : (pe.rate || 0); // default T-bill+2.5%
+        const rate = pe.rateType === 'tbill' ? 0.065 : (pe.rate || 0);
         pe.intOwed += pe.remaining * rate;
       }
+      peddDetail[pe.name].prinPaid.push(yearPrin[pe.name]);
+      peddDetail[pe.name].intPaid.push(yearInt[pe.name]);
+      peddDetail[pe.name].endBal.push(pe.remaining);
+      peddDetail[pe.name].intOwed.push(pe.intOwed);
     }
     peddPayments[i] = peddThisYear;
     tier2.push(Math.max(0, remaining));
@@ -505,6 +516,19 @@ function recalc() {
       Grant earned: +${grantPct.toFixed(1)}% (of max +2.0%)<br>
       <span style="color:var(--text-dim)">+0.5% per $500K of P&I repaid</span>
     </div>`;
+
+  // Save PE/DD detail for debt page
+  localStorage.setItem('gh-pedd-detail', JSON.stringify({
+    years: YEARS,
+    instruments: PEDD_INIT.map(pe => ({
+      name: pe.name,
+      initBalance: pe.balance,
+      prinPaid: peddDetail[pe.name].prinPaid,
+      intPaid: peddDetail[pe.name].intPaid,
+      endBal: peddDetail[pe.name].endBal,
+      intOwed: peddDetail[pe.name].intOwed,
+    })),
+  }));
 }
 
 function getOwnership(year) {

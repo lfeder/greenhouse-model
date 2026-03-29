@@ -291,29 +291,19 @@ function recalc() {
     }
   }
 
-  // PE/DD — simulate waterfall repayment
-  // Available cash for PE/DD comes from distributions page; here we just show the schedule
-  // assuming they get repaid as fast as possible (show balances declining)
-  const peddData = {};
-  const peddBalances = {};
-  const peddInterest = {};
-  const peddPrincipal = {};
-  for (const pe of PEDD_INSTRUMENTS) {
-    peddBalances[pe.name] = pe.balance;
-    peddData[pe.name] = { begBal: [], principal: [], interest: [], endBal: [] };
-  }
+  // PE/DD — read waterfall repayment data from distributions page
+  let peddFromDist = null;
+  try { peddFromDist = JSON.parse(localStorage.getItem('gh-pedd-detail')); } catch(e) {}
 
-  // For now, show PE/DD as static balances (actual repayment depends on waterfall cash from distributions page)
-  for (const year of YEARS) {
-    for (const pe of PEDD_INSTRUMENTS) {
-      const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
-      const bal = peddBalances[pe.name];
-      const interest = bal > 0 ? bal * rate : 0;
-      peddData[pe.name].begBal.push(bal);
-      peddData[pe.name].principal.push(0); // filled by distributions page
-      peddData[pe.name].interest.push(interest);
-      peddData[pe.name].endBal.push(bal);
-    }
+  const peddData = {};
+  for (const pe of PEDD_INSTRUMENTS) {
+    const distInst = peddFromDist ? peddFromDist.instruments.find(p => p.name === pe.name) : null;
+    peddData[pe.name] = {
+      prinPaid: distInst ? distInst.prinPaid : YEARS.map(() => 0),
+      intPaid: distInst ? distInst.intPaid : YEARS.map(() => 0),
+      endBal: distInst ? distInst.endBal : YEARS.map(() => pe.balance),
+      intOwed: distInst ? distInst.intOwed : YEARS.map(() => 0),
+    };
   }
 
   // Total debt service
@@ -321,8 +311,8 @@ function recalc() {
   const totalPrin = YEARS.map((_, i) => LOANS.reduce((s, l) => s + loanData[l.name].principal[i], 0));
   const totalDS = YEARS.map((_, i) => totalInt[i] + totalPrin[i]);
 
-  // Total PE/DD interest accruing
-  const totalPEDDInt = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + peddData[pe.name].interest[i], 0));
+  const totalPEDDPrin = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + peddData[pe.name].prinPaid[i], 0));
+  const totalPEDDInt = YEARS.map((_, i) => PEDD_INSTRUMENTS.reduce((s, pe) => s + peddData[pe.name].intPaid[i], 0));
 
   const row = (label, data, cls) =>
     `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fmtCell(v)}</td>`).join('')}</tr>`;
@@ -346,13 +336,30 @@ function recalc() {
   for (const loan of LOANS) html += balRow(loan.name, loanData[loan.name].endBal);
 
   // PE/DD section
-  html += sectionRow('PE/DD Balances & Accrued Interest');
+  html += sectionRow('PE/DD Principal Repayment (via Waterfall)');
+  for (const pe of PEDD_INSTRUMENTS) {
+    html += row(pe.name, peddData[pe.name].prinPaid.map(v => -v));
+  }
+  html += row('Total PE/DD Principal', totalPEDDPrin.map(v => -v), 'subtotal-row');
+
+  html += sectionRow('PE/DD Interest Paid');
   for (const pe of PEDD_INSTRUMENTS) {
     const rate = pe.rateType === 'tbill' ? tBillRate + pe.rateSpread : (pe.rate || 0);
-    html += balRow(`${pe.name} (${(rate * 100).toFixed(1)}%)`, peddData[pe.name].endBal);
-    if (rate > 0) html += row(`  Interest Accruing`, peddData[pe.name].interest.map(v => -v));
+    if (rate > 0) html += row(`${pe.name} (${(rate * 100).toFixed(1)}%)`, peddData[pe.name].intPaid.map(v => -v));
   }
   html += row('Total PE/DD Interest', totalPEDDInt.map(v => -v), 'subtotal-row');
+
+  html += sectionRow('PE/DD Balances (End of Year)');
+  for (const pe of PEDD_INSTRUMENTS) {
+    html += balRow(pe.name, peddData[pe.name].endBal);
+  }
+  const hasIntOwed = PEDD_INSTRUMENTS.some(pe => peddData[pe.name].intOwed.some(v => v > 50));
+  if (hasIntOwed) {
+    html += sectionRow('PE/DD Accrued Interest Owed');
+    for (const pe of PEDD_INSTRUMENTS) {
+      if (peddData[pe.name].intOwed.some(v => v > 50)) html += balRow(pe.name, peddData[pe.name].intOwed);
+    }
+  }
 
   html += '</tbody>';
   document.getElementById('scheduleTable').innerHTML = html;
