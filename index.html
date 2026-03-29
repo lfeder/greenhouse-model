@@ -661,13 +661,9 @@ function recalc() {
   for (const c of allCrops) {
     if (!c.isBuy) buildCropCapex += configs[c.key].capex;
   }
-  let totalCropCapex = buildCropCapex;
-  if (s.buyTomatoFacility) totalCropCapex += configs.TB.capex;
+  const totalCropCapex = buildCropCapex;
   const totalCapex = totalCropCapex + sharedCapex;
-  // TB equity: purchase price - (hard assets × LTV); others: capex × (1 - LTV)
-  const buildEquity = (buildCropCapex + sharedCapex) * (1 - s.financingPct / 100);
-  const tbEquity = s.buyTomatoFacility ? configs.TB.capex - Math.min(s.tomatoHardAssets, configs.TB.capex) * s.financingPct / 100 : 0;
-  const equity = buildEquity + tbEquity;
+  const equity = totalCapex * (1 - s.financingPct / 100);
 
   // Allocate shared capex to built crops only, not TB
   for (const c of allCrops) {
@@ -785,7 +781,7 @@ function recalc() {
   document.getElementById('kpi-debtSvc').textContent = fmtK(peakDebt);
   document.getElementById('kpi-debtSvc-sub').textContent = `peak yr | ${fmtK(lastDebt)} in '${String(YEARS[lastIdx]).slice(2)}`;
   // Total IRR across all new investments
-  const combinedCF = simulateCombinedCF(allCrops, configs, s);
+  const combinedCF = simulateCombinedCF(activeCrops, configs, s);
   const totalIRR = calcIRR(combinedCF) * 100;
   document.getElementById('kpi-irr').textContent = `${totalIRR.toFixed(1)}%`;
   document.getElementById('kpi-irr-sub').textContent = 'all new crops';
@@ -1184,9 +1180,10 @@ function updateCapTable(equityNeeded, steadyOpInc) {
 function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt, existKJ, existL, existDebt) {
   const s = state;
 
-  // Compute per-year equity deployment based on crop construction starts
+  // Compute per-year equity deployment based on crop construction starts (excludes TB)
   const equityByYear = {};
   for (const c of allCrops) {
+    if (c.isBuy) continue;
     const cfg = configs[c.key];
     if (!cfg || cfg.capex <= 0) continue;
     const fullCapex = cfg.fullCapex || cfg.capex;
