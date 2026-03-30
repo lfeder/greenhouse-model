@@ -176,6 +176,7 @@ def compute(s):
 
     # Write CSV
     model.write_csv(result)
+    model.write_gsheet(result)
 
     return {
         **{k: v for k, v in result.items() if k != "loans"},

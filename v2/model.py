@@ -646,6 +646,111 @@ def write_csv(model, path="output.csv"):
 
 
 # ============================================================
+# 12. GOOGLE SHEETS OUTPUT
+# ============================================================
+
+GSHEET_ID = "1jDsN-P4M5rNt0LkWrhtaJkvju_ADRW17bKH8HR1nPOk"
+GSHEET_KEY = _DIR / "gsheet-key.json"
+
+def write_gsheet(model):
+    """Write model output to Google Sheet. Every slider change updates the sheet."""
+    try:
+        import gspread
+    except ImportError:
+        print("gspread not installed, skipping Google Sheets output")
+        return
+
+    if not GSHEET_KEY.exists():
+        return
+
+    gc = gspread.service_account(filename=str(GSHEET_KEY))
+    sh = gc.open_by_key(GSHEET_ID)
+    ws = sh.sheet1
+
+    # Build all rows, then batch update
+    rows = []
+    hdr = [""] + [str(y) for y in YEARS]
+    R = lambda label, data: [label] + [round(v) for v in data]
+
+    rows.append(["P&L"])
+    rows.append(hdr)
+    rows.append(R("Revenue", model["rev"]))
+    rows.append(R("Expenses", model["exp"]))
+    rows.append(R("Operating Income", model["op_inc"]))
+    rows.append([])
+
+    rows.append(["DEBT SERVICE"])
+    rows.append(hdr)
+    for name, sched in model["loans"]["data"].items():
+        rows.append(R(f"{name} Int", [s["interest"] for s in sched]))
+        rows.append(R(f"{name} Prin", [s["principal"] for s in sched]))
+    rows.append(R("Total Interest", model["loans"]["total_int"]))
+    rows.append(R("Total Principal", model["loans"]["total_prin"]))
+    rows.append(R("Total DS", model["loans"]["total_ds"]))
+    rows.append(R("Capex Reserve", model["capex_res"]))
+    rows.append(R("Distributable Cash", model["distrib_cash"]))
+    rows.append([])
+
+    rows.append(["TAX DETAIL"])
+    rows.append(hdr)
+    rows.append(R("Taxable Inc", model["taxable_inc"]))
+    rows.append(R("Fed Depr", model["dep"]["fed"]))
+    rows.append(R("Fed Taxable", [model["taxable_inc"][i] - model["dep"]["fed"][i] for i in range(N_YEARS)]))
+    rows.append(R("State Depr", model["dep"]["state"]))
+    rows.append(R("HI Taxable", [model["taxable_inc"][i] - model["dep"]["state"][i] for i in range(N_YEARS)]))
+    rows.append(R("EB Fed Taxable", [td["eb_fed"] for td in model["tax_detail"]]))
+    rows.append(R("NOL Used", [td["nol_used"] for td in model["tax_detail"]]))
+    rows.append(R("EB Net Fed", [td["eb_net_fed"] for td in model["tax_detail"]]))
+    rows.append(R("Fed Tax (EB)", [td["fed_tax"] for td in model["tax_detail"]]))
+    rows.append(R("Fed Dist", [td["fed_dist"] for td in model["tax_detail"]]))
+    rows.append(R("HI Tax (EB)", [td["hi_tax"] for td in model["tax_detail"]]))
+    rows.append(R("HI Dist", [td["hi_dist"] for td in model["tax_detail"]]))
+    rows.append(R("Tax Liability", model["tax_liab"]))
+    rows.append(R("Tax Cash Dist", model["tax_cash"]))
+    rows.append([])
+
+    rows.append(["WATERFALL"])
+    rows.append(hdr)
+    rows.append(R("Distributable Cash", model["distrib_cash"]))
+    rows.append(R("Tax Dist", model["tax_cash"]))
+    rows.append(R("Tier 0", model["tier0_actual"]))
+    rows.append(R("Tier 1", model["tier1_actual"]))
+    rows.append(R("T1 Shortfall", model["tier1_shortfall"]))
+    rows.append(R("PE/DD Payments", model["pedd_payments"]))
+    rows.append(R("Tier 2", model["tier2"]))
+    rows.append([])
+
+    rows.append(["PE/DD DETAIL"])
+    rows.append(hdr)
+    for name in [p["name"] for p in PEDD_INSTRUMENTS] + ["T1Short"]:
+        if name in model["detail"]:
+            d = model["detail"][name]
+            rows.append(R(f"{name} Prin", d["prin_paid"]))
+            rows.append(R(f"{name} Int", d["int_paid"]))
+            rows.append(R(f"{name} Bal", d["end_bal"]))
+    rows.append([])
+
+    rows.append(["OWNERSHIP %"])
+    rows.append(hdr)
+    for p in ["JJB", "EB", "JS"]:
+        rows.append([p] + [round(o[p], 1) for o in model["ownership"]])
+    rows.append([])
+
+    rows.append(["PARTNER CASH"])
+    rows.append(hdr)
+    for p in ["EB", "JS", "JJB"]:
+        for rn, rd in model["partners"][p].items():
+            rows.append(R(f"{p} {rn}", rd))
+        rows.append([])
+
+    rows.append(["EB PEDD Grant %", model["pedd_grant"]])
+
+    # Clear and write in one batch
+    ws.clear()
+    ws.update(range_name="A1", values=rows)
+
+
+# ============================================================
 # STANDALONE TEST
 # ============================================================
 
