@@ -211,8 +211,12 @@ function buildSidebar() {
     ${S('costInflation', {label:'Cost Escalation',min:3,max:5,step:0.5,def:3,fmt:v=>v.toFixed(1)+'%/yr'})}
   </div>`;
 
+  h += `<div class="panel"><div class="panel-title">Equity Dilution</div>
+    ${S('buyinValuation', {label:'JJB Buy-in Valuation',min:15000000,max:25000000,step:1000000,def:20000000,fmt:v=>(v/1e6).toFixed(0)+'M'})}
+  </div>`;
+
   h += `<div class="panel"><div class="panel-title">EB Expansion Grant (from JS)</div>
-    ${S('ebExpansionGrantPct', {label:'Annual %',min:0,max:2,step:0.5,def:0.5,fmt:v=>v.toFixed(1)+'%'})}
+    ${S('ebExpansionGrantPct', {label:'Annual %',min:0,max:1,step:0.25,def:0.5,fmt:v=>v.toFixed(2)+'%'})}
     ${S('ebExpansionGrantStartYear', {label:'Start Year',min:2026,max:2032,step:1,def:2027,fmt:v=>''+v})}
     ${S('ebExpansionGrantEndYear', {label:'End Year',min:2028,max:2035,step:1,def:2035,fmt:v=>''+v})}
   </div>`;
@@ -376,9 +380,9 @@ function render(d) {
     for (const row of d.ownership_detail) {
       const label = row[0];
       const vals = row.slice(1);
-      const isDollar = label.includes('Capital ($)');
+      const isDollar = label.includes('($)');
       ot += `<tr><td>${label}</td>${vals.map(v => {
-        if (isDollar) return `<td>${v > 0 ? fK(v) : '\u2014'}</td>`;
+        if (isDollar) return `<td>${v > 0 ? fCM(v) : '\u2014'}</td>`;
         return `<td>${typeof v === 'number' ? v.toFixed(1) + '%' : v}</td>`;
       }).join('')}</tr>`;
     }

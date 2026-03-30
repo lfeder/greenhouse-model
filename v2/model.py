@@ -302,16 +302,16 @@ def compute_ownership(settings, cum_pedd_by_year, equity_by_year=None, biz_value
             buy = buyout_pct
         buyout_row.append(buy)
 
-        # 2. JJB equity investment → dilution at market value
+        # 2. JJB equity investment → dilution at fixed buy-in valuation
         eq_deploy = equity_by_year.get(year, 0)
-        biz_val = biz_values[i]
+        buyin_val = settings.get("buyinValuation", 20_000_000)
         dilution = 0
-        if eq_deploy > 0 and biz_val > 0:
-            post_money = biz_val + eq_deploy
+        if eq_deploy > 0 and buyin_val > 0:
+            post_money = buyin_val + eq_deploy
             old_jjb = jjb
-            jjb = (jjb / 100 * biz_val + eq_deploy) / post_money * 100
-            eb = eb / 100 * biz_val / post_money * 100
-            js = js / 100 * biz_val / post_money * 100
+            jjb = (jjb / 100 * buyin_val + eq_deploy) / post_money * 100
+            eb = eb / 100 * buyin_val / post_money * 100
+            js = js / 100 * buyin_val / post_money * 100
             dilution = jjb - old_jjb
         capital_row.append(eq_deploy)
         dilution_row.append(dilution)
