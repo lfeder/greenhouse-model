@@ -466,7 +466,7 @@ function render(d) {
 
   // Valuation — PE dropdowns per year, partner values
   // PE dropdowns stored in settings.yearPE
-  const peOpts = [4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
+  const peOpts = [3,4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
   let vt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   // PE dropdown row
   vt += `<tr><td style="color:var(--text-muted)">P/E Multiple</td>${Y.map(y =>
