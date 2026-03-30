@@ -1,344 +1,297 @@
 """
-Greenhouse Expansion Financial Model
+Greenhouse Expansion Financial Model v2
 All calculations in one readable Python file.
-Constants loaded from constants.json (shared with HTML).
+Constants from constants.json, slider values from settings.json.
 """
 
 import json
+import csv
 from pathlib import Path
 
 # ============================================================
-# 1. LOAD CONSTANTS FROM SHARED JSON
+# 1. LOAD CONSTANTS
 # ============================================================
 
-_CONST_PATH = Path(__file__).parent / "constants.json"
-with open(_CONST_PATH) as f:
+_DIR = Path(__file__).parent
+with open(_DIR / "constants.json") as f:
     C = json.load(f)
 
 YEARS = C["years"]
+N_YEARS = len(YEARS)
 
 # Existing ops
 BASE_REV_PER_AC = C["existing_ops"]["base_rev_per_ac"]
 EXISTING_KJ_REV = C["existing_ops"]["kj_rev"]
-EXISTING_L_REV = C["existing_ops"]["lettuce_rev"]
+EXISTING_L_REV  = C["existing_ops"]["lettuce_rev"]
 EXISTING_EXP_RATIO = C["existing_ops"]["exp_ratio"]
+PAIDOFF_2026 = C["existing_ops"]["paidoff_2026"]
 
 # Tiers
 TIER0 = C["tiers"]["tier0"]
-TIER1_SCHEDULE = {int(k): v for k, v in C["tiers"]["tier1"].items() if k != "default"}
+TIER1 = {int(k): v for k, v in C["tiers"]["tier1"].items() if k != "default"}
 TIER1_DEFAULT = C["tiers"]["tier1"]["default"]
 
-# Ownership
-OWNERSHIP_BASE = {int(k): v for k, v in C["ownership_base"].items()}
-VESTING_DELTAS = C["vesting_deltas"]
+# Distribution base (2026 starting ownership)
+DIST_BASE = C["distribution_base"]["2026"]
 
-# JS buyout
-JS_BUYOUT_VAL = {int(k): v for k, v in C["js_buyout"]["valuations"].items()}
-JS_ANNUAL_LOSS = C["js_buyout"]["js_annual_loss"]
-EB_ANNUAL_GAIN = C["js_buyout"]["eb_annual_gain"]
+# JS buyout: JJB buys 3%/yr from JS
+JS_BUYOUT = C["js_buyout"]
 
-# PE/DD instruments
+# EB grants
+EB_GRANT_PEDD = C["eb_grant_pedd"]
+# EB expansion grant is slider-driven (in settings.json)
+
+# PE/DD
 PEDD_INSTRUMENTS = C["pedd_instruments"]
 
 # Tax
 FED_NOL = C["tax"]["fed_nol"]
 FED_BRACKETS = [(b[0] if b[0] is not None else float("inf"), b[1]) for b in C["tax"]["fed_brackets"]]
-HI_BRACKETS = [(b[0] if b[0] is not None else float("inf"), b[1]) for b in C["tax"]["hi_brackets"]]
+HI_BRACKETS  = [(b[0] if b[0] is not None else float("inf"), b[1]) for b in C["tax"]["hi_brackets"]]
 
-# Loans (parameterized)
+# Loans
 LOAN_DEFS = C["loans"]
 
 # Debug defaults
-DEBUG_DEFAULTS = C["debug_defaults"]
+DEBUG = C["debug_defaults"]
+
+# Depreciation defaults
+DEP_DEFAULTS = C["depreciation_defaults"]
 
 
 # ============================================================
-# 2. LOAN CALCULATIONS
+# 2. LOANS — compute from parameters
 # ============================================================
 
-def parse_start_month(s):
-    """Parse '2024-09' → (2024, 9)"""
+def _parse_month(s):
+    """'2024-03' → (2024, 3)"""
     y, m = s.split("-")
     return int(y), int(m)
 
-def monthly_pmt(principal, annual_rate, months):
-    """Standard monthly payment for a fully amortizing loan."""
+def _monthly_pmt(principal, annual_rate, n_months):
     r = annual_rate / 12
     if r == 0:
-        return principal / months
-    return principal * (r * (1 + r)**months) / ((1 + r)**months - 1)
+        return principal / n_months
+    return principal * (r * (1 + r)**n_months) / ((1 + r)**n_months - 1)
 
-def annual_pmt(principal, annual_rate, years):
-    """Standard annual payment for a fully amortizing loan."""
+def _annual_pmt(principal, annual_rate, n_years):
     r = annual_rate
     if r == 0:
-        return principal / years
-    return principal * (r * (1 + r)**years) / ((1 + r)**years - 1)
+        return principal / n_years
+    return principal * (r * (1 + r)**n_years) / ((1 + r)**n_years - 1)
 
-def compute_monthly_loan_schedule(loan):
-    """Compute annual {interest, principal, end_bal} for a monthly loan.
-
-    Handles IO period, fiscal year boundaries, and amortization.
-    """
-    start_year, start_mo = parse_start_month(loan["start_month"])
-    orig_bal = loan["orig_bal"]
+def _compute_monthly_loan(loan):
+    """Build month-by-month schedule, aggregate to calendar years."""
+    start_y, start_m = _parse_month(loan["start_month"])
+    orig = loan["orig_bal"]
     rate = loan["rate"]
-    io_months = loan.get("io_months", 0)
-    amort_months = loan["amort_months"]
-    fiscal_start_mo = loan.get("fiscal_year_start_month", 1)  # default Jan
-
-    # Compute monthly payment for the amortization period
-    pmt = monthly_pmt(orig_bal, rate, amort_months)
+    io_mo = loan.get("io_months", 0)
+    amort_mo = loan["amort_months"]
+    pmt = _monthly_pmt(orig, rate, amort_mo)
     r = rate / 12
 
-    # Build full monthly schedule from loan start
-    bal = orig_bal
-    monthly = []  # list of (year, month, interest, principal)
-    total_months = io_months + amort_months
-
-    for m in range(total_months):
-        abs_month = start_mo + m - 1  # 0-indexed month from Jan of start_year
-        cal_year = start_year + abs_month // 12
-        cal_month = abs_month % 12 + 1  # 1-12
-
-        if bal <= 0:
+    # Generate monthly entries: (cal_year, cal_month, interest, principal)
+    bal = orig
+    months = []
+    for m in range(io_mo + amort_mo):
+        cal_m = (start_m - 1 + m) % 12 + 1
+        cal_y = start_y + (start_m - 1 + m) // 12
+        if bal <= 0.01:
             break
+        interest = bal * r
+        principal = 0 if m < io_mo else min(pmt - interest, bal)
+        months.append((cal_y, cal_m, interest, principal))
+        bal -= principal
 
-        int_pmt = bal * r
-        if m < io_months:
-            # Interest-only period
-            prin_pmt = 0
-        else:
-            prin_pmt = min(pmt - int_pmt, bal)
-
-        monthly.append((cal_year, cal_month, int_pmt, prin_pmt))
-        bal -= prin_pmt
-
-    # Assign each monthly payment to a fiscal year
-    # fiscal_start_mo=12 means fiscal year Y runs Dec(Y-1) through Nov(Y)
-    def fiscal_year_of(cal_year, cal_month):
-        if fiscal_start_mo == 1:
-            return cal_year
-        return cal_year if cal_month >= fiscal_start_mo else cal_year + 1 if cal_month < fiscal_start_mo else cal_year
-        # Simpler: if month >= fiscal_start, it's next fiscal year
-    def fy(cy, cm):
-        return cy + 1 if cm >= fiscal_start_mo else cy
-
-    if fiscal_start_mo == 1:
-        fy = lambda cy, cm: cy
-
-    # Aggregate to fiscal years
+    # Aggregate to calendar years
+    # Include pre-YEARS principal in cumulative total
+    cum_prin = sum(p for cy, _, _, p in months if cy < YEARS[0])
     result = []
-    cum_prin_total = 0
     for y in YEARS:
-        yr_months = [(cy, cm, i, p) for cy, cm, i, p in monthly if fy(cy, cm) == y]
-        total_int = sum(i for _, _, i, _ in yr_months)
-        total_prin = sum(p for _, _, _, p in yr_months)
-        cum_prin_total += total_prin
-        end_bal = max(0, orig_bal - cum_prin_total)
-        result.append({"interest": total_int, "principal": total_prin, "end_bal": end_bal})
-
+        yr = [(i, p) for cy, _, i, p in months if cy == y]
+        yr_int = sum(i for i, _ in yr)
+        yr_prin = sum(p for _, p in yr)
+        cum_prin += yr_prin
+        end_bal = max(0, orig - cum_prin)
+        result.append({"interest": yr_int, "principal": yr_prin, "end_bal": end_bal})
     return result
 
-def compute_annual_loan_schedule(loan):
-    """Compute schedule for an annually-paid amortizing loan."""
-    orig_bal = loan["orig_bal"]
+def _compute_annual_loan(loan):
+    """Annual amortizing loan."""
+    orig = loan["orig_bal"]
     rate = loan["rate"]
-    amort_years = loan.get("amort_years", 5)
-    start_year, _ = parse_start_month(loan["start_month"])
-    pmt = annual_pmt(orig_bal, rate, amort_years)
+    n_yr = loan["amort_years"]
+    start_y, _ = _parse_month(loan["start_month"])
+    pmt = _annual_pmt(orig, rate, n_yr)
 
     result = []
-    bal = orig_bal
+    bal = orig
     for y in YEARS:
-        yr_idx = y - start_year
-        if yr_idx < 0 or yr_idx >= amort_years or bal <= 0:
+        idx = y - start_y
+        if idx < 0 or idx >= n_yr or bal <= 0.01:
             result.append({"interest": 0, "principal": 0, "end_bal": max(0, bal)})
             continue
-        int_pmt = bal * rate
-        prin_pmt = min(pmt - int_pmt, bal)
-        bal -= prin_pmt
-        result.append({"interest": int_pmt, "principal": prin_pmt, "end_bal": max(0, bal)})
-    return result
-
-def compute_fixed_ds_schedule(loan):
-    """Fixed annual debt service (not split into interest/principal)."""
-    pmt = loan["annual_payment"]
-    start_y = loan["start_year"]
-    end_y = loan["end_year"]
-    end_frac = loan.get("end_fraction", 1.0)
-
-    result = []
-    for y in YEARS:
-        if y < start_y or y > end_y:
-            result.append({"interest": 0, "principal": 0, "end_bal": 0})
-        elif y == end_y:
-            result.append({"interest": 0, "principal": pmt * end_frac, "end_bal": 0})
-        else:
-            result.append({"interest": 0, "principal": pmt, "end_bal": 0})
-    return result
-
-def compute_one_time_schedule(loan):
-    """One-time payment in a specific year."""
-    target = loan["year"]
-    result = []
-    for y in YEARS:
-        if y == target:
-            result.append({"interest": loan.get("interest", 0), "principal": loan.get("principal", 0), "end_bal": 0})
-        else:
-            result.append({"interest": 0, "principal": 0, "end_bal": 0})
+        interest = bal * rate
+        principal = min(pmt - interest, bal)
+        bal -= principal
+        result.append({"interest": interest, "principal": principal, "end_bal": max(0, bal)})
     return result
 
 def compute_loan_schedules():
-    """Compute all loan schedules from parameterized definitions."""
-    loan_data = {}
-
+    """Compute all loan schedules + paid-off residuals → totals."""
+    data = {}
     for loan in LOAN_DEFS:
         name = loan["name"]
-        freq = loan["frequency"]
-        if freq == "monthly":
-            loan_data[name] = compute_monthly_loan_schedule(loan)
-        elif freq == "annual":
-            loan_data[name] = compute_annual_loan_schedule(loan)
-        elif freq == "annual_fixed":
-            loan_data[name] = compute_fixed_ds_schedule(loan)
-        elif freq == "one_time":
-            loan_data[name] = compute_one_time_schedule(loan)
+        if loan["frequency"] == "monthly":
+            data[name] = _compute_monthly_loan(loan)
+        elif loan["frequency"] == "annual":
+            data[name] = _compute_annual_loan(loan)
 
-    # Totals across all loans
-    total_int = [sum(loan_data[n][i]["interest"] for n in loan_data) for i in range(len(YEARS))]
-    total_prin = [sum(loan_data[n][i]["principal"] for n in loan_data) for i in range(len(YEARS))]
-    total_ds = [ti + tp for ti, tp in zip(total_int, total_prin)]
+    total_int = [sum(data[n][i]["interest"] for n in data) for i in range(N_YEARS)]
+    total_prin = [sum(data[n][i]["principal"] for n in data) for i in range(N_YEARS)]
 
-    return {"loan_data": loan_data, "total_int": total_int, "total_prin": total_prin, "total_ds": total_ds}
+    # Add paid-off residuals to 2026
+    total_int[0] += PAIDOFF_2026["interest"]
+    total_prin[0] += PAIDOFF_2026["principal"]
+
+    total_ds = [i + p for i, p in zip(total_int, total_prin)]
+    return {"data": data, "total_int": total_int, "total_prin": total_prin, "total_ds": total_ds}
 
 
 # ============================================================
-# 3. TAX CALCULATIONS
+# 3. TAX — bracket-based calculation
 # ============================================================
 
-def calc_tax_from_brackets(taxable_income, brackets):
+def calc_tax(taxable_income, brackets):
+    """Compute tax from brackets."""
     if taxable_income <= 0:
         return 0
     tax = 0
     prev = 0
     for limit, rate in brackets:
-        slice_amt = min(taxable_income, limit) - prev
-        if slice_amt <= 0:
+        s = min(taxable_income, limit) - prev
+        if s <= 0:
             break
-        tax += slice_amt * rate
+        tax += s * rate
         prev = limit
     return tax
 
-def calc_effective_rate(taxable_income, brackets):
-    if taxable_income <= 0:
+def calc_effective_rate(income, brackets):
+    if income <= 0:
         return 0
-    return calc_tax_from_brackets(taxable_income, brackets) / taxable_income
+    return calc_tax(income, brackets) / income
 
-def calc_tax_dist_for_year(taxable_inc, fed_dep, state_dep, ownership, fed_nol_remaining):
-    """Calculate entity-level tax distribution for one year.
+def calc_tax_dist(taxable_inc, fed_dep, state_dep, ownership, nol_remaining):
+    """Entity-level tax distribution for one year.
 
-    Steps:
     1. Fed taxable = operating taxable - fed depreciation
     2. EB's share = fed_taxable × EB%
-    3. Apply EB's NOL carryforward
-    4. EB's tax = bracket calc on net taxable
+    3. Subtract EB's NOL
+    4. EB tax via brackets
     5. Gross up: entity dist = EB tax / EB%
-    6. Same for Hawaii with state depreciation
+    6. Same for Hawaii
     """
+    eb_pct = ownership["EB"] / 100
+
     # Federal
     fed_taxable = taxable_inc - fed_dep
-    eb_fed_taxable = fed_taxable * ownership["EB"] / 100
-    nol_used = min(fed_nol_remaining, max(0, eb_fed_taxable))
-    eb_net_fed = max(0, eb_fed_taxable - nol_used)
-    fed_tax = calc_tax_from_brackets(eb_net_fed, FED_BRACKETS)
-    fed_dist = fed_tax / (ownership["EB"] / 100) if ownership["EB"] > 0 else 0
+    eb_fed = fed_taxable * eb_pct
+    nol_used = min(nol_remaining, max(0, eb_fed))
+    eb_net_fed = max(0, eb_fed - nol_used)
+    fed_tax = calc_tax(eb_net_fed, FED_BRACKETS)
+    fed_dist = fed_tax / eb_pct if eb_pct > 0 else 0
 
     # Hawaii
     hi_taxable = taxable_inc - state_dep
-    eb_hi_taxable = max(0, hi_taxable * ownership["EB"] / 100)
-    hi_tax = calc_tax_from_brackets(eb_hi_taxable, HI_BRACKETS)
-    hi_dist = hi_tax / (ownership["EB"] / 100) if ownership["EB"] > 0 else 0
+    eb_hi = max(0, hi_taxable * eb_pct)
+    hi_tax = calc_tax(eb_hi, HI_BRACKETS)
+    hi_dist = hi_tax / eb_pct if eb_pct > 0 else 0
 
     return {
-        "fed_dist": fed_dist, "hi_dist": hi_dist,
+        "fed_dist": fed_dist, "hi_dist": hi_dist, "total": fed_dist + hi_dist,
         "fed_tax": fed_tax, "hi_tax": hi_tax,
-        "eb_net_fed": eb_net_fed, "eb_hi_taxable": eb_hi_taxable,
-        "nol_used": nol_used, "fed_taxable": fed_taxable, "hi_taxable": hi_taxable,
-        "eb_fed_taxable": eb_fed_taxable,
-        "fed_nol_remaining": fed_nol_remaining - nol_used,
+        "eb_fed": eb_fed, "eb_net_fed": eb_net_fed, "eb_hi": eb_hi,
+        "nol_used": nol_used, "nol_remaining": nol_remaining - nol_used,
+        "fed_taxable": fed_taxable, "hi_taxable": hi_taxable,
     }
 
-def calc_quarterly_tax_timing(total_tax_liab):
-    """Convert annual tax liability to cash distribution timing.
+def calc_tax_cash_timing(liabilities):
+    """Convert annual tax liability → cash payment timing.
 
-    2026: $0 (no 2025 liability)
-    2027: 2026 final + 2 quarterly estimates
-    2028+: Q4 prior est + settlement + 3 quarterly estimates
+    2026: $0 (no 2025 liability, no safe harbor)
+    2027: 2026 final + 2 quarterly estimates for 2027
+    2028+: Q4 prior est + settlement + Q1-Q3 current estimates
     """
     result = []
     for i, year in enumerate(YEARS):
-        prior_liab = total_tax_liab[i - 1] if i > 0 else 0
-        two_prior_liab = total_tax_liab[i - 2] if i > 1 else 0
-
+        prior = liabilities[i - 1] if i > 0 else 0
+        two_prior = liabilities[i - 2] if i > 1 else 0
         if year == 2026:
             result.append(0)
         elif year == 2027:
-            final_26 = total_tax_liab[0]
-            q_est = total_tax_liab[0] / 4
-            result.append(final_26 + q_est * 2)
+            result.append(liabilities[0] + liabilities[0] / 4 * 2)
         else:
-            q4_prior = two_prior_liab / 4
-            settle = max(0, prior_liab - two_prior_liab)
-            cur_est = prior_liab / 4 * 3
-            result.append(q4_prior + settle + cur_est)
+            q4 = two_prior / 4
+            settle = max(0, prior - two_prior)
+            cur_est = prior / 4 * 3
+            result.append(q4 + settle + cur_est)
     return result
 
 
 # ============================================================
-# 4. OWNERSHIP & DILUTION
+# 4. OWNERSHIP — distribution percentages over time
 # ============================================================
 
-def get_ownership(year):
-    if year <= 2029 and year in OWNERSHIP_BASE:
-        return dict(OWNERSHIP_BASE[year])
-    return dict(OWNERSHIP_BASE[2029])
+def get_tier1(year):
+    return TIER1.get(year, TIER1_DEFAULT)
 
-def compute_ownership_trajectory(equity_by_year, biz_values, js_transfer_pct=0):
-    """Compute ownership % year by year with vesting + dilution + transfers.
+def compute_ownership(settings, cum_pedd_by_year):
+    """Compute ownership % for each year.
 
-    - Vesting deltas applied 2027-2029 (contractual)
-    - JJB equity investment dilutes at market value
-    - Post-2029: JS→EB transfer
-    - Percentages lock after each event
+    Drivers:
+    1. Start: distribution_base 2026
+    2. JS buyout: JJB buys 3%/yr from JS in 2027-2030
+    3. EB grant (PEDD): +0.5% per $500K repaid, 0.25% from JS + 0.25% from JJB
+    4. EB grant (expansion): slider % from JS, between start/stop years
+    5. JJB equity investment dilution (for expansion scenarios)
     """
-    jjb = 42.5
-    eb = 26.0
-    js = 31.5
+    jjb = DIST_BASE["JJB"]
+    eb = DIST_BASE["EB"]
+    js = DIST_BASE["JS"]
+
+    buyout_years = JS_BUYOUT["years"]
+    buyout_pct = JS_BUYOUT["pct_per_year"]
+
+    exp_grant_pct = settings.get("ebExpansionGrantPct", 0)
+    exp_grant_start = settings.get("ebExpansionGrantStartYear", 2027)
+    exp_grant_end = settings.get("ebExpansionGrantEndYear", 2035)
+
+    pedd_grant_earned = 0  # cumulative % granted from PEDD
     result = []
 
     for i, year in enumerate(YEARS):
-        # Vesting deltas (2027-2029)
-        if year in (2027, 2028, 2029):
-            jjb += VESTING_DELTAS["JJB"]
-            eb += VESTING_DELTAS["EB"]
-            js += VESTING_DELTAS["JS"]
+        # JS buyout: JJB buys from JS
+        if year in buyout_years:
+            js -= buyout_pct
+            jjb += buyout_pct
 
-        # Post-2029 JS→EB transfer
-        if year > 2029 and js_transfer_pct > 0 and js > js_transfer_pct:
-            js -= js_transfer_pct
-            eb += js_transfer_pct
+        # EB grant (PEDD): based on cumulative PE/DD repaid
+        cum_pedd = cum_pedd_by_year[i] if i < len(cum_pedd_by_year) else 0
+        target_grant = min(EB_GRANT_PEDD["max_pct"], int(cum_pedd / 500_000) * EB_GRANT_PEDD["per_500k"])
+        new_grant = target_grant - pedd_grant_earned
+        if new_grant > 0:
+            eb += new_grant
+            js -= new_grant * EB_GRANT_PEDD["source_split"]["JS"] / (EB_GRANT_PEDD["source_split"]["JS"] + EB_GRANT_PEDD["source_split"]["JJB"])
+            jjb -= new_grant * EB_GRANT_PEDD["source_split"]["JJB"] / (EB_GRANT_PEDD["source_split"]["JS"] + EB_GRANT_PEDD["source_split"]["JJB"])
+            pedd_grant_earned = target_grant
 
-        # JJB equity investment → dilution at market value
-        eq_deploy = equity_by_year.get(year, 0)
-        biz_val = biz_values[i] if i < len(biz_values) else 0
-        if eq_deploy > 0 and biz_val > 0:
-            post_money = biz_val + eq_deploy
-            jjb = (jjb / 100 * biz_val + eq_deploy) / post_money * 100
-            eb = eb / 100 * biz_val / post_money * 100
-            js = js / 100 * biz_val / post_money * 100
+        # EB grant (expansion): slider-driven, from JS only
+        if exp_grant_pct > 0 and exp_grant_start <= year <= exp_grant_end:
+            eb += exp_grant_pct
+            js -= exp_grant_pct
 
-        result.append({"year": year, "JJB": jjb, "EB": eb, "JS": js})
+        result.append({"year": year, "JJB": round(jjb, 2), "EB": round(eb, 2), "JS": round(js, 2)})
+
     return result
 
 
@@ -346,36 +299,31 @@ def compute_ownership_trajectory(equity_by_year, biz_values, js_transfer_pct=0):
 # 5. PE/DD WATERFALL
 # ============================================================
 
-def get_tier1(year):
-    return TIER1_SCHEDULE.get(year, TIER1_DEFAULT)
-
 def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
-    """Run the full distribution waterfall.
+    """Tax → Tier 0 → Tier 1 → PE/DD → Tier 2.
 
-    Order: Tax → Tier 0 → Tier 1 → PE/DD (PE3→PE1→PE2→DD) → Tier 2
     T1 shortfall becomes new deferred distribution.
+    PE/DD order: PE3 → PE1 → PE2 → DD → T1Short
+    Interest accrues at start of year, principal paid first.
     """
-    pedd_bal = []
+    instruments = []
     for p in PEDD_INSTRUMENTS:
         rate = t_bill_rate + p.get("rate_spread", 0) if p.get("rate_type") == "tbill" else p.get("rate", 0)
-        pedd_bal.append({
-            "name": p["name"], "label": p["label"],
-            "remaining": p["balance"], "int_owed": p.get("accrued_int", 0),
-            "rate": rate,
-        })
-    # T1 shortfall deferred distribution
-    pedd_bal.append({"name": "T1Short", "label": "T1 Shortfall DD", "remaining": 0, "int_owed": 0, "rate": 0})
+        instruments.append({"name": p["name"], "label": p["label"], "remaining": p["balance"], "int_owed": p.get("accrued_int", 0), "rate": rate})
+    # T1 shortfall bucket
+    instruments.append({"name": "T1Short", "label": "T1 Shortfall DD", "remaining": 0, "int_owed": 0, "rate": 0})
 
-    detail = {pe["name"]: {"prin_paid": [], "int_paid": [], "end_bal": [], "int_owed": []} for pe in pedd_bal}
+    detail = {inst["name"]: {"prin_paid": [], "int_paid": [], "end_bal": [], "int_owed": []} for inst in instruments}
     pedd_payments = []
     tier0_actual = []
     tier1_actual = []
     tier1_shortfall = []
     tier2 = []
     cum_pedd = 0
+    cum_pedd_by_year = []
 
     for i, year in enumerate(YEARS):
-        tier1_full = get_tier1(year)
+        t1_full = get_tier1(year)
         remaining = distrib_cash[i] - tax_dist[i]
 
         # Tier 0
@@ -384,61 +332,57 @@ def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
         tier0_actual.append(t0)
 
         # Tier 1
-        t1 = min(tier1_full, max(0, remaining))
+        t1 = min(t1_full, max(0, remaining))
         remaining -= t1
         tier1_actual.append(t1)
-        shortfall = tier1_full - t1
+        shortfall = t1_full - t1
         tier1_shortfall.append(shortfall)
         if shortfall > 0:
-            pedd_bal[-1]["remaining"] += shortfall  # add to T1Short
+            instruments[-1]["remaining"] += shortfall
 
         # Accrue interest at start of year
-        for pe in pedd_bal:
-            if pe["remaining"] > 0 and pe["rate"] > 0:
-                pe["int_owed"] += pe["remaining"] * pe["rate"]
+        for inst in instruments:
+            if inst["remaining"] > 0 and inst["rate"] > 0:
+                inst["int_owed"] += inst["remaining"] * inst["rate"]
 
-        # PE/DD payments in order
-        pedd_this_year = 0
-        year_prin = {pe["name"]: 0 for pe in pedd_bal}
-        year_int = {pe["name"]: 0 for pe in pedd_bal}
+        # Pay PE/DD in order
+        pedd_year = 0
+        yr_prin = {inst["name"]: 0 for inst in instruments}
+        yr_int = {inst["name"]: 0 for inst in instruments}
 
-        for pe in pedd_bal:
+        for inst in instruments:
             if remaining <= 0:
                 break
-            # Principal first
-            if pe["remaining"] > 0:
-                prin_pay = min(remaining, pe["remaining"])
-                pe["remaining"] -= prin_pay
-                remaining -= prin_pay
-                pedd_this_year += prin_pay
-                cum_pedd += prin_pay
-                year_prin[pe["name"]] += prin_pay
-            # Interest after principal done
-            if pe["remaining"] <= 0 and pe["int_owed"] > 0 and remaining > 0:
-                int_pay = min(remaining, pe["int_owed"])
-                pe["int_owed"] -= int_pay
-                remaining -= int_pay
-                pedd_this_year += int_pay
-                cum_pedd += int_pay
-                year_int[pe["name"]] += int_pay
+            if inst["remaining"] > 0:
+                pay = min(remaining, inst["remaining"])
+                inst["remaining"] -= pay
+                remaining -= pay
+                pedd_year += pay
+                cum_pedd += pay
+                yr_prin[inst["name"]] += pay
+            if inst["remaining"] <= 0 and inst["int_owed"] > 0 and remaining > 0:
+                pay = min(remaining, inst["int_owed"])
+                inst["int_owed"] -= pay
+                remaining -= pay
+                pedd_year += pay
+                cum_pedd += pay
+                yr_int[inst["name"]] += pay
 
-        for pe in pedd_bal:
-            detail[pe["name"]]["prin_paid"].append(year_prin[pe["name"]])
-            detail[pe["name"]]["int_paid"].append(year_int[pe["name"]])
-            detail[pe["name"]]["end_bal"].append(pe["remaining"])
-            detail[pe["name"]]["int_owed"].append(pe["int_owed"])
+        for inst in instruments:
+            detail[inst["name"]]["prin_paid"].append(yr_prin[inst["name"]])
+            detail[inst["name"]]["int_paid"].append(yr_int[inst["name"]])
+            detail[inst["name"]]["end_bal"].append(inst["remaining"])
+            detail[inst["name"]]["int_owed"].append(inst["int_owed"])
 
-        pedd_payments.append(pedd_this_year)
+        pedd_payments.append(pedd_year)
         tier2.append(max(0, remaining))
+        cum_pedd_by_year.append(cum_pedd)
 
     return {
-        "detail": detail,
-        "pedd_payments": pedd_payments,
-        "tier0_actual": tier0_actual,
-        "tier1_actual": tier1_actual,
-        "tier1_shortfall": tier1_shortfall,
-        "tier2": tier2,
-        "cum_pedd": cum_pedd,
+        "detail": detail, "pedd_payments": pedd_payments,
+        "tier0_actual": tier0_actual, "tier1_actual": tier1_actual,
+        "tier1_shortfall": tier1_shortfall, "tier2": tier2,
+        "cum_pedd": cum_pedd, "cum_pedd_by_year": cum_pedd_by_year,
     }
 
 
@@ -446,34 +390,33 @@ def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
 # 6. DEPRECIATION
 # ============================================================
 
-def compute_depreciation(crops, exist_fed_years=8, exist_fed_annual=200_000,
-                         exist_state_end=2029, exist_state_annual=1_000_000,
-                         fed_bonus_pct=1.0, state_useful_life=10):
-    """Compute federal and state depreciation schedules."""
-    fed = [exist_fed_annual if i < exist_fed_years else 0 for i in range(len(YEARS))]
-    state = [exist_state_annual if YEARS[i] <= exist_state_end else 0 for i in range(len(YEARS))]
+def compute_depreciation(crops, settings):
+    s = settings
+    fed = [s.get("existFedAnnual", 200000) if i < s.get("existFedYearsLeft", 8) else 0 for i in range(N_YEARS)]
+    state = [s.get("existStateAnnual", 1000000) if YEARS[i] <= s.get("existStateEndYear", 2029) else 0 for i in range(N_YEARS)]
+    bonus_pct = s.get("fedBonusPct", 100) / 100
+    state_life = s.get("stateUsefulLife", 10)
 
     for crop in crops:
-        pis_year = crop["end_year"]  # placed-in-service year
+        pis = crop["end_year"]
         capex = crop["capex"]
-        bonus = capex * fed_bonus_pct
-        remain = capex - bonus
-        sl_annual = remain / 20 if remain > 0 else 0
-        state_sl = capex / state_useful_life
+        bonus = capex * bonus_pct
+        sl_fed = (capex - bonus) / 20 if bonus_pct < 1 else 0
+        sl_state = capex / state_life
 
         for i, y in enumerate(YEARS):
-            if y == pis_year:
+            if y == pis:
                 fed[i] += bonus
-            if y >= pis_year and sl_annual > 0:
-                fed[i] += sl_annual
-            if pis_year <= y < pis_year + state_useful_life:
-                state[i] += state_sl
+            if y >= pis and sl_fed > 0:
+                fed[i] += sl_fed
+            if pis <= y < pis + state_life:
+                state[i] += sl_state
 
     return {"fed": fed, "state": state}
 
 
 # ============================================================
-# 7. CROP REVENUE & EXPENSE MODEL
+# 7. CROP REVENUE & EXPENSE
 # ============================================================
 
 def get_end_quarter(start_q, months):
@@ -492,39 +435,24 @@ def ramp_factor(prod_yr, ramp_years):
     if ramp_years == 2: return {1: 0.50, 2: 0.85}.get(prod_yr, 1.0)
     return {1: 0.40, 2: 0.65, 3: 0.85}.get(prod_yr, 1.0)
 
-def compute_crop_revenue(crop, rev_inflation, cost_inflation):
-    """Compute annual revenue and expense for a crop."""
-    end_q = crop["end_q"]
+def crop_annual_rev_exp(base_rev, base_exp, end_q, ramp_years, rev_inf, cost_inf):
     end_year = end_q // 10
     end_qtr = end_q % 10
-    rev_list = []
-    exp_list = []
-
+    rev, exp = [], []
     for y in YEARS:
         if y < end_year:
-            rev_list.append(0)
-            exp_list.append(0)
-            continue
-
-        if y == end_year:
-            frac = (4 - end_qtr + 1) / 4
-            prod_yr = 1
-        else:
-            frac = 1
-            prod_yr = y - end_year + 1
-
-        ramp = ramp_factor(prod_yr, crop["ramp_years"])
+            rev.append(0); exp.append(0); continue
+        frac = (4 - end_qtr + 1) / 4 if y == end_year else 1
+        prod_yr = 1 if y == end_year else y - end_year + 1
+        ramp = ramp_factor(prod_yr, ramp_years)
         n = y - 2026
-        rev = crop["base_rev"] * ramp * frac * (1 + rev_inflation / 100) ** n
-        exp = crop["base_exp"] * ramp * frac * (1 + cost_inflation / 100) ** n
-        rev_list.append(rev)
-        exp_list.append(exp)
-
-    return rev_list, exp_list
+        rev.append(base_rev * ramp * frac * (1 + rev_inf / 100) ** n)
+        exp.append(base_exp * ramp * frac * (1 + cost_inf / 100) ** n)
+    return rev, exp
 
 
 # ============================================================
-# 8. IRR (Newton's method)
+# 8. IRR
 # ============================================================
 
 def calc_irr(cashflows, guess=0.1):
@@ -542,235 +470,217 @@ def calc_irr(cashflows, guess=0.1):
 
 
 # ============================================================
-# 9. FULL MODEL
+# 9. PARTNER CASH
 # ============================================================
 
-def run_full_model(rev, exp, loan_int, loan_prin, total_ds, fed_dep, state_dep, t_bill_rate=0.065):
-    """Run the complete financial model from revenue through waterfall.
+def compute_partner_cash(model, ownership):
+    """Per-partner annual distributions."""
+    partners = {}
+    for p in ["EB", "JS", "JJB"]:
+        own = [o[p] for o in ownership]
+        rows = {}
+        rows["tax_dist"] = [model["tax_cash_dist"][i] * own[i] / 100 for i in range(N_YEARS)]
+        if p == "EB":
+            rows["tier_0"] = list(model["tier0_actual"])
+        rows["tier_1"] = [model["tier1_actual"][i] * own[i] / 100 for i in range(N_YEARS)]
+        if p in ("JS", "JJB"):
+            rows["pedd"] = [v * 0.5 for v in model["pedd_payments"]]
+        rows["tier_2"] = [model["tier2"][i] * own[i] / 100 for i in range(N_YEARS)]
 
-    Returns all intermediate calculations for display.
-    """
+        # JS buyout payments
+        if p in ("JS", "JJB"):
+            eq = []
+            for y in YEARS:
+                sy = str(y)
+                if y in JS_BUYOUT["years"] and sy in JS_BUYOUT["valuations"]:
+                    pmt = JS_BUYOUT["valuations"][sy] * JS_BUYOUT["pct_per_year"] / 100
+                    eq.append(pmt if p == "JS" else -pmt)
+                else:
+                    eq.append(0)
+            rows["equity_buy_sell"] = eq
+
+        # Total
+        total = []
+        for i in range(N_YEARS):
+            t = rows["tax_dist"][i] + rows["tier_1"][i] + rows["tier_2"][i]
+            if p == "EB": t += rows["tier_0"][i]
+            if p in ("JS", "JJB"): t += rows["pedd"][i] + rows["equity_buy_sell"][i]
+            total.append(t)
+        rows["total"] = total
+        partners[p] = rows
+
+    return partners
+
+
+# ============================================================
+# 10. FULL MODEL
+# ============================================================
+
+def run_full_model(rev, exp, settings, dep_crops=None):
+    """Run everything. Returns all intermediate values."""
+    s = settings
+    loans = compute_loan_schedules()
+    dep = compute_depreciation(dep_crops or [], s)
+    t_bill_rate = s.get("tBillRate", 4) / 100
+
     op_inc = [r - e for r, e in zip(rev, exp)]
     capex_res = [r * 0.02 for r in rev]
-    taxable_inc = [o - li for o, li in zip(op_inc, loan_int)]
+    taxable_inc = [o - li for o, li in zip(op_inc, loans["total_int"])]
 
     # Tax liability per year
-    fed_nol_remaining = FED_NOL
-    total_tax_liab = []
+    nol_left = FED_NOL
+    tax_liab = []
     tax_detail = []
-    for i in range(len(YEARS)):
-        own = get_ownership(YEARS[i])
-        td = calc_tax_dist_for_year(taxable_inc[i], fed_dep[i], state_dep[i], own, fed_nol_remaining)
-        fed_nol_remaining = td["fed_nol_remaining"]
-        total_tax_liab.append(td["fed_dist"] + td["hi_dist"])
+    for i in range(N_YEARS):
+        own = {"EB": DIST_BASE["EB"], "JS": DIST_BASE["JS"], "JJB": DIST_BASE["JJB"]}  # simplified for tax calc
+        td = calc_tax_dist(taxable_inc[i], dep["fed"][i], dep["state"][i], own, nol_left)
+        nol_left = td["nol_remaining"]
+        tax_liab.append(td["total"])
         tax_detail.append(td)
 
-    # Quarterly timing
-    tax_cash_dist = calc_quarterly_tax_timing(total_tax_liab)
-
-    # Distributable cash
-    distrib_cash = [o - ds - cr for o, ds, cr in zip(op_inc, total_ds, capex_res)]
+    tax_cash = calc_tax_cash_timing(tax_liab)
+    distrib_cash = [o - ds - cr for o, ds, cr in zip(op_inc, loans["total_ds"], capex_res)]
 
     # Waterfall
-    wf = run_waterfall(distrib_cash, tax_cash_dist, t_bill_rate)
+    wf = run_waterfall(distrib_cash, tax_cash, t_bill_rate)
+
+    # Ownership (needs cum_pedd_by_year from waterfall)
+    ownership = compute_ownership(s, wf["cum_pedd_by_year"])
+
+    # Partner cash
+    partners = compute_partner_cash({**wf, "tax_cash_dist": tax_cash}, ownership)
+
+    # EB grant summary
+    pedd_grant = min(EB_GRANT_PEDD["max_pct"], int(wf["cum_pedd"] / 500_000) * EB_GRANT_PEDD["per_500k"])
 
     return {
-        "years": YEARS,
-        "rev": rev, "exp": exp,
+        "years": YEARS, "rev": rev, "exp": exp,
         "op_inc": op_inc, "capex_res": capex_res,
-        "taxable_inc": taxable_inc,
-        "total_tax_liab": total_tax_liab,
-        "tax_cash_dist": tax_cash_dist,
-        "distrib_cash": distrib_cash,
-        "tax_detail": tax_detail,
-        "loan_int": loan_int, "loan_prin": loan_prin, "total_ds": total_ds,
-        "fed_dep": fed_dep, "state_dep": state_dep,
+        "taxable_inc": taxable_inc, "tax_liab": tax_liab, "tax_cash": tax_cash,
+        "distrib_cash": distrib_cash, "tax_detail": tax_detail,
+        "loans": loans, "dep": dep,
+        "ownership": ownership, "partners": partners,
+        "pedd_grant": pedd_grant,
         **wf,
     }
 
 
 # ============================================================
-# 10. PARTNER CASH
+# 11. CSV OUTPUT
 # ============================================================
 
-def compute_partner_cash(model, ownership_trajectory):
-    """Compute per-partner annual cash distributions."""
-    partners = {}
-    for partner in ["EB", "JS", "JJB"]:
-        rows = {}
-        own_arr = [o[partner] for o in ownership_trajectory]
-
-        tax_share = [model["tax_cash_dist"][i] * own_arr[i] / 100 for i in range(len(YEARS))]
-        rows["tax_dist"] = tax_share
-
-        if partner == "EB":
-            rows["tier_0"] = list(model["tier0_actual"])
-
-        t1_share = [model["tier1_actual"][i] * own_arr[i] / 100 for i in range(len(YEARS))]
-        rows["tier_1"] = t1_share
-
-        if partner in ("JS", "JJB"):
-            rows["pedd"] = [p * 0.5 for p in model["pedd_payments"]]
-
-        t2_share = [model["tier2"][i] * own_arr[i] / 100 for i in range(len(YEARS))]
-        rows["tier_2"] = t2_share
-
-        if partner in ("JS", "JJB"):
-            eq_pay = []
-            for y in YEARS:
-                if y in JS_BUYOUT_VAL:
-                    pmt = JS_BUYOUT_VAL[y] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2)
-                    eq_pay.append(pmt if partner == "JS" else -pmt)
-                else:
-                    eq_pay.append(0)
-            rows["equity_buy_sell"] = eq_pay
-
-        total = []
-        for i in range(len(YEARS)):
-            t = tax_share[i] + t1_share[i] + t2_share[i]
-            if partner == "EB":
-                t += model["tier0_actual"][i]
-            if partner in ("JS", "JJB"):
-                t += model["pedd_payments"][i] * 0.5
-            if YEARS[i] in JS_BUYOUT_VAL:
-                pmt = JS_BUYOUT_VAL[YEARS[i]] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2)
-                if partner == "JS": t += pmt
-                elif partner == "JJB": t -= pmt
-            total.append(t)
-        rows["total"] = total
-
-        partners[partner] = rows
-
-    # EB equity grant
-    grant_pct = min(2.0, (model["cum_pedd"] // 500_000) * 0.5)
-    return partners, grant_pct
-
-
-# ============================================================
-# QUICK TEST
-# ============================================================
-# ============================================================
-# 11. CSV OUTPUT (for debugging in Excel)
-# ============================================================
-
-def write_output_csv(model, ownership, partners, grant_pct, loans, dep, exist_debt, path="output.csv"):
-    """Write all computed data to CSV. Open in Excel to verify any number."""
-    import csv
-    from pathlib import Path
-
-    p = Path(__file__).parent / path
+def write_csv(model, path="output.csv"):
+    p = _DIR / path
     with open(p, "w", newline="") as f:
         w = csv.writer(f)
         hdr = [""] + [str(y) for y in YEARS]
+        R = lambda label, data: w.writerow([label] + [round(v) for v in data])
 
-        # P&L
-        w.writerow(["P&L"])
-        w.writerow(hdr)
-        w.writerow(["Revenue"] + [round(v) for v in model["rev"]])
-        w.writerow(["Expenses"] + [round(v) for v in model["exp"]])
-        w.writerow(["Operating Income"] + [round(v) for v in model["op_inc"]])
+        w.writerow(["P&L"]); w.writerow(hdr)
+        R("Revenue", model["rev"])
+        R("Expenses", model["exp"])
+        R("Operating Income", model["op_inc"])
         w.writerow([])
 
-        # Debt Service
-        w.writerow(["DEBT SERVICE"])
-        w.writerow(hdr)
-        w.writerow(["Loan Interest"] + [round(v) for v in model["loan_int"]])
-        w.writerow(["Loan Principal"] + [round(v) for v in model["loan_prin"]])
-        w.writerow(["Total DS"] + [round(v) for v in model["total_ds"]])
-        w.writerow(["Capex Reserve (2%)"] + [round(v) for v in model["capex_res"]])
-        w.writerow(["Distributable Cash"] + [round(v) for v in model["distrib_cash"]])
+        w.writerow(["DEBT SERVICE"]); w.writerow(hdr)
+        for name, sched in model["loans"]["data"].items():
+            R(f"{name} Int", [s["interest"] for s in sched])
+            R(f"{name} Prin", [s["principal"] for s in sched])
+        R("Total Interest", model["loans"]["total_int"])
+        R("Total Principal", model["loans"]["total_prin"])
+        R("Total DS", model["loans"]["total_ds"])
+        R("Capex Reserve", model["capex_res"])
+        R("Distributable Cash", model["distrib_cash"])
         w.writerow([])
 
-        # Tax Detail
-        w.writerow(["TAX DETAIL"])
-        w.writerow(hdr)
-        w.writerow(["Taxable Inc (OpInc-Int)"] + [round(v) for v in model["taxable_inc"]])
-        w.writerow(["Fed Depreciation"] + [round(v) for v in model["fed_dep"]])
-        fed_taxable = [model["taxable_inc"][i] - model["fed_dep"][i] for i in range(len(YEARS))]
-        w.writerow(["Fed Taxable"] + [round(v) for v in fed_taxable])
-        w.writerow(["State Depreciation"] + [round(v) for v in model["state_dep"]])
-        hi_taxable = [model["taxable_inc"][i] - model["state_dep"][i] for i in range(len(YEARS))]
-        w.writerow(["HI Taxable"] + [round(v) for v in hi_taxable])
-        w.writerow(["EB Fed Taxable"] + [round(td["eb_fed_taxable"]) for td in model["tax_detail"]])
-        w.writerow(["NOL Used"] + [round(td["nol_used"]) for td in model["tax_detail"]])
-        w.writerow(["EB Net Fed"] + [round(td["eb_net_fed"]) for td in model["tax_detail"]])
-        w.writerow(["Fed Tax (EB)"] + [round(td["fed_tax"]) for td in model["tax_detail"]])
-        w.writerow(["Fed Dist (entity)"] + [round(td["fed_dist"]) for td in model["tax_detail"]])
-        w.writerow(["HI Tax (EB)"] + [round(td["hi_tax"]) for td in model["tax_detail"]])
-        w.writerow(["HI Dist (entity)"] + [round(td["hi_dist"]) for td in model["tax_detail"]])
-        w.writerow(["Tax Liability"] + [round(v) for v in model["total_tax_liab"]])
-        w.writerow(["Tax Cash Dist"] + [round(v) for v in model["tax_cash_dist"]])
+        w.writerow(["TAX DETAIL"]); w.writerow(hdr)
+        R("Taxable Inc", model["taxable_inc"])
+        R("Fed Depr", model["dep"]["fed"])
+        R("Fed Taxable", [model["taxable_inc"][i] - model["dep"]["fed"][i] for i in range(N_YEARS)])
+        R("State Depr", model["dep"]["state"])
+        R("HI Taxable", [model["taxable_inc"][i] - model["dep"]["state"][i] for i in range(N_YEARS)])
+        R("EB Fed Taxable", [td["eb_fed"] for td in model["tax_detail"]])
+        R("NOL Used", [td["nol_used"] for td in model["tax_detail"]])
+        R("EB Net Fed", [td["eb_net_fed"] for td in model["tax_detail"]])
+        R("Fed Tax (EB)", [td["fed_tax"] for td in model["tax_detail"]])
+        R("Fed Dist", [td["fed_dist"] for td in model["tax_detail"]])
+        R("HI Tax (EB)", [td["hi_tax"] for td in model["tax_detail"]])
+        R("HI Dist", [td["hi_dist"] for td in model["tax_detail"]])
+        R("Tax Liability", model["tax_liab"])
+        R("Tax Cash Dist", model["tax_cash"])
         w.writerow([])
 
-        # Waterfall
-        w.writerow(["DISTRIBUTION WATERFALL"])
-        w.writerow(hdr)
-        w.writerow(["Distributable Cash"] + [round(v) for v in model["distrib_cash"]])
-        w.writerow(["Tax Dist"] + [round(v) for v in model["tax_cash_dist"]])
-        w.writerow(["Tier 0 (EB)"] + [round(v) for v in model["tier0_actual"]])
-        w.writerow(["Tier 1"] + [round(v) for v in model["tier1_actual"]])
-        w.writerow(["T1 Shortfall"] + [round(v) for v in model["tier1_shortfall"]])
-        w.writerow(["PE/DD Repayment"] + [round(v) for v in model["pedd_payments"]])
-        w.writerow(["Tier 2"] + [round(v) for v in model["tier2"]])
+        w.writerow(["WATERFALL"]); w.writerow(hdr)
+        R("Distributable Cash", model["distrib_cash"])
+        R("Tax Dist", model["tax_cash"])
+        R("Tier 0", model["tier0_actual"])
+        R("Tier 1", model["tier1_actual"])
+        R("T1 Shortfall", model["tier1_shortfall"])
+        R("PE/DD Payments", model["pedd_payments"])
+        R("Tier 2", model["tier2"])
         w.writerow([])
 
-        # PE/DD Detail
-        w.writerow(["PE/DD DETAIL"])
-        w.writerow(hdr)
+        w.writerow(["PE/DD DETAIL"]); w.writerow(hdr)
         for name in [p["name"] for p in PEDD_INSTRUMENTS] + ["T1Short"]:
             if name in model["detail"]:
                 d = model["detail"][name]
-                w.writerow([f"{name} Prin Paid"] + [round(v) for v in d["prin_paid"]])
-                w.writerow([f"{name} Int Paid"] + [round(v) for v in d["int_paid"]])
-                w.writerow([f"{name} End Bal"] + [round(v) for v in d["end_bal"]])
-                w.writerow([f"{name} Int Owed"] + [round(v) for v in d["int_owed"]])
+                R(f"{name} Prin", d["prin_paid"])
+                R(f"{name} Int", d["int_paid"])
+                R(f"{name} Bal", d["end_bal"])
         w.writerow([])
 
-        # Existing Debt
-        w.writerow(["EXISTING DEBT"])
-        w.writerow(hdr)
-        w.writerow(["Existing DS"] + [round(v) for v in exist_debt])
-        w.writerow([])
-
-        # Ownership
-        w.writerow(["OWNERSHIP %"])
-        w.writerow(hdr)
+        w.writerow(["OWNERSHIP %"]); w.writerow(hdr)
         for p in ["JJB", "EB", "JS"]:
-            w.writerow([p] + [round(o[p], 1) for o in ownership])
+            w.writerow([p] + [round(o[p], 1) for o in model["ownership"]])
         w.writerow([])
 
-        # Partner Cash
-        w.writerow(["PARTNER CASH"])
-        w.writerow(hdr)
+        w.writerow(["PARTNER CASH"]); w.writerow(hdr)
         for p in ["EB", "JS", "JJB"]:
-            for row_name, row_data in partners[p].items():
-                w.writerow([f"{p} {row_name}"] + [round(v) for v in row_data])
+            for rn, rd in model["partners"][p].items():
+                R(f"{p} {rn}", rd)
             w.writerow([])
 
-        w.writerow(["EB Grant %", grant_pct])
+        w.writerow(["EB PEDD Grant %", model["pedd_grant"]])
 
     return str(p)
 
 
+# ============================================================
+# STANDALONE TEST
+# ============================================================
+
 if __name__ == "__main__":
+    settings = json.load(open(_DIR / "settings.json"))
+
     # Debug mode: existing ops only
-    rev = [DEBUG_DEFAULTS["rev_2026"] * (1 + DEBUG_DEFAULTS["growth"])**i for i in range(10)]
-    exp = [DEBUG_DEFAULTS["exp_2026"] * (1 + DEBUG_DEFAULTS["growth"])**i for i in range(10)]
+    rev = [DEBUG["rev_2026"] * (1 + DEBUG["growth"])**i for i in range(N_YEARS)]
+    exp = [DEBUG["exp_2026"] * (1 + DEBUG["growth"])**i for i in range(N_YEARS)]
 
-    loans = compute_loan_schedules()
-    dep = compute_depreciation(crops=[])
-    model = run_full_model(rev, exp, loans["total_int"], loans["total_prin"], loans["total_ds"], dep["fed"], dep["state"])
+    model = run_full_model(rev, exp, settings)
+    csv_path = write_csv(model)
 
+    print(f"Output: {csv_path}\n")
     print("Year   OpInc      DistCash   TaxLiab    TaxCash    T0      T1      PEDD    T2")
     for i, y in enumerate(YEARS):
-        print(f"{y}  {model['op_inc'][i]/1e3:>8.0f}K  {model['distrib_cash'][i]/1e3:>8.0f}K  "
-              f"{model['total_tax_liab'][i]/1e3:>7.0f}K  {model['tax_cash_dist'][i]/1e3:>7.0f}K  "
-              f"{model['tier0_actual'][i]/1e3:>5.0f}K  {model['tier1_actual'][i]/1e3:>5.0f}K  "
-              f"{model['pedd_payments'][i]/1e3:>5.0f}K  {model['tier2'][i]/1e3:>5.0f}K")
+        m = model
+        print(f"{y}  {m['op_inc'][i]/1e3:>8.0f}K  {m['distrib_cash'][i]/1e3:>8.0f}K  "
+              f"{m['tax_liab'][i]/1e3:>7.0f}K  {m['tax_cash'][i]/1e3:>7.0f}K  "
+              f"{m['tier0_actual'][i]/1e3:>5.0f}K  {m['tier1_actual'][i]/1e3:>5.0f}K  "
+              f"{m['pedd_payments'][i]/1e3:>5.0f}K  {m['tier2'][i]/1e3:>5.0f}K")
 
-    own = compute_ownership_trajectory({}, [o * 4 for o in model["op_inc"]])
-    partners, grant = compute_partner_cash(model, own)
-    print(f"\nEB Grant: +{grant:.1f}%")
+    print(f"\nEB PEDD Grant: +{model['pedd_grant']:.1f}%")
+    print("\nOwnership:")
+    for o in model["ownership"]:
+        print(f"  {o['year']}: JJB {o['JJB']:.1f}%  EB {o['EB']:.1f}%  JS {o['JS']:.1f}%")
+
+    print("\nPartner Totals:")
     for p in ["EB", "JS", "JJB"]:
-        totals = partners[p]["total"]
-        print(f"{p}: {', '.join(f'{t/1e3:.0f}K' for t in totals)}")
+        totals = model["partners"][p]["total"]
+        print(f"  {p}: {', '.join(f'{t/1e3:.0f}K' for t in totals)}")
+
+    # Verify FCL against Excel
+    print("\nFCL Schedule (verify against Excel):")
+    for i, y in enumerate(YEARS):
+        d = model["loans"]["data"]["FCL (Lettuce)"][i]
+        if d["interest"] > 0:
+            print(f"  {y}: Int {d['interest']:>10,.0f}  Prin {d['principal']:>10,.0f}  Bal {d['end_bal']:>10,.0f}")
