@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Debt Schedule</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">Debt & PE/DD Schedule</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="display:flex;gap:12px;font-size:10px">
+        <a href="index.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Expansion</a>
+        <a href="debt.html" style="color:var(--accent);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em;font-weight:700">Debt</a>
+        <a href="depreciation.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Depreciation</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="max-width:1200px;margin:0 auto;padding:20px 32px">
+  <div class="panel">
+    <div class="panel-title">Existing Loans ($M)</div>
+    <div style="overflow-x:auto"><table class="fin-table" id="existLoansTable"></table></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Expansion Loans ($M)</div>
+    <div style="overflow-x:auto"><table class="fin-table" id="expansionLoansTable"></table></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">PE/DD Detail ($M)</div>
+    <div style="overflow-x:auto"><table class="fin-table" id="peddTable"></table></div>
+  </div>
+</div>
+<script>
+function fCM(n) { if (Math.abs(n) < 500) return '\u2014'; return (n < 0 ? '\u2212' : '') + (Math.abs(n) / 1e6).toFixed(1); }
+function yh(Y) { return Y.map(y => `<th>'${String(y).slice(2)}</th>`).join(''); }
+function sr(l, Y) { return `<tr class="section-header"><td colspan="${Y.length+1}">${l}</td></tr>`; }
+function tr(l, d, cls) { return `<tr${cls ? ` class="${cls}"` : ''}><td>${l}</td>${d.map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`; }
+
+async function load() {
+  const r = await fetch('/api/compute', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+  const d = await r.json();
+  const Y = d.years;
+
+  // Existing loans
+  let el = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  if (d.loan_data) {
+    for (const [name, sched] of Object.entries(d.loan_data)) {
+      el += sr(name, Y);
+      el += tr('Interest', sched.map(s => -s.interest));
+      el += tr('Principal', sched.map(s => -s.principal));
+      el += tr('Balance', sched.map(s => s.end_bal));
+    }
+  }
+  el += sr('Totals', Y);
+  el += tr('Total Interest', d.loan_total_int.map(v => -v));
+  el += tr('Total Principal', d.loan_total_prin.map(v => -v));
+  el += tr('Total DS', d.loan_total_ds.map(v => -v), 'subtotal-row');
+  el += '</tbody>';
+  document.getElementById('existLoansTable').innerHTML = el;
+
+  // Expansion loans
+  let xl = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  xl += tr('Interest', d.expansion_int.map(v => -v));
+  xl += tr('Principal', d.expansion_prin.map(v => -v));
+  xl += tr('Total DS', d.expansion_ds.map(v => -v), 'subtotal-row');
+  xl += '</tbody>';
+  document.getElementById('expansionLoansTable').innerHTML = xl;
+
+  // PE/DD
+  let pd = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  if (d.pedd_detail) {
+    for (const [name, det] of Object.entries(d.pedd_detail)) {
+      if (det.end_bal.some(v => v > 50) || det.prin_paid.some(v => v > 50)) {
+        pd += sr(name, Y);
+        pd += tr('Prin Paid', det.prin_paid.map(v => -v));
+        pd += tr('Int Paid', det.int_paid.map(v => -v));
+        pd += tr('Balance', det.end_bal);
+        if (det.int_owed.some(v => v > 50)) pd += tr('Int Owed', det.int_owed);
+      }
+    }
+  }
+  pd += '</tbody>';
+  document.getElementById('peddTable').innerHTML = pd;
+}
+load();
+</script>
+</body>
+</html>

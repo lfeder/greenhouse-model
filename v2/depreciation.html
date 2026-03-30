@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Depreciation Schedule</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">Depreciation & Tax Brackets</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="display:flex;gap:12px;font-size:10px">
+        <a href="index.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Expansion</a>
+        <a href="debt.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Debt</a>
+        <a href="depreciation.html" style="color:var(--accent);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em;font-weight:700">Depreciation</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="max-width:1200px;margin:0 auto;padding:20px 32px">
+  <div class="panel">
+    <div class="panel-title">Depreciation Schedule ($M)</div>
+    <div style="overflow-x:auto"><table class="fin-table" id="depTable"></table></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="panel">
+      <div class="panel-title">Federal Tax Brackets (MFJ)</div>
+      <div id="fedBrackets"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Hawaii Tax Brackets (MFJ)</div>
+      <div id="hiBrackets"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Effective Tax Rates by Income</div>
+    <div id="effectiveRates"></div>
+  </div>
+</div>
+<script>
+function fCM(n) { if (Math.abs(n) < 500) return '\u2014'; return (n < 0 ? '\u2212' : '') + (Math.abs(n) / 1e6).toFixed(1); }
+function fK(n) { const abs = Math.abs(n); if (abs >= 1e6) return (n<0?'\u2212':'')+(abs/1e6).toFixed(1)+'M'; if (abs >= 1e3) return (n<0?'\u2212':'')+Math.round(abs/1e3).toLocaleString()+'K'; return Math.round(n).toLocaleString(); }
+
+async function load() {
+  const [compR, constR] = await Promise.all([
+    fetch('/api/compute', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}),
+    fetch('/api/constants'),
+  ]);
+  const d = await compR.json();
+  const c = await constR.json();
+  const Y = d.years;
+
+  // Depreciation table
+  const yh = Y.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
+  const tr = (l, data, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${l}</td>${data.map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`;
+  let dt = `<thead><tr><th></th>${yh}</tr></thead><tbody>`;
+  dt += tr('Federal', d.dep_fed);
+  dt += tr('State (HI)', d.dep_state);
+  dt += '</tbody>';
+  document.getElementById('depTable').innerHTML = dt;
+
+  // Tax brackets
+  function bracketTable(brackets) {
+    let h = '<table style="width:100%;font-size:10px;font-family:inherit;border-collapse:collapse">';
+    h += '<tr><th style="text-align:left;padding:3px 6px;color:var(--accent);font-size:9px">Income Range</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">Rate</th></tr>';
+    let prev = 0;
+    for (const [limit, rate] of brackets) {
+      const label = limit === null ? fK(prev) + '+' : fK(prev) + ' \u2013 ' + fK(limit);
+      h += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:3px 6px;color:var(--text-sub)">${label}</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${(rate*100).toFixed(1)}%</td></tr>`;
+      prev = limit || prev;
+    }
+    return h + '</table>';
+  }
+  document.getElementById('fedBrackets').innerHTML = bracketTable(c.tax.fed_brackets);
+  document.getElementById('hiBrackets').innerHTML = bracketTable(c.tax.hi_brackets);
+
+  // Effective rates
+  function calcTax(income, brackets) {
+    let tax = 0, prev = 0;
+    for (const [limit, rate] of brackets) {
+      const l = limit === null ? Infinity : limit;
+      const s = Math.min(income, l) - prev;
+      if (s <= 0) break;
+      tax += s * rate;
+      prev = l;
+    }
+    return tax;
+  }
+  const incomes = [250000, 500000, 750000, 1000000, 1500000, 2000000, 3000000, 5000000];
+  let et = '<table style="width:100%;font-size:10px;font-family:inherit;border-collapse:collapse">';
+  et += '<tr><th style="text-align:left;padding:3px 6px;color:var(--accent);font-size:9px">Income</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">Fed</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">HI</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">Combined</th></tr>';
+  for (const inc of incomes) {
+    const fed = calcTax(inc, c.tax.fed_brackets) / inc * 100;
+    const hi = calcTax(inc, c.tax.hi_brackets) / inc * 100;
+    et += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:3px 6px;color:var(--text-sub)">${fK(inc)}</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${fed.toFixed(1)}%</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${hi.toFixed(1)}%</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${(fed+hi).toFixed(1)}%</td></tr>`;
+  }
+  et += '</table>';
+  document.getElementById('effectiveRates').innerHTML = et;
+}
+load();
+</script>
+</body>
+</html>

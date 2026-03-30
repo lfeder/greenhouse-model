@@ -571,79 +571,113 @@ def run_full_model(rev, exp, settings, dep_crops=None):
 # 11. CSV OUTPUT
 # ============================================================
 
-def write_csv(model, path="output.csv"):
+def _build_output_rows(data):
+    """Build all output rows from run_everything() result. Used by CSV and gsheet."""
+    hdr = [""] + [str(y) for y in YEARS]
+    R = lambda label, arr: [label] + [round(v) for v in arr]
+    rows = []
+
+    rows.append(["P&L"]); rows.append(hdr)
+    for name, vals in data.get("rev_rows", []):
+        rows.append(R(name, vals))
+    rows.append(R("Total Revenue", data["rev"]))
+    rows.append(R("Total Expenses", data["exp"]))
+    rows.append(R("Operating Income", data["op_inc"]))
+    rows.append([])
+
+    rows.append(["EXISTING DEBT SERVICE"]); rows.append(hdr)
+    if "loans" in data:
+        for name, sched in data["loans"]["data"].items():
+            rows.append(R(f"{name} Int", [s["interest"] for s in sched]))
+            rows.append(R(f"{name} Prin", [s["principal"] for s in sched]))
+        rows.append(R("Total Existing Int", data["loans"]["total_int"]))
+        rows.append(R("Total Existing Prin", data["loans"]["total_prin"]))
+        rows.append(R("Total Existing DS", data["loans"]["total_ds"]))
+    rows.append([])
+
+    rows.append(["EXPANSION DEBT SERVICE"]); rows.append(hdr)
+    if "expansion_int" in data:
+        rows.append(R("Expansion Interest", data["expansion_int"]))
+        rows.append(R("Expansion Principal", data["expansion_prin"]))
+        rows.append(R("Expansion DS", data["expansion_ds"]))
+    rows.append([])
+
+    rows.append(["DEPRECIATION"]); rows.append(hdr)
+    rows.append(R("Fed Depreciation", data["dep"]["fed"]))
+    rows.append(R("State Depreciation", data["dep"]["state"]))
+    rows.append([])
+
+    rows.append(["TAX DETAIL"]); rows.append(hdr)
+    rows.append(R("Taxable Inc", data["taxable_inc"]))
+    rows.append(R("Fed Depr", data["dep"]["fed"]))
+    rows.append(R("Fed Taxable", [data["taxable_inc"][i] - data["dep"]["fed"][i] for i in range(N_YEARS)]))
+    rows.append(R("State Depr", data["dep"]["state"]))
+    rows.append(R("HI Taxable", [data["taxable_inc"][i] - data["dep"]["state"][i] for i in range(N_YEARS)]))
+    rows.append(R("EB Fed Taxable", [td["eb_fed"] for td in data["tax_detail"]]))
+    rows.append(R("NOL Used", [td["nol_used"] for td in data["tax_detail"]]))
+    rows.append(R("EB Net Fed", [td["eb_net_fed"] for td in data["tax_detail"]]))
+    rows.append(R("Fed Tax (EB)", [td["fed_tax"] for td in data["tax_detail"]]))
+    rows.append(R("Fed Dist", [td["fed_dist"] for td in data["tax_detail"]]))
+    rows.append(R("HI Tax (EB)", [td["hi_tax"] for td in data["tax_detail"]]))
+    rows.append(R("HI Dist", [td["hi_dist"] for td in data["tax_detail"]]))
+    rows.append(R("Tax Liability", data["tax_liab"]))
+    rows.append(R("Tax Cash Dist", data["tax_cash"]))
+    rows.append([])
+
+    rows.append(R("Capex Reserve", data["capex_res"]))
+    rows.append(R("Distributable Cash", data["distrib_cash"]))
+    rows.append([])
+
+    rows.append(["WATERFALL"]); rows.append(hdr)
+    rows.append(R("Distributable Cash", data["distrib_cash"]))
+    rows.append(R("Tax Dist", data["tax_cash"]))
+    rows.append(R("Tier 0", data["tier0_actual"]))
+    rows.append(R("Tier 1", data["tier1_actual"]))
+    rows.append(R("T1 Shortfall", data["tier1_shortfall"]))
+    rows.append(R("PE/DD Payments", data["pedd_payments"]))
+    rows.append(R("Tier 2", data["tier2"]))
+    rows.append([])
+
+    rows.append(["PE/DD DETAIL"]); rows.append(hdr)
+    for name in [p["name"] for p in PEDD_INSTRUMENTS] + ["T1Short"]:
+        if name in data["detail"]:
+            d = data["detail"][name]
+            rows.append(R(f"{name} Prin", d["prin_paid"]))
+            rows.append(R(f"{name} Int", d["int_paid"]))
+            rows.append(R(f"{name} Bal", d["end_bal"]))
+    rows.append([])
+
+    rows.append(["OWNERSHIP %"]); rows.append(hdr)
+    for p in ["JJB", "EB", "JS"]:
+        rows.append([p] + [round(o[p], 1) for o in data["ownership"]])
+    rows.append([])
+
+    rows.append(["PARTNER CASH"]); rows.append(hdr)
+    for p in ["EB", "JS", "JJB"]:
+        for rn, rd in data["partners"][p].items():
+            rows.append(R(f"{p} {rn}", rd))
+        rows.append([])
+
+    rows.append(["EB PEDD Grant %", data.get("pedd_grant", 0)])
+
+    # Crop IRR summary
+    if "crop_irrs" in data:
+        rows.append([])
+        rows.append(["CROP IRR"])
+        rows.append(["Crop", "CapEx", "Equity", "IRR", "Unlevered"])
+        for c in data["crop_irrs"]:
+            rows.append([c["label"], round(c["capex"]), round(c["equity"]), c["irr"], c.get("unlev", "")])
+
+    return rows
+
+
+def write_csv(data, path="output.csv"):
     p = _DIR / path
+    rows = _build_output_rows(data)
     with open(p, "w", newline="") as f:
         w = csv.writer(f)
-        hdr = [""] + [str(y) for y in YEARS]
-        R = lambda label, data: w.writerow([label] + [round(v) for v in data])
-
-        w.writerow(["P&L"]); w.writerow(hdr)
-        R("Revenue", model["rev"])
-        R("Expenses", model["exp"])
-        R("Operating Income", model["op_inc"])
-        w.writerow([])
-
-        w.writerow(["DEBT SERVICE"]); w.writerow(hdr)
-        for name, sched in model["loans"]["data"].items():
-            R(f"{name} Int", [s["interest"] for s in sched])
-            R(f"{name} Prin", [s["principal"] for s in sched])
-        R("Total Interest", model["loans"]["total_int"])
-        R("Total Principal", model["loans"]["total_prin"])
-        R("Total DS", model["loans"]["total_ds"])
-        R("Capex Reserve", model["capex_res"])
-        R("Distributable Cash", model["distrib_cash"])
-        w.writerow([])
-
-        w.writerow(["TAX DETAIL"]); w.writerow(hdr)
-        R("Taxable Inc", model["taxable_inc"])
-        R("Fed Depr", model["dep"]["fed"])
-        R("Fed Taxable", [model["taxable_inc"][i] - model["dep"]["fed"][i] for i in range(N_YEARS)])
-        R("State Depr", model["dep"]["state"])
-        R("HI Taxable", [model["taxable_inc"][i] - model["dep"]["state"][i] for i in range(N_YEARS)])
-        R("EB Fed Taxable", [td["eb_fed"] for td in model["tax_detail"]])
-        R("NOL Used", [td["nol_used"] for td in model["tax_detail"]])
-        R("EB Net Fed", [td["eb_net_fed"] for td in model["tax_detail"]])
-        R("Fed Tax (EB)", [td["fed_tax"] for td in model["tax_detail"]])
-        R("Fed Dist", [td["fed_dist"] for td in model["tax_detail"]])
-        R("HI Tax (EB)", [td["hi_tax"] for td in model["tax_detail"]])
-        R("HI Dist", [td["hi_dist"] for td in model["tax_detail"]])
-        R("Tax Liability", model["tax_liab"])
-        R("Tax Cash Dist", model["tax_cash"])
-        w.writerow([])
-
-        w.writerow(["WATERFALL"]); w.writerow(hdr)
-        R("Distributable Cash", model["distrib_cash"])
-        R("Tax Dist", model["tax_cash"])
-        R("Tier 0", model["tier0_actual"])
-        R("Tier 1", model["tier1_actual"])
-        R("T1 Shortfall", model["tier1_shortfall"])
-        R("PE/DD Payments", model["pedd_payments"])
-        R("Tier 2", model["tier2"])
-        w.writerow([])
-
-        w.writerow(["PE/DD DETAIL"]); w.writerow(hdr)
-        for name in [p["name"] for p in PEDD_INSTRUMENTS] + ["T1Short"]:
-            if name in model["detail"]:
-                d = model["detail"][name]
-                R(f"{name} Prin", d["prin_paid"])
-                R(f"{name} Int", d["int_paid"])
-                R(f"{name} Bal", d["end_bal"])
-        w.writerow([])
-
-        w.writerow(["OWNERSHIP %"]); w.writerow(hdr)
-        for p in ["JJB", "EB", "JS"]:
-            w.writerow([p] + [round(o[p], 1) for o in model["ownership"]])
-        w.writerow([])
-
-        w.writerow(["PARTNER CASH"]); w.writerow(hdr)
-        for p in ["EB", "JS", "JJB"]:
-            for rn, rd in model["partners"][p].items():
-                R(f"{p} {rn}", rd)
-            w.writerow([])
-
-        w.writerow(["EB PEDD Grant %", model["pedd_grant"]])
-
+        for row in rows:
+            w.writerow(row)
     return str(p)
 
 
@@ -654,138 +688,84 @@ def write_csv(model, path="output.csv"):
 GSHEET_ID = "1jDsN-P4M5rNt0LkWrhtaJkvju_ADRW17bKH8HR1nPOk"
 GSHEET_KEY = _DIR / "gsheet-key.json"
 
-def write_gsheet(model):
-    """Write model output to Google Sheet. Every slider change updates the sheet."""
+def write_gsheet(data):
+    """Write full model output to Google Sheet with multiple tabs."""
     try:
         import gspread
     except ImportError:
-        print("gspread not installed, skipping Google Sheets output")
         return
-
     if not GSHEET_KEY.exists():
         return
 
     gc = gspread.service_account(filename=str(GSHEET_KEY))
     sh = gc.open_by_key(GSHEET_ID)
-    ws = sh.sheet1
 
-    # Build all rows, then batch update
-    rows = []
-    hdr = [""] + [str(y) for y in YEARS]
-    R = lambda label, data: [label] + [round(v) for v in data]
-
-    rows.append(["P&L"])
-    rows.append(hdr)
-    rows.append(R("Revenue", model["rev"]))
-    rows.append(R("Expenses", model["exp"]))
-    rows.append(R("Operating Income", model["op_inc"]))
-    rows.append([])
-
-    rows.append(["DEBT SERVICE"])
-    rows.append(hdr)
-    for name, sched in model["loans"]["data"].items():
-        rows.append(R(f"{name} Int", [s["interest"] for s in sched]))
-        rows.append(R(f"{name} Prin", [s["principal"] for s in sched]))
-    rows.append(R("Total Interest", model["loans"]["total_int"]))
-    rows.append(R("Total Principal", model["loans"]["total_prin"]))
-    rows.append(R("Total DS", model["loans"]["total_ds"]))
-    rows.append(R("Capex Reserve", model["capex_res"]))
-    rows.append(R("Distributable Cash", model["distrib_cash"]))
-    rows.append([])
-
-    rows.append(["TAX DETAIL"])
-    rows.append(hdr)
-    rows.append(R("Taxable Inc", model["taxable_inc"]))
-    rows.append(R("Fed Depr", model["dep"]["fed"]))
-    rows.append(R("Fed Taxable", [model["taxable_inc"][i] - model["dep"]["fed"][i] for i in range(N_YEARS)]))
-    rows.append(R("State Depr", model["dep"]["state"]))
-    rows.append(R("HI Taxable", [model["taxable_inc"][i] - model["dep"]["state"][i] for i in range(N_YEARS)]))
-    rows.append(R("EB Fed Taxable", [td["eb_fed"] for td in model["tax_detail"]]))
-    rows.append(R("NOL Used", [td["nol_used"] for td in model["tax_detail"]]))
-    rows.append(R("EB Net Fed", [td["eb_net_fed"] for td in model["tax_detail"]]))
-    rows.append(R("Fed Tax (EB)", [td["fed_tax"] for td in model["tax_detail"]]))
-    rows.append(R("Fed Dist", [td["fed_dist"] for td in model["tax_detail"]]))
-    rows.append(R("HI Tax (EB)", [td["hi_tax"] for td in model["tax_detail"]]))
-    rows.append(R("HI Dist", [td["hi_dist"] for td in model["tax_detail"]]))
-    rows.append(R("Tax Liability", model["tax_liab"]))
-    rows.append(R("Tax Cash Dist", model["tax_cash"]))
-    rows.append([])
-
-    rows.append(["WATERFALL"])
-    rows.append(hdr)
-    rows.append(R("Distributable Cash", model["distrib_cash"]))
-    rows.append(R("Tax Dist", model["tax_cash"]))
-    rows.append(R("Tier 0", model["tier0_actual"]))
-    rows.append(R("Tier 1", model["tier1_actual"]))
-    rows.append(R("T1 Shortfall", model["tier1_shortfall"]))
-    rows.append(R("PE/DD Payments", model["pedd_payments"]))
-    rows.append(R("Tier 2", model["tier2"]))
-    rows.append([])
-
-    rows.append(["PE/DD DETAIL"])
-    rows.append(hdr)
-    for name in [p["name"] for p in PEDD_INSTRUMENTS] + ["T1Short"]:
-        if name in model["detail"]:
-            d = model["detail"][name]
-            rows.append(R(f"{name} Prin", d["prin_paid"]))
-            rows.append(R(f"{name} Int", d["int_paid"]))
-            rows.append(R(f"{name} Bal", d["end_bal"]))
-    rows.append([])
-
-    rows.append(["OWNERSHIP %"])
-    rows.append(hdr)
-    for p in ["JJB", "EB", "JS"]:
-        rows.append([p] + [round(o[p], 1) for o in model["ownership"]])
-    rows.append([])
-
-    rows.append(["PARTNER CASH"])
-    rows.append(hdr)
-    for p in ["EB", "JS", "JJB"]:
-        for rn, rd in model["partners"][p].items():
-            rows.append(R(f"{p} {rn}", rd))
-        rows.append([])
-
-    rows.append(["EB PEDD Grant %", model["pedd_grant"]])
-
-    # Clear and write model output
-    ws.clear()
-    ws.update(range_name="A1", values=rows)
-
-    # Write constants.json to a "Constants" tab
-    def _ensure_tab(sh, name):
+    def _tab(name):
         try:
             return sh.worksheet(name)
         except gspread.exceptions.WorksheetNotFound:
-            return sh.add_worksheet(title=name, rows=200, cols=20)
+            return sh.add_worksheet(title=name, rows=300, cols=20)
 
-    def _json_to_rows(obj, prefix=""):
-        """Flatten JSON to key/value rows."""
+    hdr = [""] + [str(y) for y in YEARS]
+    R = lambda label, arr: [label] + [round(v) for v in arr]
+
+    # Main tab: uses shared _build_output_rows
+    ws = sh.sheet1
+    ws.clear()
+    ws.update(range_name="A1", values=_build_output_rows(data))
+
+    # Debt tab
+    debt_rows = [["EXISTING LOANS"], hdr]
+    if "loans" in data:
+        for name, sched in data["loans"]["data"].items():
+            debt_rows.append(R(f"{name} Int", [s["interest"] for s in sched]))
+            debt_rows.append(R(f"{name} Prin", [s["principal"] for s in sched]))
+            debt_rows.append(R(f"{name} Bal", [s["end_bal"] for s in sched]))
+            debt_rows.append([])
+    if "expansion_int" in data:
+        debt_rows.append(["EXPANSION LOANS"]); debt_rows.append(hdr)
+        debt_rows.append(R("Expansion Interest", data["expansion_int"]))
+        debt_rows.append(R("Expansion Principal", data["expansion_prin"]))
+        debt_rows.append(R("Expansion DS", data["expansion_ds"]))
+        debt_rows.append([])
+    debt_rows.append(["PE/DD DETAIL"]); debt_rows.append(hdr)
+    for name in [p["name"] for p in PEDD_INSTRUMENTS] + ["T1Short"]:
+        if name in data.get("detail", {}):
+            d = data["detail"][name]
+            debt_rows.append(R(f"{name} Prin", d["prin_paid"]))
+            debt_rows.append(R(f"{name} Int", d["int_paid"]))
+            debt_rows.append(R(f"{name} Bal", d["end_bal"]))
+            debt_rows.append(R(f"{name} Int Owed", d["int_owed"]))
+    dws = _tab("Debt")
+    dws.clear()
+    dws.update(range_name="A1", values=debt_rows)
+
+    # Depreciation tab
+    dep_rows = [["DEPRECIATION"], hdr, R("Fed", data["dep"]["fed"]), R("State", data["dep"]["state"])]
+    dpws = _tab("Depreciation")
+    dpws.clear()
+    dpws.update(range_name="A1", values=dep_rows)
+
+    # Constants tab
+    def _flat(obj, prefix=""):
         rows = []
         if isinstance(obj, dict):
-            for k, v in obj.items():
-                rows.extend(_json_to_rows(v, f"{prefix}{k}."))
+            for k, v in obj.items(): rows.extend(_flat(v, f"{prefix}{k}."))
         elif isinstance(obj, list):
-            for i, v in enumerate(obj):
-                rows.extend(_json_to_rows(v, f"{prefix}[{i}]."))
-        else:
-            rows.append([prefix.rstrip("."), str(obj)])
+            for i, v in enumerate(obj): rows.extend(_flat(v, f"{prefix}[{i}]."))
+        else: rows.append([prefix.rstrip("."), str(obj)])
         return rows
+    cws = _tab("Constants")
+    cws.clear()
+    cws.update(range_name="A1", values=[["Key", "Value"]] + _flat(C))
 
-    const_ws = _ensure_tab(sh, "Constants")
-    const_ws.clear()
-    const_rows = [["Key", "Value"]] + _json_to_rows(C)
-    const_ws.update(range_name="A1", values=const_rows)
-
-    # Write settings.json to a "Settings" tab
-    settings_ws = _ensure_tab(sh, "Settings")
-    settings_ws.clear()
+    # Settings tab
+    sws = _tab("Settings")
+    sws.clear()
     try:
-        with open(_DIR / "settings.json") as f:
-            sdata = json.load(f)
-        settings_rows = [["Key", "Value"]] + [[k, str(v)] for k, v in sdata.items()]
-        settings_ws.update(range_name="A1", values=settings_rows)
-    except Exception:
-        pass
+        with open(_DIR / "settings.json") as f: sdata = json.load(f)
+        sws.update(range_name="A1", values=[["Key", "Value"]] + [[k, str(v)] for k, v in sdata.items()])
+    except Exception: pass
 
 
 # ============================================================

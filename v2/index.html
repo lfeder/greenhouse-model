@@ -14,8 +14,12 @@
   <div class="header-inner">
     <div class="header-title">Greenhouse Expansion Planner</div>
     <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="display:flex;gap:12px;font-size:10px">
+        <a href="index.html" style="color:var(--accent);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em;font-weight:700">Expansion</a>
+        <a href="debt.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Debt</a>
+        <a href="depreciation.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Depreciation</a>
+      </div>
       <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
-      <div id="versionLabel" style="font-size:10px;color:var(--text)">v2</div>
     </div>
   </div>
 </div>
@@ -170,7 +174,7 @@ function buildSidebar() {
   </div>`;
 
   h += `<div class="panel"><div class="panel-title">Lettuce Revenue</div>
-    ${S('lettuceLbs', {label:'Lbs / Year',min:400000,max:1200000,step:200000,def:600000,fmt:v=>(v/1e3).toFixed(0)+'K lb'})}
+    ${S('lettuceLbs', {label:'Lbs / Year',min:500000,max:1300000,step:200000,def:800000,fmt:v=>(v/1e3).toFixed(0)+'K lb'})}
     ${S('lettucePrice', {label:'Price / lb',min:6,max:8,step:0.5,def:7,fmt:v=>'$'+v.toFixed(2)})}
   </div>`;
 
