@@ -231,22 +231,32 @@ function buildSidebar() {
 }
 
 // --- CHART ---
+const CROP_COLORS = {
+  'Existing Keiki': '#4a8acc', 'Existing Japanese': '#4a8acc', 'Existing English': '#4a8acc', 'Existing Lettuce': '#4a8acc',
+  'Keiki': '#5a9e55', 'Japanese': '#66bb6a', 'English': '#4ac6c6',
+  'Tomato (Build)': '#e07050', 'Lettuce': '#cc8a4a',
+};
 function renderChart(d) {
   const ctx = document.getElementById('chart').getContext('2d');
   const labels = d.years.map(y => "'" + String(y).slice(2));
   const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
   const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
 
+  // Merge existing ops into one bar, keep new crops separate
+  const existKeys = Object.keys(d.rev_rows).filter(k => k.startsWith('Existing'));
+  const newKeys = Object.keys(d.rev_rows).filter(k => !k.startsWith('Existing'));
+  const existData = d.years.map((_, i) => existKeys.reduce((s, k) => s + d.rev_rows[k][i], 0));
+
   const datasets = [
-    { label: 'Revenue', data: d.rev, backgroundColor: '#5a9e55', borderRadius: 2 },
+    { label: 'Existing Ops', data: existData, backgroundColor: '#4a8acc', borderRadius: 2 },
+    ...newKeys.map(k => ({
+      label: k, data: d.rev_rows[k], backgroundColor: CROP_COLORS[k] || '#888', borderRadius: 2,
+    })),
   ];
 
   if (chart) {
     chart.data.labels = labels;
     chart.data.datasets = datasets;
-    chart.options.scales.x.ticks.color = tickColor;
-    chart.options.scales.y.ticks.color = tickColor;
-    chart.options.scales.y.grid.color = gridColor;
     chart.update();
     return;
   }
@@ -256,19 +266,22 @@ function renderChart(d) {
     data: { labels, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: {
-          labels: { usePointStyle: true, pointStyle: 'circle', font: { size: 10 }, color: tickColor }
+          labels: { usePointStyle: true, pointStyle: 'circle', font: { family: 'DM Mono, monospace', size: 10 }, color: tickColor,
+            generateLabels: ch => { const orig = Chart.defaults.plugins.legend.labels.generateLabels(ch); orig.forEach(l => { if (l.hidden) l.fontColor = 'rgba(122,170,122,0.3)'; }); return orig; }
+          }
         },
         tooltip: {
           backgroundColor: '#0a150a', borderColor: '#3a5a3a', borderWidth: 1,
-          bodyFont: { family: 'monospace', size: 11 },
+          bodyFont: { family: 'monospace', size: 11 }, titleFont: { family: 'monospace', size: 10 }, titleColor: '#5a9e55',
           callbacks: { label: ctx => ctx.dataset.label + ': ' + fK(ctx.parsed.y) }
         }
       },
       scales: {
-        x: { ticks: { font: { family: 'monospace', size: 11 }, color: tickColor }, grid: { display: false } },
-        y: { ticks: { font: { family: 'monospace', size: 11 }, color: tickColor, callback: v => fK(v) }, grid: { color: gridColor } }
+        x: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor }, grid: { display: false } },
+        y: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor, callback: v => fK(v) }, grid: { color: gridColor } }
       }
     }
   });
@@ -278,20 +291,27 @@ function renderChart(d) {
 function render(d) {
   const Y = d.years;
 
-  // KPIs
+  // KPIs — 6 cards matching v1
   const lastIdx = Y.length - 1;
   const steadyRev = d.rev[lastIdx], steadyExp = d.exp[lastIdx];
   const steadyOpInc = steadyRev - steadyExp;
+  const totalCapex = d.total_capex + d.shared_capex;
+  const equityAmt = totalCapex * (1 - d.financing_pct / 100);
+  const peakDebt = Math.max(...d.loan_total_ds);
+  const lastDebt = d.loan_total_ds[lastIdx];
   document.getElementById('kpiGrid').innerHTML = [
-    ['Total IRR', d.total_irr + '%', 'all built crops'],
-    ['Steady Rev', fK(steadyRev), Y[lastIdx]],
-    ['Steady Op Inc', fK(steadyOpInc), ((steadyOpInc / steadyRev * 100) || 0).toFixed(1) + '% margin'],
+    ['Total CapEx', fK(totalCapex), `crop: ${fK(d.total_capex)} | infra: ${fK(d.shared_capex)}`],
+    ['Equity', fK(equityAmt), `${100 - d.financing_pct}% of ${fK(totalCapex)}`],
+    ['Steady Rev', fK(steadyRev), `year ${Y[lastIdx]}`],
+    ['Steady Op Inc', fK(steadyOpInc), `${((steadyOpInc / steadyRev * 100) || 0).toFixed(1)}% margin`],
+    ['Debt Svc', fK(peakDebt), `peak yr | ${fK(lastDebt)} in '${String(Y[lastIdx]).slice(2)}`],
+    ['Total IRR', d.total_irr + '%', 'all new crops'],
   ].map(([l, v, s]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div><div class="kpi-sub">${s}</div></div>`).join('');
 
-  // Chart — stacked revenue bars
+  // Chart — stacked revenue bars by crop
   renderChart(d);
 
-  // Revenue & expense table — per-crop rows
+  // Revenue table — per-crop rows, no expense detail
   let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   rt += sr('Revenue', Y);
   if (d.rev_rows) {
@@ -300,13 +320,7 @@ function render(d) {
     }
   }
   rt += tr('Total Revenue', d.rev, fCM, 'subtotal-row');
-  rt += sr('Expenses', Y);
-  if (d.exp_rows) {
-    for (const [name, data] of Object.entries(d.exp_rows)) {
-      rt += tr(name, data.map(v => -v), fCM);
-    }
-  }
-  rt += tr('Total Expenses', d.exp.map(v => -v), fCM, 'subtotal-row');
+  rt += tr('Total Expenses', d.exp.map(v => -v), fCM);
   rt += tr('Operating Income', d.op_inc, fCM, 'total-row-table');
   rt += '</tbody>';
   document.getElementById('revExpTable').innerHTML = rt;

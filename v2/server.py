@@ -194,7 +194,6 @@ def compute(s):
 
     # Write CSV
     model.write_csv(result)
-    model.write_gsheet(result)
 
     return {
         **{k: v for k, v in result.items() if k != "loans"},
@@ -207,6 +206,10 @@ def compute(s):
         "crops": [{"key": c["key"], "label": c["label"], "acres": c["acres"], "capex": c["capex"]} for c in crop_data],
         "rev_rows": rev_rows,
         "exp_rows": exp_rows,
+        # KPI data
+        "total_capex": sum(c["capex"] for c in crop_data if not c.get("is_buy")),
+        "shared_capex": (s.get("landCostPerAc", 125000) * 20 + s.get("packhouseSF", 30000) * s.get("packhouseCostPerSF", 100) + s.get("housingPeople", 25) * 50000) if not debug else 0,
+        "financing_pct": s.get("financingPct", 65),
     }
 
 
@@ -236,6 +239,7 @@ def api_compute():
     settings.update(params)
     save_settings(settings)
     return jsonify(compute(settings))
+
 
 
 if __name__ == "__main__":
