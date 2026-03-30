@@ -930,7 +930,19 @@ def build_rev_exp(s):
             rev_rows.append([crop["label"], cr]); exp_rows.append([crop["label"], ce])
             dep_crops.append({"end_year": crop["end_year"], "capex": crop["capex"]})
 
-    return rev, exp, rev_rows, exp_rows, crop_data, dep_crops
+    # Total GH acres per year (existing + new as they come online)
+    # Existing: K ~7.8ac, J ~3.9ac, E ~0.4ac, L ~2.5ac ≈ 14.6ac
+    existing_acres = round((EXISTING_K_REV + EXISTING_J_REV + EXISTING_E_REV) / BASE_REV_PER_AC, 1) + 2.5
+    total_acres = [existing_acres] * N_YEARS
+    for crop in crop_data:
+        if crop.get("is_buy"):
+            continue
+        end_year = crop["end_year"]
+        for i, y in enumerate(YEARS):
+            if y >= end_year:
+                total_acres[i] += crop["acres"]
+
+    return rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres
 
 
 def compute_crop_irrs(crop_data, s):
@@ -1015,7 +1027,7 @@ def compute_kpis(s, crop_data, debug):
 
 def run_everything(s):
     """Single entry point: settings → all computed data for HTML."""
-    rev, exp, rev_rows, exp_rows, crop_data, dep_crops = build_rev_exp(s)
+    rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres = build_rev_exp(s)
     result = run_full_model(rev, exp, s, dep_crops)
     crop_irrs, total_irr, expansion_int, expansion_prin = compute_crop_irrs(crop_data, s)
     kpis = compute_kpis(s, crop_data, s.get("debug", False))
@@ -1056,7 +1068,7 @@ def run_everything(s):
         "crop_irrs": crop_irrs,
         "total_irr": total_irr,
         "crops": [{"key": c["key"], "label": c["label"], "acres": c["acres"], "capex": c["capex"]} for c in crop_data],
-        "rev_rows": rev_rows, "exp_rows": exp_rows,
+        "rev_rows": rev_rows, "exp_rows": exp_rows, "total_acres": total_acres,
         "expansion_int": expansion_int, "expansion_prin": expansion_prin,
         "expansion_ds": [expansion_int[i] + expansion_prin[i] for i in range(N_YEARS)],
         "ownership_detail": ownership_detail,
