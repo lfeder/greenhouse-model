@@ -327,26 +327,24 @@ function render(d) {
   // IRR grid with tooltip cashflows
   let ig = '';
   for (const crop of d.crop_irrs) {
-    const cd = crop.coc_detail;
+    const ud = crop.unlev_detail;
     let tip = crop.label + '\n\nIRR: ' + crop.irr.toFixed(1) + '%\n';
     for (let i = 0; i < Y.length; i++) {
       const cf = crop.cashflows[i];
       if (Math.abs(cf) > 50) tip += Y[i] + ': ' + fK(cf) + '\n';
     }
-    tip += '\nCash-on-Cash: ' + crop.coc.toFixed(1) + '%\n';
-    tip += 'Rev: ' + fK(cd.base_rev) + '\n';
-    tip += 'Exp: ' + fK(cd.base_exp) + '\n';
-    tip += 'Op Inc: ' + fK(cd.op_inc) + '\n';
-    tip += 'Debt Svc: ' + fK(cd.debt_svc) + '\n';
-    tip += 'Net Inc: ' + fK(cd.net_inc) + '\n';
-    tip += 'Equity: ' + fK(cd.equity) + '\n';
-    tip += 'CoC = ' + fK(cd.net_inc) + ' / ' + fK(cd.equity) + ' = ' + crop.coc.toFixed(1) + '%';
+    tip += '\nUnlevered: ' + crop.unlev.toFixed(1) + '%\n';
+    tip += 'Rev: ' + fK(ud.base_rev) + '\n';
+    tip += 'Exp: ' + fK(ud.base_exp) + '\n';
+    tip += 'Op Inc: ' + fK(ud.op_inc) + '\n';
+    tip += 'CapEx: ' + fK(ud.capex) + '\n';
+    tip += 'Unlev = ' + fK(ud.op_inc) + ' / ' + fK(ud.capex) + ' = ' + crop.unlev.toFixed(1) + '%';
     ig += `<div class="roi-item" title="${tip.replace(/"/g,'&quot;')}">
       <div><div class="roi-label">${crop.label}</div>
       <div style="font-size:8px;color:var(--text-dim)">${fK(crop.capex)} capex | ${fK(crop.equity)} equity</div></div>
       <div style="display:flex;gap:12px;align-items:baseline">
         <div class="roi-value" style="color:var(--green)">${crop.irr.toFixed(1)}%</div>
-        <div class="roi-value" style="color:var(--text-sub)">${crop.coc.toFixed(1)}%</div>
+        <div class="roi-value" style="color:var(--green)">${crop.unlev.toFixed(1)}%</div>
       </div>
     </div>`;
   }
