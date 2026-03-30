@@ -52,7 +52,7 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title">P&L, Distributions & Tax ($M)</div>
+      <div class="panel-title">Distributions ($M)</div>
       <div style="overflow-x:auto"><table class="fin-table" id="distTable"></table></div>
     </div>
 
@@ -386,11 +386,7 @@ function render(d) {
 
   // Distribution waterfall
   let dt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-  dt += sr('P&L', Y);
-  dt += tr('Revenue', d.rev, fCM);
-  dt += tr('Expenses', d.exp.map(v => -v), fCM);
   dt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
-  dt += sr('Cash Adjustments', Y);
   dt += tr('Existing DS', d.loan_total_ds.map(v => -v), fCM);
   dt += tr('Expansion DS', d.expansion_ds.map(v => -v), fCM);
   dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCM);
