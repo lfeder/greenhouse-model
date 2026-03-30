@@ -283,7 +283,7 @@ function renderChart(d) {
       },
       scales: {
         x: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor }, grid: { display: false } },
-        y: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor, callback: v => fK(v) }, grid: { color: gridColor } }
+        y: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor, callback: v => { const abs = Math.abs(v); if (abs >= 1e6) return Math.round(abs/1e6)+'M'; if (abs >= 1e3) return Math.round(abs/1e3)+'K'; return v; } }, grid: { color: gridColor } }
       }
     }
   });
@@ -317,7 +317,7 @@ function render(d) {
   // Revenue table — per-crop rows, no expense detail
   let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   if (d.total_acres) {
-    rt += `<tr><td style="color:var(--text-muted)">Total GH Acres</td>${d.total_acres.map(v => `<td>${v.toFixed(1)}</td>`).join('')}</tr>`;
+    rt += `<tr><td style="color:var(--text-muted)">Total GH Acres</td>${d.total_acres.map(v => `<td>${Math.round(v)}</td>`).join('')}</tr>`;
   }
   rt += sr('Revenue', Y);
   if (d.rev_rows) {
@@ -352,7 +352,7 @@ function render(d) {
     ig += `<div class="roi-item" title="${tip.replace(/"/g,'&quot;')}">
       <div><div class="roi-label">${crop.label}</div>
       <div style="font-size:8px;color:var(--text-dim)">${fK(crop.capex)} capex | ${fK(crop.equity)} equity</div></div>
-      <div class="roi-value" style="color:var(--green)">${crop.irr.toFixed(1)}% / ${crop.unlev.toFixed(1)}%</div>
+      <div class="roi-value" style="color:var(--green)">${Math.round(crop.irr)}% / ${Math.round(crop.unlev)}%</div>
     </div>`;
   }
   document.getElementById('irrGrid').innerHTML = ig;
