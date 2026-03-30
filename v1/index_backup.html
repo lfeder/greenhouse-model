@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Greenhouse Expansion Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --text: #d8e8d8; --text-sub: #b0d0b0; --text-muted: #88b888; --text-dim: #5a8a5a;
+    --green: #7dd17a; --green-bright: #9adf97; --yellow: #e0c860;
+    --border: #2a4a2a; --bg: #0d1a0d; --panel: #121f12; --panel-dark: #0a100a; --accent: #6aae66;
+    --header-bg: linear-gradient(135deg, #0d1a0d, #162816, #0d1a0d);
+    --slider-track: #243624; --slider-fill: #5a9e55; --slider-thumb: #5a9e55; --slider-thumb-border: #0d1a0d;
+    --chart-grid: #162416; --chart-tick: #5a8a5a;
+  }
+  body.light {
+    --text: #1a2a1a; --text-sub: #2a4a2a; --text-muted: #2a5a2a; --text-dim: #5a8a5a;
+    --green: #2a7a28; --green-bright: #1a6a18; --yellow: #8a7018;
+    --border: #a0b0a0; --bg: #e8eae8; --panel: #f0f2f0; --panel-dark: #dce0dc; --accent: #2a6a28;
+    --header-bg: linear-gradient(135deg, #d8dcd8, #e4e8e4, #d8dcd8);
+    --slider-track: #a0c8a0; --slider-fill: #2a6a28; --slider-thumb: #2a6a28; --slider-thumb-border: #e0e8e0;
+    --chart-grid: #c0ccc0; --chart-tick: #3a6a3a;
+  }
+  body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; padding-bottom: 60px; }
+
+  .header { background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 22px 32px 18px; }
+  .header-inner { max-width: 1060px; margin: 0 auto; }
+  .header-title { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--text); }
+
+  .layout { max-width: 1060px; margin: 0 auto; padding: 20px 32px 0; display: grid; grid-template-columns: 280px 1fr; gap: 22px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 10px; }
+  .panel-title { font-size: 9px; letter-spacing: 0.16em; color: var(--accent); text-transform: uppercase; margin-bottom: 0; font-weight: 700; }
+
+  .slider-group { margin-bottom: 0; padding-top: 10px; }
+  .slider-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0; }
+  .slider-label { font-size: 10px; letter-spacing: 0.08em; color: var(--text-sub); text-transform: uppercase; line-height: 1; }
+  .slider-sublabel { font-size: 9px; color: var(--text-muted); margin-top: 1px; line-height: 1.1; }
+  .slider-sublabel:empty { display: none; }
+  .slider-value { font-size: 14px; color: var(--text); font-weight: 700; white-space: nowrap; flex-shrink: 0; line-height: 1; }
+
+  input[type=range] { width: 100%; appearance: none; -webkit-appearance: none; height: 3px; border-radius: 2px; outline: none; cursor: pointer; margin-top: 7px; margin-bottom: 0; padding: 0; display: block; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: inherit; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); margin-top: -5px; }
+  input[type=range]::-moz-range-track { height: 3px; border-radius: 2px; background: inherit; border: none; }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); cursor: pointer; border: 2px solid var(--slider-thumb-border); }
+
+  .total-row { display: flex; justify-content: space-between; background: var(--panel-dark); border-radius: 5px; padding: 7px 11px; margin-top: 4px; }
+  .total-row .label { font-size: 10px; color: var(--text-sub); }
+  .total-row .value { font-size: 15px; font-weight: 700; color: var(--text); }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 9px; margin-bottom: 9px; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 7px; padding: 11px 12px; }
+  .kpi-label { font-size: 9px; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; text-align: right; }
+  .kpi-value { font-size: 17px; font-weight: 700; line-height: 1; color: var(--text); text-align: right; }
+  .kpi-sub { font-size: 9px; color: var(--text-dim); margin-top: 4px; text-align: right; }
+
+  .chart-panel { margin-bottom: 18px; }
+
+  .fin-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'DM Mono', monospace; }
+  .fin-table th { font-size: 14px; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 700; }
+  .fin-table th:first-child { text-align: left; }
+  .fin-table td { text-align: right; padding: 5px 8px; border-bottom: 1px solid #1a2e1a; color: var(--text-sub); }
+  .fin-table td:first-child { text-align: left; color: var(--text-muted); }
+  .fin-table tr.section-header td { color: var(--accent); font-weight: 700; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding-top: 12px; border-bottom: 1px solid var(--border); }
+  .fin-table tr.total-row-table td { color: var(--text); font-weight: 700; border-top: 1px solid var(--border); border-bottom: 2px solid var(--border); }
+  .fin-table tr.subtotal-row td { color: var(--green); font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+
+  .phase-grid { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .phase-grid th { font-size: 8px; color: var(--text-muted); text-transform: uppercase; padding: 4px 2px; text-align: center; letter-spacing: 0.05em; }
+  .phase-grid th:first-child { text-align: left; }
+  .phase-grid td { padding: 3px 2px; }
+  .phase-grid td:first-child { font-size: 10px; color: var(--text-sub); font-weight: 700; padding-right: 4px; white-space: nowrap; }
+  .phase-grid select {
+    width: 100%; background: var(--panel-dark); color: var(--text-sub);
+    border: 1px solid var(--border); border-radius: 3px;
+    font-family: inherit; font-size: 9px; padding: 3px 1px;
+    cursor: pointer; text-align-last: center;
+  }
+
+  .toggle-row { display: flex; align-items: center; gap: 8px; padding: 10px 0 4px; }
+  .toggle-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+  .toggle-row label { font-size: 10px; color: var(--text-sub); cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .roi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .roi-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--panel-dark); border-radius: 4px; }
+  .roi-label { font-size: 10px; color: var(--text-muted); }
+  .roi-value { font-size: 14px; font-weight: 700; }
+  .roi-highlight { border: 1px solid var(--accent); }
+
+  @media (max-width: 720px) {
+    .layout { grid-template-columns: 1fr; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner" style="display:flex;justify-content:space-between;align-items:baseline">
+    <div class="header-title">Greenhouse Expansion Planner</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="display:flex;gap:12px;font-size:10px">
+        <a href="index.html" style="color:var(--accent);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em;font-weight:700">Expansion</a>
+        <a href="debt.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Debt</a>
+        <a href="depreciation.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Depreciation</a>
+      </div>
+      <button id="saveBtn" onclick="saveModel()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">save model</button>
+      <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:inherit;font-size:10px;padding:3px 8px;cursor:pointer">light</button>
+      <div id="versionLabel" style="font-size:10px;color:var(--text)"></div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <div id="inputs">
+    <div class="panel">
+      <div class="panel-title">New Greenhouse Acres</div>
+      <div id="sl-newKAcres"></div>
+      <div id="sl-newJAcres"></div>
+      <div id="sl-newEAcres"></div>
+      <div id="sl-englishRevPct"></div>
+      <div id="sl-newTAcres"></div>
+      <div id="sl-tomatoRevPct"></div>
+      <div id="sl-newLAcres"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Lettuce Revenue</div>
+      <div id="sl-lettuceLbs"></div>
+      <div id="sl-lettucePrice"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Capital Costs</div>
+      <div id="sl-cucumberCostPerAc"></div>
+      <div id="sl-tomatoCostPerAc"></div>
+      <div id="sl-lettuceCostPerAc"></div>
+      <div id="sl-landCostPerAc"></div>
+      <div id="sl-packhouseSF"></div>
+      <div id="sl-packhouseCostPerSF"></div>
+      <div id="sl-housingPeople"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Operating Expenses (% of Rev)</div>
+      <div id="sl-cukeExpPct"></div>
+      <div id="sl-tomatoExpPct"></div>
+      <div id="sl-lettuceExpPct"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Crop Phasing</div>
+      <table class="phase-grid">
+        <thead><tr><th>Crop</th><th>Ph</th><th>Start</th><th>Build</th><th>Ramp</th></tr></thead>
+        <tbody id="phaseGrid"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Buy 6ac Tomato Facility</div>
+      <div id="sl-tomatoPurchasePrice"></div>
+      <div id="sl-tomatoHardAssets"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Financing</div>
+      <div id="sl-financingPct"></div>
+      <div id="sl-interestRate"></div>
+      <div id="sl-loanTermYears"></div>
+      <div style="font-size:9px;color:var(--text-muted);padding-top:8px">Interest-only during build + 6mo</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Inflation</div>
+      <div id="sl-revInflation"></div>
+      <div id="sl-costInflation"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">JS→EB Transfer</div>
+      <div id="sl-jsTransferPct"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Mode</div>
+      <div class="toggle-row">
+        <input type="checkbox" id="debugToggle" onchange="state.debug=this.checked;recalc()">
+        <label for="debugToggle">Debug (existing ops only)</label>
+      </div>
+      <div style="font-size:9px;color:var(--text-dim);padding-top:4px">
+        Fed tax: brackets · HI: brackets · NOL: $600K<br>
+        Tier 0: $300K · Tier 1: $500K/$600K/$750K<br>
+        Capex reserve: 2% of rev
+      </div>
+    </div>
+  </div>
+
+  <div style="min-width:0">
+    <div class="kpi-grid" style="margin-bottom:18px">
+      <div class="kpi"><div class="kpi-label">Total CapEx</div><div class="kpi-value" id="kpi-capex"></div><div class="kpi-sub" id="kpi-capex-sub"></div></div>
+      <div class="kpi"><div class="kpi-label">Equity</div><div class="kpi-value" id="kpi-equity"></div><div class="kpi-sub" id="kpi-equity-sub"></div></div>
+      <div class="kpi"><div class="kpi-label">Steady Rev</div><div class="kpi-value" id="kpi-revenue"></div><div class="kpi-sub" id="kpi-revenue-sub"></div></div>
+      <div class="kpi"><div class="kpi-label">Steady Op Inc</div><div class="kpi-value" id="kpi-opIncome"></div><div class="kpi-sub" id="kpi-opIncome-sub"></div></div>
+      <div class="kpi"><div class="kpi-label">Debt Svc</div><div class="kpi-value" id="kpi-debtSvc"></div><div class="kpi-sub" id="kpi-debtSvc-sub"></div></div>
+      <div class="kpi"><div class="kpi-label">Total IRR</div><div class="kpi-value" id="kpi-irr"></div><div class="kpi-sub" id="kpi-irr-sub"></div></div>
+    </div>
+
+    <div class="panel chart-panel">
+      <div style="position:relative;height:255px"><canvas id="chart"></canvas></div>
+    </div>
+
+    <div class="panel" id="tablePanel">
+      <div style="overflow-x:auto">
+        <table class="fin-table" id="finTable"></table>
+      </div>
+    </div>
+
+    <div class="panel" id="roiPanel">
+      <div class="panel-title">IRR (Internal Rate of Return)</div>
+      <div class="roi-grid" id="roiGrid"></div>
+      <div id="roiDetail"></div>
+    </div>
+
+    <div class="panel" id="internalPanel">
+      <div class="panel-title">Ownership & Equity Investment</div>
+      <div id="internalCapTable"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">P&L, Distributions &amp; Tax ($K)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="distWaterfallTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Partner Cash ($K)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="partnerCashTable"></table></div>
+    </div>
+
+    <div class="panel" id="valuationPanel">
+      <div class="panel-title">Partner Valuations</div>
+      <div id="valuationTable"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+// === CONSTANTS ===
+const BASE_REV_PER_AC = 11500000 / 12; // ~$958K/ac from 12ac K+J in 2026
+const EXISTING_KJ_REV = 11500000;      // 12ac K/J baseline 2026
+const EXISTING_L_REV = 3000000;         // 2.5ac lettuce baseline 2026
+const EXISTING_EXP_RATIO = 0.66;        // ~66% expense ratio on existing ops
+const EXISTING_DEBT_LETTUCE = 1000000;  // $1M/yr, pays off 3/2031
+const EXISTING_DEBT_LETTUCE_END = 2031; // last year of lettuce debt (Q1 payoff = partial year)
+const EXISTING_DEBT_LAND = 430000;      // $430K/yr through 2045
+const EXISTING_DEBT_LAND_END = 2045;
+// YEARS defined in shared.js
+
+const QUARTERS = [];
+for (let y = 2026; y <= 2035; y++)
+  for (let q = 1; q <= 4; q++)
+    QUARTERS.push({ value: y * 10 + q, label: `Q${q}-${String(y).slice(2)}` });
+
+const CROP_DEFS = [
+  { key: 'K',  label: 'Keiki',    prefix: 'k',  color: '#5a9e55', acresKey: 'newKAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 1.0 },
+  { key: 'J',  label: 'Japanese', prefix: 'j',  color: '#66bb6a', acresKey: 'newJAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMult: 1.0 },
+  { key: 'E',  label: 'English',  prefix: 'e',  color: '#4ac6c6', acresKey: 'newEAcres',  expKey: 'cukeExpPct',    costKey: 'cucumberCostPerAc', revMultKey: 'englishRevPct' },
+  { key: 'T',  label: 'Tomato (Build)',  prefix: 't',  color: '#e07050', acresKey: 'newTAcres', expKey: 'tomatoExpPct', costKey: 'tomatoCostPerAc', revMultKey: 'tomatoRevPct' },
+  { key: 'TB', label: 'Tomato (Purchased)', prefix: 'tb', color: '#cc5535', fixedAcres: 6, expKey: 'tomatoExpPct', revMultKey: 'tomatoRevPct', isBuy: true },
+  { key: 'L',  label: 'Lettuce',  prefix: 'l',  color: '#cc8a4a', acresKey: 'newLAcres',  expKey: 'lettuceExpPct', costKey: 'lettuceCostPerAc', isLettuce: true },
+];
+
+// === STATE ===
+const state = {
+  newKAcres: 3, newJAcres: 3, newEAcres: 2, newTAcres: 2, newLAcres: 2,
+  englishRevPct: 80, tomatoRevPct: 120,
+  lettuceLbs: 600000, lettucePrice: 7.00,
+  cucumberCostPerAc: 1000000, tomatoCostPerAc: 1500000, lettuceCostPerAc: 4500000,
+  landCostPerAc: 125000, packhouseSF: 30000, packhouseCostPerSF: 100, housingPeople: 25,
+  tomatoPurchasePrice: 8000000, tomatoHardAssets: 5000000,
+  cukeExpPct: 70, tomatoExpPct: 70, lettuceExpPct: 70,
+  kPhase: 1, kStartQ: 20271, kBuildMonths: 12, kRampYears: 2,
+  jPhase: 1, jStartQ: 20271, jBuildMonths: 12, jRampYears: 2,
+  ePhase: 2, eStartQ: 20281, eBuildMonths: 12, eRampYears: 2,
+  tPhase: 2, tStartQ: 20281, tBuildMonths: 12, tRampYears: 2,
+  tbPhase: 2, tbStartQ: 20281, tbBuildMonths: 6, tbRampYears: 1,
+  lPhase: 3, lStartQ: 20291, lBuildMonths: 18, lRampYears: 2,
+  financingPct: 80, interestRate: 7, loanTermYears: 7, interestOnly: true,
+  revInflation: 4, costInflation: 3,
+  // Investor / cap table
+  jsTransferPct: 0, debug: false,
+  yearPE: {}, // per-year PE overrides for cap table
+};
+
+// === FORMATTERS ===
+const fmt = (n) => {
+  if (n == null || isNaN(n)) return "\u2014";
+  const abs = Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return n < 0 ? `-${abs}` : abs;
+};
+// fmtK and fmtM defined in shared.js
+
+// === QUARTER UTILS ===
+function qLabel(qVal) { return `Q${qVal % 10}-${String(Math.floor(qVal / 10)).slice(2)}`; }
+
+function snapToQuarter(val) {
+  let closest = QUARTERS[0].value, minDist = Math.abs(val - closest);
+  for (const q of QUARTERS) {
+    const d = Math.abs(val - q.value);
+    if (d < minDist) { minDist = d; closest = q.value; }
+  }
+  return closest;
+}
+
+function getEndQ(startQ, months) {
+  const sY = Math.floor(startQ / 10), sQ = startQ % 10;
+  let eQ = sQ + Math.ceil(months / 3), eY = sY;
+  while (eQ > 4) { eQ -= 4; eY++; }
+  return eY * 10 + eQ;
+}
+
+function rampFactor(prodYr, rampYears) {
+  if (rampYears === 0) return 1.0;
+  if (rampYears === 1) return prodYr === 1 ? 0.70 : 1.0;
+  if (rampYears === 2) return prodYr === 1 ? 0.50 : prodYr === 2 ? 0.85 : 1.0;
+  return prodYr === 1 ? 0.40 : prodYr === 2 ? 0.65 : prodYr === 3 ? 0.85 : 1.0;
+}
+
+function calcIRR(cashflows, guess = 0.1) {
+  // Newton's method to find rate where NPV = 0
+  let rate = guess;
+  for (let i = 0; i < 200; i++) {
+    let npv = 0, dnpv = 0;
+    for (let t = 0; t < cashflows.length; t++) {
+      const pv = Math.pow(1 + rate, t);
+      npv += cashflows[t] / pv;
+      dnpv -= t * cashflows[t] / (pv * (1 + rate));
+    }
+    if (Math.abs(npv) < 0.01) return rate;
+    if (Math.abs(dnpv) < 1e-10) break;
+    rate -= npv / dnpv;
+    if (rate < -0.99) rate = -0.5;
+    if (rate > 10) rate = 1;
+  }
+  return rate;
+}
+
+function annualDebtSvc(principal, rate, termYears) {
+  if (principal <= 0) return 0;
+  const mRate = rate / 100 / 12, nPmt = termYears * 12;
+  const monthly = mRate > 0
+    ? principal * (mRate * Math.pow(1 + mRate, nPmt)) / (Math.pow(1 + mRate, nPmt) - 1)
+    : principal / nPmt;
+  return monthly * 12;
+}
+
+// === SLIDER BUILDER ===
+function sliderBg(pct) {
+  const s = getComputedStyle(document.documentElement);
+  const fill = s.getPropertyValue('--slider-fill').trim();
+  const track = s.getPropertyValue('--slider-track').trim();
+  return `linear-gradient(to right,${fill} 0%,${fill} ${pct}%,${track} ${pct}%,${track} 100%)`;
+}
+
+// sliderOpts defined in shared.js
+
+function createSlider(containerId, key, opts) {
+  sliderOpts[key] = opts;
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const fill = ((state[key] - opts.min) / (opts.max - opts.min)) * 100;
+  container.innerHTML = `
+    <div class="slider-group">
+      <div class="slider-header">
+        <div style="flex:1;padding-right:10px">
+          <div class="slider-label">${opts.label}</div>
+          <div class="slider-sublabel" id="${key}-sublabel">${opts.sublabel ? opts.sublabel() : ''}</div>
+        </div>
+        <span class="slider-value" id="${key}-display">${opts.format(state[key])}</span>
+      </div>
+      <input type="range" id="${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${state[key]}">
+    </div>`;
+  const input = document.getElementById(key);
+  input.style.background = sliderBg(fill);
+  input.addEventListener('input', (e) => {
+    let val = Number(e.target.value);
+    if (opts.snap) val = opts.snap(val);
+    state[key] = val;
+    input.value = val;
+    const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
+    input.style.background = sliderBg(pct);
+    document.getElementById(`${key}-display`).textContent = opts.format(val);
+    if (opts.sublabel) document.getElementById(`${key}-sublabel`).innerHTML = opts.sublabel();
+    recalc();
+  });
+}
+
+// === PHASE GRID BUILDER ===
+function buildPhaseGrid() {
+  const grid = document.getElementById('phaseGrid');
+  const crops = CROP_DEFS.filter(c => !c.isBuy);
+
+  const buildOpts = [6, 9, 12, 18, 24].map(m => `<option value="${m}">${m}mo</option>`).join('');
+  const rampOpts = [0, 1, 2, 3].map(y => `<option value="${y}">${y}yr</option>`).join('');
+  const phaseOpts = [1, 2, 3, 4].map(p => `<option value="${p}">${p}</option>`).join('');
+  const qOpts = QUARTERS.map(q => `<option value="${q.value}">${q.label}</option>`).join('');
+
+  grid.innerHTML = crops.map(c => {
+    const p = c.prefix;
+    return `<tr>
+      <td>${c.key === 'TB' ? 'T\u2605' : c.key}</td>
+      <td><select data-key="${p}Phase">${phaseOpts}</select></td>
+      <td><select data-key="${p}StartQ">${qOpts}</select></td>
+      <td><select data-key="${p}BuildMonths">${buildOpts}</select></td>
+      <td><select data-key="${p}RampYears">${rampOpts}</select></td>
+    </tr>`;
+  }).join('');
+
+  // Set values and bind events
+  grid.querySelectorAll('select').forEach(sel => {
+    const key = sel.dataset.key;
+    sel.value = state[key];
+    sel.addEventListener('change', () => {
+      state[key] = Number(sel.value);
+      recalc();
+    });
+  });
+}
+
+
+
+
+// === BUILD ALL SLIDERS ===
+function buildSliders() {
+  // New acres
+  createSlider('sl-newKAcres', 'newKAcres', {
+    label: 'Keiki', min: 0, max: 10, step: 2, format: v => `${v} ac`,
+    sublabel: () => `$${(state.newKAcres * BASE_REV_PER_AC / 1e6).toFixed(1)}M base rev`
+  });
+  createSlider('sl-newJAcres', 'newJAcres', {
+    label: 'Japanese', min: 0, max: 10, step: 2, format: v => `${v} ac`,
+    sublabel: () => `$${(state.newJAcres * BASE_REV_PER_AC / 1e6).toFixed(1)}M base rev`
+  });
+  createSlider('sl-newEAcres', 'newEAcres', {
+    label: 'English', min: 0, max: 10, step: 2, format: v => `${v} ac`,
+    sublabel: () => `$${(state.newEAcres * BASE_REV_PER_AC * state.englishRevPct / 100 / 1e6).toFixed(1)}M base rev`
+  });
+  createSlider('sl-englishRevPct', 'englishRevPct', {
+    label: 'English Rev % of K/J', min: 75, max: 95, step: 5, format: v => `${v}%`
+  });
+  createSlider('sl-newTAcres', 'newTAcres', {
+    label: 'Tomato (Build)', min: 0, max: 10, step: 2, format: v => `${v} ac`,
+    sublabel: () => `$${(state.newTAcres * BASE_REV_PER_AC * state.tomatoRevPct / 100 / 1e6).toFixed(1)}M base rev`
+  });
+  createSlider('sl-tomatoRevPct', 'tomatoRevPct', {
+    label: 'Tomato Rev % of K/J', min: 90, max: 130, step: 10, format: v => `${v}%`
+  });
+  createSlider('sl-newLAcres', 'newLAcres', {
+    label: 'Lettuce', min: 0, max: 2.5, step: 2.5, format: v => `${v} ac`,
+    sublabel: () => `CapEx: $${(state.newLAcres * state.lettuceCostPerAc / 1e6).toFixed(1)}M`
+  });
+
+  // Lettuce revenue
+  createSlider('sl-lettuceLbs', 'lettuceLbs', {
+    label: 'Lbs Sold / Year', min: 400000, max: 1200000, step: 200000,
+    format: v => `${(v / 1e3).toFixed(0)}K lb`
+  });
+  createSlider('sl-lettucePrice', 'lettucePrice', {
+    label: 'Price per lb', min: 6, max: 8, step: 0.50,
+    format: v => `$${v.toFixed(2)}`,
+    sublabel: () => `$${(state.lettuceLbs * state.lettucePrice / 1e6).toFixed(1)}M base rev`
+  });
+
+  // Capital costs
+  createSlider('sl-cucumberCostPerAc', 'cucumberCostPerAc', {
+    label: 'Cucumber GH / Acre', min: 600000, max: 1500000, step: 200000,
+    format: v => fmtM(v)
+  });
+  createSlider('sl-tomatoCostPerAc', 'tomatoCostPerAc', {
+    label: 'Tomato GH / Acre', min: 1000000, max: 2000000, step: 200000,
+    format: v => fmtM(v)
+  });
+  createSlider('sl-lettuceCostPerAc', 'lettuceCostPerAc', {
+    label: 'Lettuce GH / Acre', min: 3000000, max: 5000000, step: 500000,
+    format: v => fmtM(v)
+  });
+  createSlider('sl-landCostPerAc', 'landCostPerAc', {
+    label: 'Land (20 acres)', min: 100000, max: 150000, step: 10000,
+    format: v => `$${(v / 1e3).toFixed(0)}K/ac`,
+    sublabel: () => `Total: $${(20 * state.landCostPerAc / 1e6).toFixed(1)}M`
+  });
+  createSlider('sl-packhouseSF', 'packhouseSF', {
+    label: 'Packhouse Size', min: 20000, max: 40000, step: 5000,
+    format: v => `${(v / 1e3).toFixed(0)}K SF`
+  });
+  createSlider('sl-packhouseCostPerSF', 'packhouseCostPerSF', {
+    label: 'Packhouse $/SF', min: 50, max: 150, step: 25,
+    format: v => `$${v}/sf`,
+    sublabel: () => `Total: $${(state.packhouseSF * state.packhouseCostPerSF / 1e6).toFixed(1)}M`
+  });
+  createSlider('sl-housingPeople', 'housingPeople', {
+    label: 'Housing (new people)', min: 10, max: 50, step: 10,
+    format: v => `${v} people`,
+    sublabel: () => `$50K/person \u2022 Total: $${(state.housingPeople * 50000 / 1e6).toFixed(1)}M`
+  });
+  createSlider('sl-tomatoPurchasePrice', 'tomatoPurchasePrice', {
+    label: 'Purchase Price (6ac)', min: 3000000, max: 15000000, step: 2500000,
+    format: v => fmtM(v)
+  });
+  createSlider('sl-tomatoHardAssets', 'tomatoHardAssets', {
+    label: 'Hard Asset Value', min: 2000000, max: 10000000, step: 1000000,
+    format: v => fmtM(v),
+    sublabel: () => {
+      const loan = state.tomatoHardAssets * state.financingPct / 100;
+      const eq = state.tomatoPurchasePrice - loan;
+      return `Loan: ${fmtK(loan)} · Equity: ${fmtK(eq)}`;
+    }
+  });
+
+  // Operating expenses
+  createSlider('sl-cukeExpPct', 'cukeExpPct', {
+    label: 'Cucumber Expenses', min: 60, max: 80, step: 5, format: v => `${v}%`
+  });
+  createSlider('sl-tomatoExpPct', 'tomatoExpPct', {
+    label: 'Tomato Expenses', min: 60, max: 80, step: 5, format: v => `${v}%`
+  });
+  createSlider('sl-lettuceExpPct', 'lettuceExpPct', {
+    label: 'Lettuce Expenses', min: 60, max: 80, step: 5, format: v => `${v}%`
+  });
+
+  // Financing
+  createSlider('sl-financingPct', 'financingPct', {
+    label: 'Loan-to-Cost', min: 50, max: 90, step: 10, format: v => `${v}%`
+  });
+  createSlider('sl-interestRate', 'interestRate', {
+    label: 'Interest Rate', min: 5, max: 9, step: 1, format: v => `${v.toFixed(1)}%`
+  });
+  createSlider('sl-loanTermYears', 'loanTermYears', {
+    label: 'Loan Term', min: 5, max: 25, step: 5, format: v => `${v} yr`
+  });
+
+  // Inflation
+  createSlider('sl-revInflation', 'revInflation', {
+    label: 'Revenue Escalation', min: 0, max: 8, step: 2, format: v => `${v.toFixed(0)}%/yr`
+  });
+  createSlider('sl-costInflation', 'costInflation', {
+    label: 'Cost Escalation', min: 0, max: 8, step: 2, format: v => `${v.toFixed(0)}%/yr`
+  });
+
+  createSlider('sl-jsTransferPct', 'jsTransferPct', {
+    label: 'JS→EB Transfer/yr', min: 0, max: 2, step: 0.5,
+    format: v => `${v.toFixed(1)}%`
+  });
+
+  // Phase grid & toggle
+  buildPhaseGrid();
+}
+
+// === CROP HELPERS ===
+function getCropConfig(c) {
+  const p = c.prefix;
+  const acres = c.fixedAcres || state[c.acresKey] || 0;
+  let baseRev;
+  if (c.isLettuce) {
+    baseRev = state.lettuceLbs * state.lettucePrice;
+  } else {
+    const revMult = c.revMultKey ? state[c.revMultKey] / 100 : (c.revMult || 1.0);
+    baseRev = acres * BASE_REV_PER_AC * revMult;
+  }
+  const expPct = state[c.expKey] / 100;
+  const baseExp = baseRev * expPct;
+
+  let capex;
+  if (c.isBuy) {
+    capex = state.tomatoPurchasePrice;
+  } else {
+    capex = acres * state[c.costKey];
+  }
+
+  // TB (purchased) uses T (build) start quarter
+  const startQ = c.isBuy ? state.tStartQ : state[`${p}StartQ`];
+  const buildMonths = state[`${p}BuildMonths`];
+  const rampYears = state[`${p}RampYears`];
+  const endQ = getEndQ(startQ, buildMonths);
+
+  return { acres, baseRev, baseExp, expPct, capex, startQ, buildMonths, rampYears, endQ };
+}
+
+function cropYearRevExp(cfg, year) {
+  const endYear = Math.floor(cfg.endQ / 10);
+  const endQtr = cfg.endQ % 10;
+
+  if (year < endYear) return { rev: 0, exp: 0 };
+
+  let frac = 1, prodYr;
+  if (year === endYear) {
+    frac = (4 - endQtr + 1) / 4;
+    prodYr = 1;
+  } else {
+    prodYr = year - endYear + 1;
+  }
+
+  const ramp = rampFactor(prodYr, cfg.rampYears);
+  const n = year - 2026;
+  const rev = cfg.baseRev * ramp * frac * Math.pow(1 + state.revInflation / 100, n);
+  const exp = cfg.baseExp * ramp * frac * Math.pow(1 + state.costInflation / 100, n);
+  return { rev, exp };
+}
+
+// === MAIN RECALC ===
+let chart = null;
+
+function recalc() {
+  const s = state;
+  // Active crops for table/chart (excludes TB)
+  const activeCrops = CROP_DEFS.filter(c => {
+    if (c.isBuy) return false;
+    const acres = s[c.acresKey] || 0;
+    return acres > 0;
+  });
+  // All crops including TB for ROI panel (always include TB)
+  const allCrops = CROP_DEFS.filter(c => {
+    const acres = c.fixedAcres || s[c.acresKey] || 0;
+    return acres > 0;
+  });
+
+  // Compute configs
+  const configs = {};
+  for (const c of allCrops) configs[c.key] = getCropConfig(c);
+
+  // Shared CapEx
+  const landCapex = 20 * s.landCostPerAc;
+  const packhouseCapex = s.packhouseSF * s.packhouseCostPerSF;
+  const housingCapex = s.housingPeople * 50000;
+  const sharedCapex = landCapex + packhouseCapex + housingCapex;
+
+  // Per-crop CapEx (direct) — exclude TB from shared allocation base
+  let buildCropCapex = 0;
+  for (const c of allCrops) {
+    if (!c.isBuy) buildCropCapex += configs[c.key].capex;
+  }
+  const totalCropCapex = buildCropCapex;
+  const totalCapex = totalCropCapex + sharedCapex;
+  const equity = totalCapex * (1 - s.financingPct / 100);
+
+  // Allocate shared capex to built crops only, not TB
+  for (const c of allCrops) {
+    if (c.isBuy) {
+      configs[c.key].fullCapex = configs[c.key].capex;
+    } else {
+      const share = buildCropCapex > 0 ? configs[c.key].capex / buildCropCapex : 0;
+      configs[c.key].fullCapex = configs[c.key].capex + sharedCapex * share;
+    }
+  }
+
+  // Per-crop debt for table (activeCrops only, excludes TB)
+  const cropDebtSvc = {};
+  for (const c of activeCrops) {
+    const fullCapex = configs[c.key].fullCapex;
+    const loan = fullCapex * s.financingPct / 100;
+    const ioAnnual = loan * s.interestRate / 100;
+    const piAnnual = annualDebtSvc(loan, s.interestRate, s.loanTermYears);
+    cropDebtSvc[c.key] = { loan, ioAnnual, piAnnual, fullCapex };
+  }
+
+  // Per-year data
+  const yearData = {}; // key -> { rev: [], exp: [], debt: [] }
+  for (const c of activeCrops) yearData[c.key] = { rev: [], exp: [], debt: [] };
+  const existKJ = { rev: [], exp: [] }, existL = { rev: [], exp: [] };
+  const existDebt = [];
+  const totalRev = [], totalExp = [], totalDebt = [];
+
+  for (const year of YEARS) {
+    const n = year - 2026;
+    const revMult = Math.pow(1 + s.revInflation / 100, n);
+    const cstMult = Math.pow(1 + s.costInflation / 100, n);
+
+    // Existing operations
+    const eKJRev = EXISTING_KJ_REV * revMult;
+    const eKJExp = EXISTING_KJ_REV * EXISTING_EXP_RATIO * cstMult;
+    const eLBaseRev = year <= 2026 ? EXISTING_L_REV : s.lettuceLbs * s.lettucePrice;
+    const eLRev = eLBaseRev * revMult;
+    const eLExp = eLBaseRev * (year <= 2026 ? EXISTING_EXP_RATIO : s.lettuceExpPct / 100) * cstMult;
+    existKJ.rev.push(eKJRev); existKJ.exp.push(eKJExp);
+    existL.rev.push(eLRev); existL.exp.push(eLExp);
+
+    // Existing debt service
+    let eDebt = 0;
+    if (year < EXISTING_DEBT_LETTUCE_END) eDebt += EXISTING_DEBT_LETTUCE;
+    else if (year === EXISTING_DEBT_LETTUCE_END) eDebt += EXISTING_DEBT_LETTUCE * 0.25; // Q1 payoff
+    if (year <= EXISTING_DEBT_LAND_END) eDebt += EXISTING_DEBT_LAND;
+    existDebt.push(eDebt);
+
+    let yRev = eKJRev + eLRev, yExp = eKJExp + eLExp, yDebt = eDebt;
+    for (const c of activeCrops) {
+      const cfg = configs[c.key];
+      const { rev, exp } = cropYearRevExp(cfg, year);
+      yearData[c.key].rev.push(rev);
+      yearData[c.key].exp.push(exp);
+      yRev += rev;
+      yExp += exp;
+
+      // Debt service: starts at construction start, runs for loan term
+      const startYear = Math.floor(cfg.startQ / 10);
+      const endQ = cfg.endQ;
+      const endYear = Math.floor(endQ / 10);
+      const endQtr = endQ % 10;
+      // IO period ends 6 months (2 quarters) after construction completion
+      let ioEndQ = endQtr + 2, ioEndYear = endYear;
+      while (ioEndQ > 4) { ioEndQ -= 4; ioEndYear++; }
+
+      const debtYear = year - startYear + 1; // year 1 = construction start year
+      const applyIO = s.interestOnly && !c.isBuy;
+      let debt = 0;
+      if (debtYear >= 1 && debtYear <= s.loanTermYears) {
+        const ds = cropDebtSvc[c.key];
+        if (applyIO && year < ioEndYear) {
+          // Full IO year
+          debt = ds.ioAnnual;
+        } else if (applyIO && year === ioEndYear) {
+          // Partial IO then P&I
+          const ioFrac = (ioEndQ - 1) / 4;
+          debt = ds.ioAnnual * ioFrac + ds.piAnnual * (1 - ioFrac);
+        } else {
+          debt = ds.piAnnual;
+        }
+        // Partial first year if construction starts mid-year
+        if (debtYear === 1) {
+          const startQtr = cfg.startQ % 10;
+          debt *= (4 - startQtr + 1) / 4;
+        }
+      }
+      yearData[c.key].debt.push(debt);
+      yDebt += debt;
+    }
+    totalRev.push(yRev);
+    totalExp.push(yExp);
+    totalDebt.push(yDebt);
+  }
+
+  // Steady-state: peak debt year (when all loans overlap)
+  const peakDebt = Math.max(...totalDebt);
+  const lastIdx = YEARS.length - 1;
+  const steadyRev = totalRev[lastIdx];
+  const steadyExp = totalExp[lastIdx];
+  const steadyOpInc = steadyRev - steadyExp;
+  const lastDebt = totalDebt[lastIdx];
+  const steadyNetCF = steadyOpInc - lastDebt;
+
+  // KPIs
+  document.getElementById('kpi-capex').textContent = fmtK(totalCapex);
+  document.getElementById('kpi-capex-sub').textContent = `crop: ${fmtK(totalCropCapex)} | infra: ${fmtK(sharedCapex)}`;
+  document.getElementById('kpi-equity').textContent = fmtK(equity);
+  document.getElementById('kpi-equity-sub').textContent = `${100 - s.financingPct}% of ${fmtK(totalCapex)}`;
+  document.getElementById('kpi-revenue').textContent = fmtK(steadyRev);
+  document.getElementById('kpi-revenue-sub').textContent = `year ${YEARS[lastIdx]}`;
+  document.getElementById('kpi-opIncome').textContent = fmtK(steadyOpInc);
+  document.getElementById('kpi-opIncome-sub').textContent = `${(steadyRev > 0 ? (steadyOpInc / steadyRev * 100).toFixed(1) : 0)}% margin`;
+  document.getElementById('kpi-debtSvc').textContent = fmtK(peakDebt);
+  document.getElementById('kpi-debtSvc-sub').textContent = `peak yr | ${fmtK(lastDebt)} in '${String(YEARS[lastIdx]).slice(2)}`;
+  // Total IRR across all new investments
+  const combinedCF = simulateCombinedCF(activeCrops, configs, s);
+  const totalIRR = calcIRR(combinedCF) * 100;
+  document.getElementById('kpi-irr').textContent = `${totalIRR.toFixed(1)}%`;
+  document.getElementById('kpi-irr-sub').textContent = 'all new crops';
+
+  updateChart(activeCrops, yearData, existKJ, existL);
+  updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt);
+  updateROI(allCrops, configs);
+  updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt, existKJ, existL, existDebt);
+
+  // Export data for other pages
+  localStorage.setItem('gh-expansion-data', JSON.stringify({
+    years: YEARS,
+    totalRev, totalExp, totalDebt,
+    existDebt: existDebt,
+    crops: activeCrops.map(c => ({
+      key: c.key, label: c.label,
+      capex: configs[c.key].fullCapex || configs[c.key].capex,
+      endQ: configs[c.key].endQ,
+    })),
+  }));
+
+  renderDistTables(totalRev, totalExp);
+}
+
+function renderDistTables(totalRev, totalExp) {
+  const rev = totalRev, exp = totalExp;
+  const { totalInt: loanInt, totalPrin: loanPrin, totalDS } = computeLoanSchedules();
+  const dep = getDepreciation(state.debug);
+  const model = runFullModel({ rev, exp, loanInt, loanPrin, totalDS, fedDep: dep.fedDep, stateDep: dep.stateDep, tBillRate: 0.065 });
+  const { opInc, capexRes, taxableInc, totalTaxLiab, taxCashDist, distribCash, peddDetail, peddPayments, tier2, cumPEDD, tier0Actual, tier1Actual, tier1Shortfall, taxDetail } = model;
+  const totalTaxDist = taxCashDist;
+
+  const JS_BUYOUT_VAL = { 2026: 8000000, 2027: 9750000, 2028: 11500000, 2029: 13250000 };
+  const JS_ANNUAL_LOSS = 0.03, EB_ANNUAL_GAIN = 0.005;
+
+  const fC = (n) => { if (Math.abs(n) < 50) return '\u2014'; const k = Math.round(Math.abs(n) / 1e3); return `${n < 0 ? '\u2212' : ''}${k.toLocaleString()}`; };
+  const yh = YEARS.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
+  const sr = (label) => `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
+  const rw = (label, data, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fC(v)}</td>`).join('')}</tr>`;
+  const rwLink = (label, data, href) => `<tr><td><a href="${href}" style="color:inherit;text-decoration:underline;text-decoration-style:dotted">${label}</a></td>${data.map(v => `<td>${fC(v)}</td>`).join('')}</tr>`;
+  const rwYellow = (label, actual, shortfall) => `<tr><td>${label}</td>${actual.map((v, i) => { const s = shortfall[i] > 50; return `<td${s ? ' style="color:var(--yellow)"' : ''}>${fC(-v)}${s ? ' *' : ''}</td>`; }).join('')}</tr>`;
+
+  // Build tax tooltips
+  const fK2 = (v) => '$' + Math.round(v / 1e3).toLocaleString() + 'K';
+  const taxTips = taxDetail.map((td, i) => {
+    const own = getOwnership(YEARS[i]);
+    let t = `--- ${YEARS[i]} TAX ---\nFed: ${fK2(td.fedTaxable)} x EB ${own.EB.toFixed(1)}% = ${fK2(td.ebFedTaxable)}`;
+    if (td.nolUsed > 0) t += ` - NOL ${fK2(td.nolUsed)}`;
+    t += ` = ${fK2(td.ebNetFed)} \u2192 tax ${fK2(td.fedTax)} / ${own.EB.toFixed(1)}% = ${fK2(td.fedDist)}`;
+    t += `\nHI: ${fK2(td.ebHiTaxable)} \u2192 tax ${fK2(td.hiTax)} / ${own.EB.toFixed(1)}% = ${fK2(td.hiDist)}`;
+    t += `\nTotal: ${fK2(td.fedDist + td.hiDist)}`;
+    return t;
+  });
+  const rwTip = (label, data, tips, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map((v, i) => `<td title="${(tips[i]||'').replace(/"/g,'&quot;')}" style="cursor:help">${fC(v)}</td>`).join('')}</tr>`;
+
+  // P&L + Waterfall combined
+  let wf = `<thead><tr><th></th>${yh}</tr></thead><tbody>`;
+  wf += sr('P&L');
+  wf += rw('Revenue', rev);
+  wf += rw('Operating Expense', exp.map(v => -v));
+  wf += rw('Operating Income', opInc, 'subtotal-row');
+  wf += sr('Cash Adjustments');
+  wf += rwLink('Loan Interest', loanInt.map(v => -v), 'debt.html');
+  wf += rwLink('Loan Principal', loanPrin.map(v => -v), 'debt.html');
+  wf += rw('Capex Reserve (2%)', capexRes.map(v => -v));
+  wf += rw('Distributable Cash', distribCash, 'total-row-table');
+  wf += sr('Distribution Waterfall');
+  wf += rwTip('Tax (Fed + HI)', totalTaxDist.map(v => -v), taxTips);
+  wf += rw('Tier 0 (EB)', tier0Actual.map(v => -v));
+  wf += rwYellow('Tier 1 (Partners)', tier1Actual, tier1Shortfall);
+  wf += rwLink('PE/DD Repayment', peddPayments.map(v => -v), 'debt.html');
+  wf += rw('Tier 2 (Pro-Rata)', tier2.map(v => -v));
+  if (tier1Shortfall.some(v => v > 50)) wf += rw('T1 Shortfall \u2192 DD', tier1Shortfall.map(v => -v));
+  wf += sr('Tax Detail (Liability Year)');
+  wf += rwLink('Fed Bonus Depr', dep.fedDep.map(v => -v), 'depreciation.html');
+  wf += rw('Fed Taxable', taxableInc.map((t, i) => t - dep.fedDep[i]));
+  wf += rwLink('State Depr', dep.stateDep.map(v => -v), 'depreciation.html');
+  wf += rw('HI Taxable', taxableInc.map((t, i) => t - dep.stateDep[i]));
+  wf += rwTip('Tax Liability (accrual)', totalTaxLiab, taxTips);
+  wf += '</tbody>';
+  document.getElementById('distWaterfallTable').innerHTML = wf;
+
+  // Partner cash
+  const tier1Arr = YEARS.map(y => getTier1(y));
+  let pt = `<thead><tr><th></th>${yh}</tr></thead><tbody>`;
+  for (const partner of ['EB', 'JS', 'JJB']) {
+    pt += sr(partner);
+    const ownArr = YEARS.map(y => getOwnership(y));
+    const taxShare = YEARS.map((_, i) => totalTaxDist[i] * ownArr[i][partner] / 100);
+    pt += rw('Tax Dist', taxShare);
+    if (partner === 'EB') pt += rw('Tier 0', tier0Actual);
+    const t1Share = YEARS.map((_, i) => tier1Actual[i] * ownArr[i][partner] / 100);
+    pt += rw('Tier 1', t1Share);
+    if (partner === 'JS' || partner === 'JJB') pt += rw('PE/DD', peddPayments.map(v => v * 0.5));
+    const t2Share = YEARS.map((_, i) => tier2[i] * ownArr[i][partner] / 100);
+    pt += rw('Tier 2', t2Share);
+    if (partner === 'JS' || partner === 'JJB') {
+      const eqPay = YEARS.map(y => {
+        if (!JS_BUYOUT_VAL[y]) return 0;
+        return JS_BUYOUT_VAL[y] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2) * (partner === 'JS' ? 1 : -1);
+      });
+      pt += rw('Equity Buy/Sell', eqPay);
+    }
+    const total = YEARS.map((_, i) => {
+      let t = taxShare[i] + t1Share[i] + t2Share[i];
+      if (partner === 'EB') t += tier0Actual[i];
+      if (partner === 'JS' || partner === 'JJB') t += peddPayments[i] * 0.5;
+      if (JS_BUYOUT_VAL[YEARS[i]]) t += JS_BUYOUT_VAL[YEARS[i]] * (JS_ANNUAL_LOSS - EB_ANNUAL_GAIN / 2) * (partner === 'JS' ? 1 : partner === 'JJB' ? -1 : 0);
+      return t;
+    });
+    pt += rw('Total ' + partner, total, 'subtotal-row');
+  }
+  // EB grant
+  const grantPct = Math.min(2, Math.floor(cumPEDD / 500000) * 0.5);
+  pt += sr('EB Equity Grant');
+  pt += `<tr><td colspan="${YEARS.length + 1}" style="color:var(--text-sub);font-size:10px">PE/DD repaid: ${fmtK(cumPEDD)} · Grant: +${grantPct.toFixed(1)}% (max +2.0%)</td></tr>`;
+  pt += '</tbody>';
+  document.getElementById('partnerCashTable').innerHTML = pt;
+
+  // Valuation
+  let own = null;
+  try { own = JSON.parse(localStorage.getItem('gh-ownership')); } catch(e) {}
+  const lastYear = YEARS[YEARS.length - 1];
+  const lastOwn = own && own[lastYear] ? own[lastYear] : { JJB: 50, EB: 27.5, JS: 22.5 };
+  const lastOpInc = rev[YEARS.length - 1] - exp[YEARS.length - 1];
+  const peOptions = [4,5,6,7,8,9,10,11,12];
+  let vHTML = '<table style="width:100%;font-size:11px;font-family:inherit;border-collapse:collapse">';
+  vHTML += '<tr><th style="text-align:left;padding:4px 8px;color:var(--accent);font-size:9px;text-transform:uppercase">P/E</th>';
+  for (const p of ['JJB', 'EB', 'JS']) vHTML += `<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">${p} (${lastOwn[p].toFixed(1)}%)</th>`;
+  vHTML += '<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">Total</th></tr>';
+  for (const pe of peOptions) {
+    const bizVal = lastOpInc * pe;
+    vHTML += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:4px 8px;color:var(--text-muted)">${pe}x</td>`;
+    for (const p of ['JJB', 'EB', 'JS']) vHTML += `<td style="text-align:right;padding:4px 8px;color:var(--text-sub)">${fmtK(lastOwn[p] / 100 * bizVal)}</td>`;
+    vHTML += `<td style="text-align:right;padding:4px 8px;color:var(--text)">${fmtK(bizVal)}</td></tr>`;
+  }
+  vHTML += '</table>';
+  vHTML += `<div style="font-size:9px;color:var(--text-dim);margin-top:6px">${lastYear} Op Income: ${fmtK(lastOpInc)}</div>`;
+  document.getElementById('valuationTable').innerHTML = vHTML;
+
+  // Save for debt page
+  localStorage.setItem('gh-pedd-detail', JSON.stringify({
+    years: YEARS,
+    instruments: PEDD_INSTRUMENTS.map(pe => ({
+      name: pe.name, prinPaid: peddDetail[pe.name]?.prinPaid || [], intPaid: peddDetail[pe.name]?.intPaid || [],
+      endBal: peddDetail[pe.name]?.endBal || [], intOwed: peddDetail[pe.name]?.intOwed || [],
+    })),
+  }));
+}
+
+// === CHART ===
+function updateChart(activeCrops, yearData, existKJ, existL) {
+  const ctx = document.getElementById('chart').getContext('2d');
+  const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-tick').trim();
+  const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim();
+  const labels = YEARS.map(y => `'${String(y).slice(2)}`);
+
+  const existRev = existKJ.rev.map((v, i) => v + existL.rev[i]);
+  const datasets = [
+    { label: 'Existing Ops', data: existRev, backgroundColor: '#4a8acc', borderColor: '#4a8acc', borderRadius: 2 },
+    ...activeCrops.map(c => ({
+      label: c.label,
+      data: yearData[c.key].rev,
+      backgroundColor: c.color,
+      borderColor: c.color,
+      borderRadius: 2,
+    }))
+  ];
+
+  if (chart) {
+    chart.data.labels = labels;
+    chart.data.datasets = datasets;
+    chart.options.scales.x.ticks.color = tickColor;
+    chart.options.scales.y.ticks.color = tickColor;
+    chart.options.scales.y.grid.color = gridColor;
+    chart.update();
+    return;
+  }
+
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: {
+            usePointStyle: true, pointStyle: 'circle',
+            font: { family: 'DM Mono, monospace', size: 10 },
+            color: tickColor,
+            generateLabels: (ch) => {
+              const orig = Chart.defaults.plugins.legend.labels.generateLabels(ch);
+              orig.forEach(l => { if (l.hidden) l.fontColor = 'rgba(122,170,122,0.3)'; });
+              return orig;
+            }
+          }
+        },
+        tooltip: {
+          backgroundColor: '#0a150a', borderColor: '#3a5a3a', borderWidth: 1,
+          titleFont: { family: 'monospace', size: 10 }, bodyFont: { family: 'monospace', size: 11 },
+          titleColor: '#5a9e55',
+          callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtK(ctx.parsed.y)}` }
+        }
+      },
+      scales: {
+        x: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor }, grid: { display: false } },
+        y: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor, callback: v => fmtK(v) }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+
+// === TABLE ===
+function updateTable(activeCrops, yearData, configs, totalRev, totalExp, totalDebt, sharedCapex, existKJ, existL, existDebt) {
+  const table = document.getElementById('finTable');
+
+  const fmtCell = (n) => {
+    if (Math.abs(n) < 500) return '\u2014';
+    const inM = Math.abs(n) / 1e6;
+    const str = inM >= 0.05 ? inM.toFixed(1) : inM.toFixed(2);
+    if (n < 0) return `\u2212${str}`;
+    return str;
+  };
+
+  const yearHeaders = YEARS.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
+  const row = (label, data, cls) =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fmtCell(v)}</td>`).join('')}</tr>`;
+  const sectionRow = (label) =>
+    `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
+
+  // Revenue rows
+  let revRows = sectionRow('Revenue ($M)');
+  revRows += row('Existing K/J', existKJ.rev);
+  revRows += row('Existing Lettuce', existL.rev);
+  for (const c of activeCrops) {
+    revRows += row(c.label, yearData[c.key].rev);
+  }
+  revRows += row('Total Revenue', totalRev, 'subtotal-row');
+
+  // Expense rows
+  let expRows = sectionRow('Expenses ($M)');
+  expRows += row('Existing K/J', existKJ.exp.map(v => -v));
+  expRows += row('Existing Lettuce', existL.exp.map(v => -v));
+  for (const c of activeCrops) {
+    expRows += row(c.label, yearData[c.key].exp.map(v => -v));
+  }
+  const totalExpNeg = totalExp.map(v => -v);
+  expRows += row('Total Expenses', totalExpNeg, 'subtotal-row');
+
+  // Operating income, debt, net CF
+  const opInc = YEARS.map((_, i) => totalRev[i] - totalExp[i]);
+  const expansionDebt = YEARS.map((_, i) => totalDebt[i] - existDebt[i]);
+  const netCF = YEARS.map((_, i) => opInc[i] - totalDebt[i]);
+
+  const summaryRows = sectionRow('Summary ($M)')
+    + row('Operating Income', opInc)
+    + row('Existing Debt Svc', existDebt.map(v => -v))
+    + row('Expansion Debt Svc', expansionDebt.map(v => -v))
+    + row('Net Cash Flow', netCF, 'total-row-table');
+
+  table.innerHTML = `
+    <thead><tr><th></th>${yearHeaders}</tr></thead>
+    <tbody>${revRows}${expRows}${summaryRows}</tbody>`;
+}
+
+// === ROI PANEL ===
+let lastROICrops = [], lastROIConfigs = {}, selectedROICrop = null;
+
+function updateROI(crops, configs) {
+  lastROICrops = crops;
+  lastROIConfigs = configs;
+  const grid = document.getElementById('roiGrid');
+  const s = state;
+  let html = '';
+
+  // Merge K and J into one card if both exist with same IRR
+  const kCfg = configs['K'], jCfg = configs['J'];
+  const hasK = kCfg && kCfg.capex > 0, hasJ = jCfg && jCfg.capex > 0;
+  let mergedKJ = false;
+
+  for (const c of crops) {
+    const cfg = configs[c.key];
+    if (cfg.capex <= 0) continue;
+
+    // Skip J if merged with K
+    if (c.key === 'J' && mergedKJ) continue;
+
+    let label = c.label, capex = cfg.fullCapex || cfg.capex, clickKey = c.key;
+    const roi = calcCropROI(cfg, c);
+
+    // Merge K+J
+    if (c.key === 'K' && hasJ) {
+      const jRoi = calcCropROI(jCfg, crops.find(x => x.key === 'J'));
+      if (Math.abs(roi.pct - jRoi.pct) < 0.5) {
+        label = 'Keiki + Japanese';
+        capex += (jCfg.fullCapex || jCfg.capex);
+        mergedKJ = true;
+      }
+    }
+
+    const isSelected = c.key === selectedROICrop || (mergedKJ && c.key === 'K' && selectedROICrop === 'J');
+    html += `<div class="roi-item${isSelected ? ' roi-highlight' : ''}" style="cursor:pointer" onclick="showCropCF('${clickKey}')">
+      <div>
+        <div class="roi-label">${label}</div>
+        <div style="font-size:8px;color:var(--text-dim)">${fmtK(capex)} capex | ${fmtK(roi.equity)} equity</div>
+      </div>
+      <div class="roi-value" style="color:var(--green)">${roi.pct.toFixed(1)}%</div>
+    </div>`;
+  }
+
+  grid.innerHTML = html;
+  // Clear detail table if crops changed
+  document.getElementById('roiDetail').innerHTML = '';
+}
+
+// Combined cashflows across all new crops for total IRR
+function simulateCombinedCF(crops, configs, s) {
+  // Find earliest start and latest end across all crops
+  let minYear = 9999, maxYear = 0;
+  const sims = [];
+  for (const c of crops) {
+    const cfg = configs[c.key];
+    if (!cfg || cfg.capex <= 0) continue;
+    const sim = simulateCropCF(cfg, c);
+    sims.push(sim);
+    for (const yr of sim.years) {
+      if (yr.year < minYear) minYear = yr.year;
+      if (yr.year > maxYear) maxYear = yr.year;
+    }
+  }
+  // Sum cashflows by year
+  const combined = [];
+  for (let y = minYear; y <= maxYear; y++) {
+    let total = 0;
+    for (const sim of sims) {
+      const yr = sim.years.find(r => r.year === y);
+      if (yr) total += yr.netCF;
+    }
+    combined.push(total);
+  }
+  return combined;
+}
+
+// Simulate year-by-year cashflows for a crop — used by both ROI calc and detail table
+function simulateCropCF(cfg, cDef) {
+  const s = state;
+  const totalCap = cfg.fullCapex || cfg.capex;
+  // For purchased facility: can only finance hard assets, not full purchase price
+  const loanBase = (cDef && cDef.isBuy) ? Math.min(s.tomatoHardAssets, totalCap) : totalCap;
+  const cropLoan = loanBase * s.financingPct / 100;
+  const cropEquity = totalCap - cropLoan;
+  const piAnnual = annualDebtSvc(cropLoan, s.interestRate, s.loanTermYears);
+  const ioAnnual = cropLoan * s.interestRate / 100;
+
+  const endQ = cfg.endQ;
+  const endYear = Math.floor(endQ / 10);
+  const endQtr = endQ % 10;
+  const startYear = Math.floor(cfg.startQ / 10);
+
+  let ioEndQ = endQtr + 2, ioEndYear = endYear;
+  while (ioEndQ > 4) { ioEndQ -= 4; ioEndYear++; }
+
+  const applyIO = s.interestOnly && !(cDef && cDef.isBuy);
+
+  function ramp(yr) {
+    const ry = cfg.rampYears;
+    if (ry === 0) return 1.0;
+    if (ry === 1) return yr === 1 ? 0.70 : 1.0;
+    if (ry === 2) return yr === 1 ? 0.50 : yr === 2 ? 0.85 : 1.0;
+    return yr === 1 ? 0.40 : yr === 2 ? 0.65 : yr === 3 ? 0.85 : 1.0;
+  }
+
+  const lastYear = Math.max(startYear + s.loanTermYears + 2, 2035);
+  const years = [];
+  let cumCF = 0, totalNetCF = 0, numYears = 0;
+
+  for (let year = startYear; year <= lastYear; year++) {
+    const n = year - 2026;
+    const revMult = Math.pow(1 + s.revInflation / 100, n);
+    const cstMult = Math.pow(1 + s.costInflation / 100, n);
+
+    let rev = 0, exp = 0, phase = '';
+    if (year < endYear) {
+      phase = 'Build';
+    } else if (year === endYear) {
+      const frac = (4 - endQtr + 1) / 4;
+      const r = ramp(1);
+      rev = cfg.baseRev * r * frac * revMult;
+      exp = cfg.baseExp * r * frac * cstMult;
+      phase = 'Yr1 (' + (ramp(1)*100).toFixed(0) + '%)';
+    } else {
+      const prodYr = year - endYear + 1;
+      const r = ramp(prodYr);
+      rev = cfg.baseRev * r * revMult;
+      exp = cfg.baseExp * r * cstMult;
+      phase = r < 1 ? 'Yr' + prodYr + ' (' + (r*100).toFixed(0) + '%)' : 'Full';
+    }
+    const opInc = rev - exp;
+
+    const debtYear = year - startYear + 1;
+    let debt = 0;
+    if (debtYear >= 1 && debtYear <= s.loanTermYears) {
+      if (applyIO && year < ioEndYear) {
+        debt = ioAnnual;
+      } else if (applyIO && year === ioEndYear) {
+        const ioFrac = (ioEndQ - 1) / 4;
+        debt = ioAnnual * ioFrac + piAnnual * (1 - ioFrac);
+      } else {
+        debt = piAnnual;
+      }
+      if (debtYear === 1) {
+        const startQtr = cfg.startQ % 10;
+        debt *= (4 - startQtr + 1) / 4;
+      }
+    }
+
+    let eqOut = 0;
+    if (year === startYear) eqOut = cropEquity;
+
+    const netCF = opInc - debt - eqOut;
+    cumCF += netCF;
+    totalNetCF += netCF;
+    numYears++;
+
+    years.push({ year, phase, rev, exp, opInc, debt, eqOut, netCF, cumCF });
+  }
+
+  // IRR: cashflows include equity outlay in year 0
+  const cfArray = years.map(y => y.netCF);
+  const irr = calcIRR(cfArray) * 100;
+
+  return { years, pct: irr, equity: cropEquity, loan: cropLoan, piAnnual, ioAnnual };
+}
+
+function calcCropROI(cfg, cDef) {
+  return simulateCropCF(cfg, cDef);
+}
+
+function showCropCF(key) {
+  selectedROICrop = key;
+  updateROI(lastROICrops, lastROIConfigs);
+  const cDef = CROP_DEFS.find(c => c.key === key);
+  const cfg = lastROIConfigs[key];
+  if (!cfg) return;
+
+  const sim = simulateCropCF(cfg, cDef);
+
+  const p = (v) => {
+    if (Math.abs(v) < 500) return '\u2014';
+    const m = Math.abs(v) / 1e6;
+    return (v < 0 ? '\u2212' : '') + m.toFixed(2);
+  };
+
+  let rows = '';
+  for (const yr of sim.years) {
+    rows += `<tr><td>${yr.year}</td><td>${yr.phase}</td><td>${p(yr.rev)}</td><td>${p(-yr.exp)}</td><td>${p(yr.opInc)}</td><td>${p(-yr.debt)}</td><td>${p(yr.netCF)}</td><td>${p(yr.cumCF)}</td></tr>`;
+  }
+
+  document.getElementById('roiDetail').innerHTML = `
+    <div style="margin-top:10px;font-size:9px;color:var(--accent);font-weight:700;letter-spacing:0.1em;text-transform:uppercase">${cDef.label} — Cashflow Detail ($M) · IRR = ${sim.pct.toFixed(1)}%</div>
+    <table class="fin-table" style="font-size:10px;margin-top:6px">
+      <thead><tr><th>Year</th><th>Phase</th><th>Rev</th><th>Exp</th><th>OpInc</th><th>Debt</th><th>NetCF</th><th>CumCF</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// === INTERNAL FUNDING SCENARIO ===
+function updateInternalCapTable(allCrops, configs, totalRev, totalExp, totalDebt, existKJ, existL, existDebt) {
+  const s = state;
+
+  // Compute per-year equity deployment based on crop construction starts (excludes TB)
+  const equityByYear = {};
+  for (const c of allCrops) {
+    if (c.isBuy) continue;
+    const cfg = configs[c.key];
+    if (!cfg || cfg.capex <= 0) continue;
+    const fullCapex = cfg.fullCapex || cfg.capex;
+    const cropEquity = fullCapex * (1 - s.financingPct / 100);
+    const startYear = Math.floor(cfg.startQ / 10);
+    equityByYear[startYear] = (equityByYear[startYear] || 0) + cropEquity;
+  }
+
+  // Vesting deltas: annual changes from base schedule
+  // 2026→2027: JJB +2.5, EB +0.5, JS -3.0
+  // Applied at start of each year through 2029
+  const vestingDeltas = {
+    2027: { JJB: 2.5, EB: 0.5, JS: -3.0 },
+    2028: { JJB: 2.5, EB: 0.5, JS: -3.0 },
+    2029: { JJB: 2.5, EB: 0.5, JS: -3.0 },
+  };
+  const jsTransferPct = s.jsTransferPct;
+
+  // Start with 2026 base — percentages that lock and persist
+  let jjbPct = 42.5, ebPct = 26.0, jsPct = 31.5;
+
+  const d = { jjbInv: [], jjbPct: [], ebPct: [], jsPct: [], bizVal: [], jjbVal: [], ebVal: [], jsVal: [], transfer: [], pe: [], opInc: [] };
+
+  for (let i = 0; i < YEARS.length; i++) {
+    const year = YEARS[i];
+
+    // Apply vesting delta (contractual transfer, in % points)
+    if (vestingDeltas[year]) {
+      jjbPct += vestingDeltas[year].JJB;
+      ebPct += vestingDeltas[year].EB;
+      jsPct += vestingDeltas[year].JS;
+    }
+
+    // Post-2029: JS→EB slider transfer
+    if (year > 2029 && jsTransferPct > 0 && jsPct > jsTransferPct) {
+      jsPct -= jsTransferPct;
+      ebPct += jsTransferPct;
+    }
+
+    const eqDeploy = equityByYear[year] || 0;
+    const opInc = totalRev[i] - totalExp[i];
+    const pe = s.yearPE[year] || 8;
+    const bizValue = opInc * pe;
+
+    // JJB equity investment → dilutes EB/JS, locks in new percentages
+    if (eqDeploy > 0 && bizValue > 0) {
+      const postMoney = bizValue + eqDeploy;
+      jjbPct = (jjbPct / 100 * bizValue + eqDeploy) / postMoney * 100;
+      ebPct = ebPct / 100 * bizValue / postMoney * 100;
+      jsPct = jsPct / 100 * bizValue / postMoney * 100;
+    }
+
+    // JS→EB transfer (in % points, applied after base schedule ends in 2029)
+    let transfer = 0;
+    if (year > 2029 && jsPct > jsTransferPct && jsTransferPct > 0) {
+      jsPct -= jsTransferPct;
+      ebPct += jsTransferPct;
+      transfer = jsTransferPct / 100 * bizValue;
+    }
+
+    d.jjbInv.push(eqDeploy);
+    d.jjbPct.push(jjbPct);
+    d.ebPct.push(ebPct);
+    d.jsPct.push(jsPct);
+    d.pe.push(pe);
+    d.opInc.push(opInc);
+    d.bizVal.push(bizValue);
+    d.jjbVal.push(jjbPct / 100 * bizValue);
+    d.ebVal.push(ebPct / 100 * bizValue);
+    d.jsVal.push(jsPct / 100 * bizValue);
+    d.transfer.push(transfer);
+  }
+
+  const yearHeaders = YEARS.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
+  const p = (v) => { if (Math.abs(v) < 500) return '\u2014'; return fmtK(v); };
+  const pPct = (v) => `${v.toFixed(1)}%`;
+
+  const fmtRow = (label, data, fn, cls) =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fn(v)}</td>`).join('')}</tr>`;
+  const sectionRow = (label) =>
+    `<tr class="section-header"><td colspan="${YEARS.length + 1}">${label}</td></tr>`;
+
+  // PE dropdown row
+  const peOpts = [4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
+  const peRow = `<tr><td style="color:var(--text-muted)">P/E Multiple</td>${YEARS.map((y, i) =>
+    `<td><select data-year="${y}" class="pe-select" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>`
+  ).join('')}</tr>`;
+
+  const lastIdx = YEARS.length - 1;
+  const finalJJB = d.jjbPct[lastIdx], finalEB = d.ebPct[lastIdx], finalJS = d.jsPct[lastIdx];
+
+  document.getElementById('internalCapTable').innerHTML = `
+    <div style="font-size:9px;color:var(--text-muted);margin:8px 0 4px">JJB funds all equity · JS transfers ${jsTransferPct.toFixed(1)}%/yr to EB · Exit: JJB ${finalJJB.toFixed(1)}% (${p(d.jjbVal[lastIdx])}) · EB ${finalEB.toFixed(1)}% (${p(d.ebVal[lastIdx])}) · JS ${finalJS.toFixed(1)}% (${p(d.jsVal[lastIdx])})</div>
+    <table class="fin-table" style="font-size:10px">
+      <thead><tr><th></th>${yearHeaders}</tr></thead>
+      <tbody>
+        ${sectionRow('Ownership %')}
+        ${fmtRow('JJB', d.jjbPct, pPct)}
+        ${fmtRow('EB', d.ebPct, pPct)}
+        ${fmtRow('JS', d.jsPct, pPct)}
+        ${sectionRow('Investment & Transfers')}
+        ${fmtRow('JJB Equity In', d.jjbInv, p)}
+        ${sectionRow('Valuations')}
+        ${peRow}
+        ${fmtRow('Business', d.bizVal, p)}
+        ${fmtRow('JJB', d.jjbVal, p)}
+        ${fmtRow('EB', d.ebVal, p)}
+        ${fmtRow('JS', d.jsVal, p)}
+      </tbody>
+    </table>`;
+
+  // Set dropdown values and bind events
+  document.querySelectorAll('.pe-select').forEach(sel => {
+    const year = Number(sel.dataset.year);
+    sel.value = s.yearPE[year] || 8;
+    sel.addEventListener('change', () => {
+      s.yearPE[year] = Number(sel.value);
+      recalc();
+    });
+  });
+
+  // Export ownership for distributions page
+  const ownershipExport = {};
+  for (let i = 0; i < YEARS.length; i++) {
+    ownershipExport[YEARS[i]] = { EB: d.ebPct[i], JS: d.jsPct[i], JJB: d.jjbPct[i] };
+  }
+  localStorage.setItem('gh-ownership', JSON.stringify(ownershipExport));
+}
+
+// === SAVE / LOAD ===
+function saveModel() {
+  localStorage.setItem('gh-expansion-v2', JSON.stringify(state));
+  localStorage.setItem('gh-expansion-theme', document.body.classList.contains('light') ? 'light' : 'dark');
+  const btn = document.getElementById('saveBtn');
+  btn.textContent = 'saved!';
+  setTimeout(() => { btn.textContent = 'save model'; }, 1500);
+}
+
+function loadSavedModel() {
+  const saved = localStorage.getItem('gh-expansion-v2');
+  if (saved) {
+    try { Object.assign(state, JSON.parse(saved)); } catch(e) {}
+  }
+  const theme = localStorage.getItem('gh-expansion-theme');
+  if (theme === 'light') {
+    document.body.classList.add('light');
+    document.getElementById('themeToggle').textContent = 'dark';
+  }
+}
+
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const isLight = document.body.classList.contains('light');
+  document.getElementById('themeToggle').textContent = isLight ? 'dark' : 'light';
+  document.body.offsetHeight;
+  document.querySelectorAll('input[type=range]').forEach(input => {
+    const key = input.id;
+    if (state[key] !== undefined && sliderOpts[key]) {
+      const pct = ((state[key] - sliderOpts[key].min) / (sliderOpts[key].max - sliderOpts[key].min)) * 100;
+      input.style.background = sliderBg(pct);
+    }
+  });
+  if (chart) { chart.destroy(); chart = null; }
+  recalc();
+}
+
+// === INIT ===
+document.getElementById('versionLabel').textContent = 'v 03-27 15:00';
+loadSavedModel();
+document.getElementById('debugToggle').checked = state.debug;
+window._pageState = state;
+buildSliders();
+recalc();
+</script>
+</body>
+</html>
