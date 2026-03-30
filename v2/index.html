@@ -114,12 +114,15 @@ function fCM(n) { // table cell in $M
 }
 
 // --- SLIDER BUILDER ---
+const _sliderOpts = {};  // store opts by key so onSlider can look them up
+
 function sliderBg(pct) {
   const s = getComputedStyle(document.documentElement);
   return `linear-gradient(to right,${s.getPropertyValue('--slider-fill').trim()} ${pct}%,${s.getPropertyValue('--slider-track').trim()} ${pct}%)`;
 }
 
 function makeSlider(key, opts) {
+  _sliderOpts[key] = opts;
   const val = settings[key] ?? opts.def;
   const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
   const sub = opts.sub ? `<div class="slider-sublabel">${opts.sub(val)}</div>` : '';
@@ -130,11 +133,12 @@ function makeSlider(key, opts) {
     </div>
     <input type="range" id="sl-${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${val}"
       style="background:${sliderBg(pct)}"
-      oninput="onSlider('${key}',this,${JSON.stringify(opts).replace(/"/g,'&quot;')})">
+      oninput="onSlider('${key}',this)">
   </div>`;
 }
 
-function onSlider(key, el, opts) {
+function onSlider(key, el) {
+  const opts = _sliderOpts[key];
   const val = Number(el.value);
   const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
   el.style.background = sliderBg(pct);
