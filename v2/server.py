@@ -89,40 +89,46 @@ def compute(s):
     ri = s.get("revInflation", 4)
     ci = s.get("costInflation", 3)
 
-    if debug:
-        base_rev = model.EXISTING_KJ_REV + model.EXISTING_L_REV
-        base_exp = base_rev * model.EXISTING_EXP_RATIO
-        g = model.DEFAULT_GROWTH
-        rev = [base_rev * (1 + g)**i for i in range(model.N_YEARS)]
-        exp = [base_exp * (1 + g)**i for i in range(model.N_YEARS)]
-        dep_crops = []
-        crop_data = []
-    else:
-        rev = [0.0] * model.N_YEARS
-        exp = [0.0] * model.N_YEARS
+    # Per-component revenue/expense for detailed table rows
+    rev_rows = {}  # label → [annual values]
+    exp_rows = {}
+    rev = [0.0] * model.N_YEARS
+    exp = [0.0] * model.N_YEARS
+    dep_crops = []
+    crop_data = []
 
-        # Existing ops
-        for i, y in enumerate(model.YEARS):
-            n = y - 2026
-            rm = (1 + ri / 100) ** n
-            cm = (1 + ci / 100) ** n
-            rev[i] += model.EXISTING_KJ_REV * rm
-            l_base = model.EXISTING_L_REV if y <= 2026 else s.get("lettuceLbs", 600000) * s.get("lettucePrice", 7.0)
-            rev[i] += l_base * rm
-            exp[i] += model.EXISTING_KJ_REV * model.EXISTING_EXP_RATIO * cm
-            l_exp = model.EXISTING_EXP_RATIO if y <= 2026 else s.get("lettuceExpPct", 70) / 100
-            exp[i] += l_base * l_exp * cm
+    # Existing ops (always included)
+    ekj_rev = [0.0] * model.N_YEARS
+    ekj_exp = [0.0] * model.N_YEARS
+    el_rev = [0.0] * model.N_YEARS
+    el_exp = [0.0] * model.N_YEARS
+    for i, y in enumerate(model.YEARS):
+        n = y - 2026
+        rm = (1 + ri / 100) ** n
+        cm = (1 + ci / 100) ** n
+        ekj_rev[i] = model.EXISTING_KJ_REV * rm
+        ekj_exp[i] = model.EXISTING_KJ_REV * model.EXISTING_EXP_RATIO * cm
+        l_base = model.EXISTING_L_REV if y <= 2026 else s.get("lettuceLbs", 600000) * s.get("lettucePrice", 7.0)
+        el_rev[i] = l_base * rm
+        el_exp[i] = l_base * (model.EXISTING_EXP_RATIO if y <= 2026 else s.get("lettuceExpPct", 70) / 100) * cm
+        rev[i] += ekj_rev[i] + el_rev[i]
+        exp[i] += ekj_exp[i] + el_exp[i]
+    rev_rows["Existing K/J"] = ekj_rev
+    exp_rows["Existing K/J"] = ekj_exp
+    rev_rows["Existing Lettuce"] = el_rev
+    exp_rows["Existing Lettuce"] = el_exp
 
-        # New crops
+    # New crops (unless debug mode)
+    if not debug:
         crop_data = build_crops(s)
-        dep_crops = []
         for crop in crop_data:
             cr, ce = model.crop_annual_rev_exp(crop["base_rev"], crop["base_exp"], crop["end_q"], crop["ramp_years"], ri, ci)
-            if not crop.get("is_buy"):  # TB excluded from main rev/exp
+            if not crop.get("is_buy"):
                 for i in range(model.N_YEARS):
                     rev[i] += cr[i]
                     exp[i] += ce[i]
-            if not crop.get("is_buy"):
+                rev_rows[crop["label"]] = cr
+                exp_rows[crop["label"]] = ce
                 dep_crops.append({"end_year": crop["end_year"], "capex": crop["capex"]})
 
     result = model.run_full_model(rev, exp, s, dep_crops)
@@ -187,6 +193,8 @@ def compute(s):
         "crop_irrs": crop_irrs,
         "total_irr": round(total_irr, 1),
         "crops": [{"key": c["key"], "label": c["label"], "acres": c["acres"], "capex": c["capex"]} for c in crop_data],
+        "rev_rows": rev_rows,
+        "exp_rows": exp_rows,
     }
 
 

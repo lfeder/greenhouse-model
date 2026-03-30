@@ -291,14 +291,23 @@ function render(d) {
   // Chart — stacked revenue bars
   renderChart(d);
 
-  // Revenue & expense table
+  // Revenue & expense table — per-crop rows
   let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   rt += sr('Revenue', Y);
-  // Existing + new crop rows would need crop-level data from server
-  // For now, show totals
-  rt += tr('Total Revenue', d.rev, fCM);
-  rt += tr('Total Expenses', d.exp.map(v => -v), fCM);
-  rt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
+  if (d.rev_rows) {
+    for (const [name, data] of Object.entries(d.rev_rows)) {
+      rt += tr(name, data, fCM);
+    }
+  }
+  rt += tr('Total Revenue', d.rev, fCM, 'subtotal-row');
+  rt += sr('Expenses', Y);
+  if (d.exp_rows) {
+    for (const [name, data] of Object.entries(d.exp_rows)) {
+      rt += tr(name, data.map(v => -v), fCM);
+    }
+  }
+  rt += tr('Total Expenses', d.exp.map(v => -v), fCM, 'subtotal-row');
+  rt += tr('Operating Income', d.op_inc, fCM, 'total-row-table');
   rt += '</tbody>';
   document.getElementById('revExpTable').innerHTML = rt;
 
