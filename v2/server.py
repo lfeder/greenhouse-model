@@ -90,9 +90,11 @@ def compute(s):
     ci = s.get("costInflation", 3)
 
     if debug:
-        d = model.DEBUG
-        rev = [d["rev_2026"] * (1 + d["growth"])**i for i in range(model.N_YEARS)]
-        exp = [d["exp_2026"] * (1 + d["growth"])**i for i in range(model.N_YEARS)]
+        base_rev = model.EXISTING_KJ_REV + model.EXISTING_L_REV
+        base_exp = base_rev * model.EXISTING_EXP_RATIO
+        g = model.DEFAULT_GROWTH
+        rev = [base_rev * (1 + g)**i for i in range(model.N_YEARS)]
+        exp = [base_exp * (1 + g)**i for i in range(model.N_YEARS)]
         dep_crops = []
         crop_data = []
     else:

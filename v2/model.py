@@ -52,8 +52,8 @@ HI_BRACKETS  = [(b[0] if b[0] is not None else float("inf"), b[1]) for b in C["t
 # Loans
 LOAN_DEFS = C["loans"]
 
-# Debug defaults
-DEBUG = C["debug_defaults"]
+# Default growth for existing ops
+DEFAULT_GROWTH = C["existing_ops"]["default_growth"]
 
 # Depreciation defaults
 DEP_DEFAULTS = C["depreciation_defaults"]
@@ -652,9 +652,12 @@ def write_csv(model, path="output.csv"):
 if __name__ == "__main__":
     settings = json.load(open(_DIR / "settings.json"))
 
-    # Debug mode: existing ops only
-    rev = [DEBUG["rev_2026"] * (1 + DEBUG["growth"])**i for i in range(N_YEARS)]
-    exp = [DEBUG["exp_2026"] * (1 + DEBUG["growth"])**i for i in range(N_YEARS)]
+    # Existing ops only (debug mode)
+    base_rev = EXISTING_KJ_REV + EXISTING_L_REV
+    base_exp = base_rev * EXISTING_EXP_RATIO
+    g = DEFAULT_GROWTH
+    rev = [base_rev * (1 + g)**i for i in range(N_YEARS)]
+    exp = [base_exp * (1 + g)**i for i in range(N_YEARS)]
 
     model = run_full_model(rev, exp, settings)
     csv_path = write_csv(model)

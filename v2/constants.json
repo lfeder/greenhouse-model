@@ -6,6 +6,7 @@
     "lettuce_rev": 3000000,
     "exp_ratio": 0.66,
     "base_rev_per_ac": 958333,
+    "default_growth": 0.05,
     "paidoff_2026": {"interest": 2934, "principal": 51901, "note": "AgCredit + JJB Solar"}
   },
 
@@ -96,11 +97,5 @@
     "exist_state_annual": 1000000,
     "fed_bonus_pct": 100,
     "state_useful_life": 10
-  },
-
-  "debug_defaults": {
-    "rev_2026": 14200000,
-    "exp_2026": 9700000,
-    "growth": 0.05
   }
 }
