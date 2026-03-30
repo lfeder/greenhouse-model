@@ -15,7 +15,7 @@ body.light {
 }
 body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; padding-bottom: 60px; }
 
-.header { background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 22px 32px 18px; }
+.header { background: var(--header-bg); border-bottom: 1px solid var(--border); padding: 22px 32px 18px; position: sticky; top: 0; z-index: 100; }
 .header-inner { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: baseline; }
 .header-title { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--text); }
 

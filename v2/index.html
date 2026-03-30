@@ -365,7 +365,8 @@ function render(d) {
   // Tax detail table
   let tx = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   tx += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
-  tx += tr('Loan Interest', d.loan_total_int.map(v => -v), fCM);
+  const totalInt = d.total_interest || d.loan_total_int;
+  tx += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Total Interest</a></td>${totalInt.map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
   tx += tr('Taxable Income', d.taxable_inc, fCM);
   tx += sr('Federal', Y);
   tx += tr('Bonus Depreciation', d.dep.fed.map(v => -v), fCM);
@@ -419,8 +420,8 @@ function render(d) {
   // Distribution waterfall
   let dt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   dt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
-  dt += tr('Existing DS', d.loan_total_ds.map(v => -v), fCM);
-  dt += tr('Expansion DS', d.expansion_ds.map(v => -v), fCM);
+  dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Existing DS</a></td>${d.loan_total_ds.map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+  dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Expansion DS</a></td>${d.expansion_ds.map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
   dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCM);
   dt += tr('Distributable Cash', d.distrib_cash, fCM, 'total-row-table');
   // Tax rows with tooltips — all data from model, no math here

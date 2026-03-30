@@ -586,16 +586,19 @@ def compute_partner_cash(model, ownership):
 # 10. FULL MODEL
 # ============================================================
 
-def run_full_model(rev, exp, settings, dep_crops=None):
+def run_full_model(rev, exp, settings, dep_crops=None, expansion_int=None):
     """Run everything. Returns all intermediate values."""
     s = settings
     loans = compute_loan_schedules()
     dep = compute_depreciation(dep_crops or [], s)
     t_bill_rate = s.get("tBillRate", 4) / 100
+    expansion_int = expansion_int or [0] * N_YEARS
 
     op_inc = [r - e for r, e in zip(rev, exp)]
     capex_res = [r * 0.02 for r in rev]
-    taxable_inc = [o - li for o, li in zip(op_inc, loans["total_int"])]
+    # Total interest = existing loans + expansion loans
+    total_interest = [loans["total_int"][i] + expansion_int[i] for i in range(N_YEARS)]
+    taxable_inc = [o - ti for o, ti in zip(op_inc, total_interest)]
 
     # Tax liability per year
     nol_left = FED_NOL
@@ -627,7 +630,8 @@ def run_full_model(rev, exp, settings, dep_crops=None):
     return {
         "years": YEARS, "rev": rev, "exp": exp,
         "op_inc": op_inc, "capex_res": capex_res,
-        "taxable_inc": taxable_inc, "tax_liab": tax_liab, "tax_cash": tax_cash, "tax_cash_detail": tax_cash_detail,
+        "taxable_inc": taxable_inc, "total_interest": total_interest,
+        "tax_liab": tax_liab, "tax_cash": tax_cash, "tax_cash_detail": tax_cash_detail,
         "distrib_cash": distrib_cash, "tax_detail": tax_detail,
         "loans": loans, "dep": dep,
         "ownership": ownership, "partners": partners,
@@ -1039,8 +1043,11 @@ def compute_kpis(s, crop_data, debug):
 def run_everything(s):
     """Single entry point: settings → all computed data for HTML."""
     rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres = build_rev_exp(s)
-    result = run_full_model(rev, exp, s, dep_crops)
+
+    # Compute expansion DS BEFORE full model so interest is included in taxable income
     crop_irrs, total_irr, expansion_int, expansion_prin = compute_crop_irrs(crop_data, s)
+
+    result = run_full_model(rev, exp, s, dep_crops, expansion_int)
     kpis = compute_kpis(s, crop_data, s.get("debug", False))
 
     # Compute equity deployed per year for ownership dilution
