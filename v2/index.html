@@ -366,7 +366,7 @@ function render(d) {
   // Ownership — summary rows + collapsible detail
   let ot = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   for (const p of ['JJB', 'EB', 'JS']) {
-    ot += `<tr class="subtotal-row"><td>${p}</td>${d.ownership.map(o => `<td>${o[p].toFixed(1)}%</td>`).join('')}</tr>`;
+    ot += `<tr><td>${p}</td>${d.ownership.map(o => `<td>${o[p].toFixed(1)}%</td>`).join('')}</tr>`;
   }
   // EB grant summary
   ot += `<tr><td colspan="${Y.length+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
