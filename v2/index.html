@@ -300,8 +300,9 @@ function render(d) {
   const steadyOpInc = steadyRev - steadyExp;
   const totalCapex = d.total_capex + d.shared_capex;
   const equityAmt = totalCapex * (1 - d.financing_pct / 100);
-  const peakDebt = Math.max(...d.loan_total_ds);
-  const lastDebt = d.loan_total_ds[lastIdx];
+  const combinedDS = d.loan_total_ds.map((v, i) => v + d.expansion_ds[i]);
+  const peakDebt = Math.max(...combinedDS);
+  const lastDebt = combinedDS[lastIdx];
   document.getElementById('kpiGrid').innerHTML = [
     ['Total CapEx', fK(totalCapex), `crop: ${fK(d.total_capex)} | infra: ${fK(d.shared_capex)}`],
     ['Equity', fK(equityAmt), `${100 - d.financing_pct}% of ${fK(totalCapex)}`],
@@ -370,10 +371,8 @@ function render(d) {
   dt += tr('Expenses', d.exp.map(v => -v), fCM);
   dt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
   dt += sr('Cash Adjustments', Y);
-  dt += tr('Existing Loan Int', d.loan_total_int.map(v => -v), fCM);
-  dt += tr('Existing Loan Prin', d.loan_total_prin.map(v => -v), fCM);
-  dt += tr('Expansion Loan Int', d.expansion_int.map(v => -v), fCM);
-  dt += tr('Expansion Loan Prin', d.expansion_prin.map(v => -v), fCM);
+  dt += tr('Existing DS', d.loan_total_ds.map(v => -v), fCM);
+  dt += tr('Expansion DS', d.expansion_ds.map(v => -v), fCM);
   dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCM);
   dt += tr('Distributable Cash', d.distrib_cash, fCM, 'total-row-table');
   dt += sr('Waterfall', Y);
