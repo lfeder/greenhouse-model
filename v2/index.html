@@ -355,11 +355,22 @@ function render(d) {
   }
   document.getElementById('irrGrid').innerHTML = ig;
 
-  // Ownership
+  // Ownership — summary rows + collapsible detail
   let ot = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-  ot += sr('Ownership %', Y);
   for (const p of ['JJB', 'EB', 'JS']) {
-    ot += `<tr><td>${p}</td>${d.ownership.map(o => `<td>${o[p].toFixed(1)}%</td>`).join('')}</tr>`;
+    ot += `<tr class="subtotal-row"><td>${p}</td>${d.ownership.map(o => `<td>${o[p].toFixed(1)}%</td>`).join('')}</tr>`;
+  }
+  // Detail toggle
+  if (d.ownership_detail) {
+    ot += `<tr><td colspan="${Y.length+1}" style="padding-top:8px">
+      <a href="#" onclick="document.getElementById('ownershipDetail').style.display=document.getElementById('ownershipDetail').style.display==='none'?'':'none';return false"
+         style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
+    ot += `</tbody><tbody id="ownershipDetail" style="display:none">`;
+    for (const row of d.ownership_detail) {
+      const label = row[0];
+      const vals = row.slice(1);
+      ot += `<tr><td>${label}</td>${vals.map(v => `<td>${typeof v === 'number' ? v.toFixed(1) + '%' : v}</td>`).join('')}</tr>`;
+    }
   }
   ot += '</tbody>';
   document.getElementById('ownershipTable').innerHTML = ot;

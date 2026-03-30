@@ -247,15 +247,14 @@ def calc_tax_cash_timing(liabilities):
 def get_tier1(year):
     return TIER1.get(year, TIER1_DEFAULT)
 
-def compute_ownership(settings, cum_pedd_by_year):
-    """Compute ownership % for each year.
+def compute_ownership(settings, cum_pedd_by_year, equity_by_year=None, biz_values=None):
+    """Compute ownership % for each year with detailed activity log.
 
-    Drivers:
-    1. Start: distribution_base 2026
-    2. JS buyout: JJB buys 3%/yr from JS in 2027-2030
-    3. EB grant (PEDD): +0.5% per $500K repaid, 0.25% from JS + 0.25% from JJB
-    4. EB grant (expansion): slider % from JS, between start/stop years
-    5. JJB equity investment dilution (for expansion scenarios)
+    Drivers (in order each year):
+    1. Vesting: JJB buys 3%/yr from JS (2027-2030)
+    2. JJB equity investment: dilutes EB/JS at market value
+    3. EB grant (PEDD): +0.5% per $500K repaid, from JS+JJB equally
+    4. EB grant (expansion): slider % from JS
     """
     jjb = DIST_BASE["JJB"]
     eb = DIST_BASE["EB"]
@@ -268,33 +267,80 @@ def compute_ownership(settings, cum_pedd_by_year):
     exp_grant_start = settings.get("ebExpansionGrantStartYear", 2027)
     exp_grant_end = settings.get("ebExpansionGrantEndYear", 2035)
 
-    pedd_grant_earned = 0  # cumulative % granted from PEDD
-    result = []
+    equity_by_year = equity_by_year or {}
+    biz_values = biz_values or [0] * N_YEARS
+
+    pedd_grant_earned = 0
+    result = []       # [{year, JJB, EB, JS}, ...]
+    detail_rows = []  # [[label, y0, y1, ...], ...] for display
+
+    # Prepare detail tracking
+    start_jjb, start_eb, start_js = [], [], []
+    buyout_row, dilution_row = [], []
+    pedd_grant_row, exp_grant_row = [], []
+    end_jjb, end_eb, end_js = [], [], []
 
     for i, year in enumerate(YEARS):
-        # JS buyout: JJB buys from JS
+        start_jjb.append(jjb); start_eb.append(eb); start_js.append(js)
+
+        # 1. Vesting: JJB buys from JS
+        buy = 0
         if year in buyout_years:
             js -= buyout_pct
             jjb += buyout_pct
+            buy = buyout_pct
+        buyout_row.append(buy)
 
-        # EB grant (PEDD): based on cumulative PE/DD repaid
+        # 2. JJB equity investment → dilution at market value
+        eq_deploy = equity_by_year.get(year, 0)
+        biz_val = biz_values[i]
+        dilution = 0
+        if eq_deploy > 0 and biz_val > 0:
+            post_money = biz_val + eq_deploy
+            old_jjb = jjb
+            jjb = (jjb / 100 * biz_val + eq_deploy) / post_money * 100
+            eb = eb / 100 * biz_val / post_money * 100
+            js = js / 100 * biz_val / post_money * 100
+            dilution = jjb - old_jjb
+        dilution_row.append(dilution)
+
+        # 3. EB grant (PEDD)
         cum_pedd = cum_pedd_by_year[i] if i < len(cum_pedd_by_year) else 0
         target_grant = min(EB_GRANT_PEDD["max_pct"], int(cum_pedd / 500_000) * EB_GRANT_PEDD["per_500k"])
         new_grant = target_grant - pedd_grant_earned
         if new_grant > 0:
             eb += new_grant
-            js -= new_grant * EB_GRANT_PEDD["source_split"]["JS"] / (EB_GRANT_PEDD["source_split"]["JS"] + EB_GRANT_PEDD["source_split"]["JJB"])
-            jjb -= new_grant * EB_GRANT_PEDD["source_split"]["JJB"] / (EB_GRANT_PEDD["source_split"]["JS"] + EB_GRANT_PEDD["source_split"]["JJB"])
+            js -= new_grant * 0.5   # 50% from JS
+            jjb -= new_grant * 0.5  # 50% from JJB
             pedd_grant_earned = target_grant
+        pedd_grant_row.append(new_grant)
 
-        # EB grant (expansion): slider-driven, from JS only
+        # 4. EB grant (expansion)
+        exp_g = 0
         if exp_grant_pct > 0 and exp_grant_start <= year <= exp_grant_end:
             eb += exp_grant_pct
             js -= exp_grant_pct
+            exp_g = exp_grant_pct
+        exp_grant_row.append(exp_g)
 
+        end_jjb.append(jjb); end_eb.append(eb); end_js.append(js)
         result.append({"year": year, "JJB": round(jjb, 2), "EB": round(eb, 2), "JS": round(js, 2)})
 
-    return result
+    # Build detail rows for display
+    detail_rows = [
+        ["Starting JJB %"] + [round(v, 1) for v in start_jjb],
+        ["Starting EB %"] + [round(v, 1) for v in start_eb],
+        ["Starting JS %"] + [round(v, 1) for v in start_js],
+        ["JJB buys from JS"] + [round(v, 1) for v in buyout_row],
+        ["JJB equity dilution"] + [round(v, 1) for v in dilution_row],
+        ["EB grant (PEDD)"] + [round(v, 1) for v in pedd_grant_row],
+        ["EB grant (expansion)"] + [round(v, 1) for v in exp_grant_row],
+        ["Ending JJB %"] + [round(v, 1) for v in end_jjb],
+        ["Ending EB %"] + [round(v, 1) for v in end_eb],
+        ["Ending JS %"] + [round(v, 1) for v in end_js],
+    ]
+
+    return result, detail_rows
 
 
 # ============================================================
@@ -546,11 +592,12 @@ def run_full_model(rev, exp, settings, dep_crops=None):
     # Waterfall
     wf = run_waterfall(distrib_cash, tax_cash, t_bill_rate)
 
-    # Ownership (needs cum_pedd_by_year from waterfall)
-    ownership = compute_ownership(s, wf["cum_pedd_by_year"])
+    # Ownership computed in run_everything (needs equity_by_year + biz_values)
+    ownership = None
+    ownership_detail = None
 
-    # Partner cash
-    partners = compute_partner_cash({**wf, "tax_cash_dist": tax_cash}, ownership)
+    # Partner cash deferred to run_everything
+    partners = None
 
     # EB grant summary
     pedd_grant = min(EB_GRANT_PEDD["max_pct"], int(wf["cum_pedd"] / 500_000) * EB_GRANT_PEDD["per_500k"])
@@ -955,6 +1002,30 @@ def run_everything(s):
     crop_irrs, total_irr, expansion_int, expansion_prin = compute_crop_irrs(crop_data, s)
     kpis = compute_kpis(s, crop_data, s.get("debug", False))
 
+    # Compute equity deployed per year for ownership dilution
+    financing = s.get("financingPct", 65) / 100
+    equity_by_year = {}
+    for crop in crop_data:
+        if crop.get("is_buy"):
+            continue
+        start_year = crop["start_q"] // 10
+        crop_equity = crop["capex"] * (1 - financing)
+        equity_by_year[start_year] = equity_by_year.get(start_year, 0) + crop_equity
+
+    # Business values for dilution pricing (op_inc × default PE)
+    biz_values = [result["op_inc"][i] * 8 for i in range(N_YEARS)]  # 8x PE default
+
+    # Ownership with dilution
+    ownership, ownership_detail = compute_ownership(s, result["cum_pedd_by_year"], equity_by_year, biz_values)
+
+    # Partner cash (needs ownership)
+    partners = compute_partner_cash({**result, "tax_cash_dist": result["tax_cash"]}, ownership)
+    result["ownership"] = ownership
+    result["ownership_detail"] = ownership_detail
+    result["partners"] = partners
+    pedd_grant = min(EB_GRANT_PEDD["max_pct"], int(result["cum_pedd"] / 500_000) * EB_GRANT_PEDD["per_500k"])
+    result["pedd_grant"] = pedd_grant
+
     write_csv(result)
 
     return {
@@ -969,6 +1040,7 @@ def run_everything(s):
         "rev_rows": rev_rows, "exp_rows": exp_rows,
         "expansion_int": expansion_int, "expansion_prin": expansion_prin,
         "expansion_ds": [expansion_int[i] + expansion_prin[i] for i in range(N_YEARS)],
+        "ownership_detail": ownership_detail,
         **kpis,
     }
 
