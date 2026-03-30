@@ -336,6 +336,16 @@ function render(d) {
   // Op margin row
   const opMargin = d.op_inc.map((v, i) => d.rev[i] > 0 ? (v / d.rev[i] * 100) : 0);
   rt += `<tr><td>Op Margin</td>${opMargin.map(v => `<td>${v.toFixed(1)}%</td>`).join('')}</tr>`;
+  // Total debt outstanding
+  if (d.loan_data && d.expansion_loan_detail) {
+    const totalDebt = Y.map((_, i) => {
+      let bal = 0;
+      for (const sched of Object.values(d.loan_data)) bal += sched[i].end_bal;
+      for (const det of Object.values(d.expansion_loan_detail)) bal += (det.balance[i] || 0);
+      return bal;
+    });
+    rt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Total Debt</a></td>${totalDebt.map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`;
+  }
   rt += '</tbody>';
   document.getElementById('revExpTable').innerHTML = rt;
 

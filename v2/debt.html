@@ -62,10 +62,21 @@ async function load() {
   el += '</tbody>';
   document.getElementById('existLoansTable').innerHTML = el;
 
-  // Expansion loans
+  // Expansion loans — per crop detail
   let xl = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-  xl += tr('Interest', d.expansion_int.map(v => -v));
-  xl += tr('Principal', d.expansion_prin.map(v => -v));
+  if (d.expansion_loan_detail) {
+    for (const [name, det] of Object.entries(d.expansion_loan_detail)) {
+      if (det.loan_amt > 0) {
+        xl += sr(name + ' (' + fCM(det.loan_amt) + 'M @ ' + (det.rate*100).toFixed(0) + '%, ' + det.term + 'yr)', Y);
+        xl += tr('Interest', det.interest.map(v => -v));
+        xl += tr('Principal', det.principal.map(v => -v));
+        xl += tr('Balance', det.balance);
+      }
+    }
+  }
+  xl += sr('Expansion Totals', Y);
+  xl += tr('Total Interest', d.expansion_int.map(v => -v));
+  xl += tr('Total Principal', d.expansion_prin.map(v => -v));
   xl += tr('Total DS', d.expansion_ds.map(v => -v), 'subtotal-row');
   xl += '</tbody>';
   document.getElementById('expansionLoansTable').innerHTML = xl;

@@ -971,6 +971,7 @@ def compute_crop_irrs(crop_data, s):
     crop_irrs = []
     expansion_int = [0.0] * N_YEARS
     expansion_prin = [0.0] * N_YEARS
+    expansion_loan_detail = {}  # per-crop: {interest, principal, balance}
 
     for crop in crop_data:
         cr, ce = crop_annual_rev_exp(crop["base_rev"], crop["base_exp"], crop["end_q"], crop["ramp_years"], ri, ci)
@@ -983,6 +984,9 @@ def compute_crop_irrs(crop_data, s):
         annual_ds = _annual_pmt(loan_amt, rate, term) if loan_amt > 0 else 0
 
         cfs = []
+        crop_int_row = []
+        crop_prin_row = []
+        crop_bal_row = []
         start_year = crop["start_q"] // 10
         end_year = crop["end_q"] // 10
         bal = loan_amt
@@ -999,9 +1003,17 @@ def compute_crop_irrs(crop_data, s):
             if not crop.get("is_buy"):
                 expansion_int[i] += yr_int
                 expansion_prin[i] += yr_prin
+            crop_int_row.append(yr_int)
+            crop_prin_row.append(yr_prin)
+            crop_bal_row.append(max(0, bal))
             if y == start_year:
                 cf -= equity
             cfs.append(cf)
+
+        expansion_loan_detail[crop["label"]] = {
+            "loan_amt": loan_amt, "rate": rate, "term": term,
+            "interest": crop_int_row, "principal": crop_prin_row, "balance": crop_bal_row,
+        }
 
         irr = calc_irr(cfs) * 100 if any(c != 0 for c in cfs) else 0
 
@@ -1026,7 +1038,7 @@ def compute_crop_irrs(crop_data, s):
                 built_cfs[i] += ci_data["cashflows"][i]
     total_irr = calc_irr(built_cfs) * 100 if any(c != 0 for c in built_cfs) else 0
 
-    return crop_irrs, round(total_irr, 1), expansion_int, expansion_prin
+    return crop_irrs, round(total_irr, 1), expansion_int, expansion_prin, expansion_loan_detail
 
 
 def compute_kpis(s, crop_data, debug):
@@ -1045,7 +1057,7 @@ def run_everything(s):
     rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres = build_rev_exp(s)
 
     # Compute expansion DS BEFORE full model so interest is included in taxable income
-    crop_irrs, total_irr, expansion_int, expansion_prin = compute_crop_irrs(crop_data, s)
+    crop_irrs, total_irr, expansion_int, expansion_prin, expansion_loan_detail = compute_crop_irrs(crop_data, s)
 
     result = run_full_model(rev, exp, s, dep_crops, expansion_int)
     kpis = compute_kpis(s, crop_data, s.get("debug", False))
@@ -1103,6 +1115,7 @@ def run_everything(s):
         "rev_rows": rev_rows, "exp_rows": exp_rows, "total_acres": total_acres,
         "expansion_int": expansion_int, "expansion_prin": expansion_prin,
         "expansion_ds": [expansion_int[i] + expansion_prin[i] for i in range(N_YEARS)],
+        "expansion_loan_detail": expansion_loan_detail,
         "ownership_detail": ownership_detail,
         "partners_no_exp": partners_no_exp,
         **kpis,
