@@ -86,4 +86,6 @@ if __name__ == "__main__":
     print("Google Sheet updates every 10s when data changes")
     t = threading.Thread(target=_gsheet_worker, daemon=True)
     t.start()
-    app.run(port=5050, debug=True, use_reloader=False)
+    # extra_files: auto-reload when model.py or constants.json change
+    app.run(port=5050, debug=True, use_reloader=True,
+            extra_files=[str(DIR / "model.py"), str(DIR / "constants.json")])
