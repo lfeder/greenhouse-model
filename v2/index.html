@@ -242,14 +242,14 @@ function renderChart(d) {
   const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
 
   // Merge existing ops into one bar, keep new crops separate
-  const existKeys = Object.keys(d.rev_rows).filter(k => k.startsWith('Existing'));
-  const newKeys = Object.keys(d.rev_rows).filter(k => !k.startsWith('Existing'));
-  const existData = d.years.map((_, i) => existKeys.reduce((s, k) => s + d.rev_rows[k][i], 0));
+  const existRows = d.rev_rows.filter(([k]) => k.startsWith('Existing'));
+  const newRows = d.rev_rows.filter(([k]) => !k.startsWith('Existing'));
+  const existData = d.years.map((_, i) => existRows.reduce((s, [, data]) => s + data[i], 0));
 
   const datasets = [
     { label: 'Existing Ops', data: existData, backgroundColor: '#4a8acc', borderRadius: 2 },
-    ...newKeys.map(k => ({
-      label: k, data: d.rev_rows[k], backgroundColor: CROP_COLORS[k] || '#888', borderRadius: 2,
+    ...newRows.map(([k, data]) => ({
+      label: k, data, backgroundColor: CROP_COLORS[k] || '#888', borderRadius: 2,
     })),
   ];
 
@@ -314,7 +314,7 @@ function render(d) {
   let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   rt += sr('Revenue', Y);
   if (d.rev_rows) {
-    for (const [name, data] of Object.entries(d.rev_rows)) {
+    for (const [name, data] of d.rev_rows) {
       rt += tr(name, data, fCM);
     }
   }

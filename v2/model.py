@@ -849,18 +849,19 @@ def build_rev_exp(s):
     ci = s.get("costInflation", 3)
     debug = s.get("debug", False)
 
-    rev_rows = {}
-    exp_rows = {}
+    # Ordered lists: [[name, data], ...] — order matters for display
+    rev_rows = []
+    exp_rows = []
     rev = [0.0] * N_YEARS
     exp = [0.0] * N_YEARS
 
-    # Existing ops — K, J, E, L
+    # Existing ops — K, J, E, L (in this order)
     for label, base in [("Existing Keiki", EXISTING_K_REV), ("Existing Japanese", EXISTING_J_REV), ("Existing English", EXISTING_E_REV)]:
         r = [base * (1 + ri / 100) ** (y - 2026) for y in YEARS]
         e = [base * EXISTING_EXP_RATIO * (1 + ci / 100) ** (y - 2026) for y in YEARS]
         for i in range(N_YEARS):
             rev[i] += r[i]; exp[i] += e[i]
-        rev_rows[label] = r; exp_rows[label] = e
+        rev_rows.append([label, r]); exp_rows.append([label, e])
 
     # Existing lettuce
     el_rev = [0.0] * N_YEARS; el_exp = [0.0] * N_YEARS
@@ -871,9 +872,9 @@ def build_rev_exp(s):
         el_rev[i] = l_base * rm
         el_exp[i] = l_base * (EXISTING_EXP_RATIO if y <= 2026 else s.get("lettuceExpPct", 70) / 100) * cm
         rev[i] += el_rev[i]; exp[i] += el_exp[i]
-    rev_rows["Existing Lettuce"] = el_rev; exp_rows["Existing Lettuce"] = el_exp
+    rev_rows.append(["Existing Lettuce", el_rev]); exp_rows.append(["Existing Lettuce", el_exp])
 
-    # New crops
+    # New crops — K, J, E, L, then T (matching CROP_DEFS order, TB excluded from table)
     crop_data = [] if debug else build_crops(s)
     dep_crops = []
     for crop in crop_data:
@@ -881,7 +882,7 @@ def build_rev_exp(s):
         if not crop.get("is_buy"):
             for i in range(N_YEARS):
                 rev[i] += cr[i]; exp[i] += ce[i]
-            rev_rows[crop["label"]] = cr; exp_rows[crop["label"]] = ce
+            rev_rows.append([crop["label"], cr]); exp_rows.append([crop["label"], ce])
             dep_crops.append({"end_year": crop["end_year"], "capex": crop["capex"]})
 
     return rev, exp, rev_rows, exp_rows, crop_data, dep_crops
