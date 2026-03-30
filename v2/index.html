@@ -48,12 +48,12 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title">P&L, Distributions & Tax ($K)</div>
+      <div class="panel-title">P&L, Distributions & Tax ($M)</div>
       <div style="overflow-x:auto"><table class="fin-table" id="distTable"></table></div>
     </div>
 
     <div class="panel">
-      <div class="panel-title">Partner Cash ($K)</div>
+      <div class="panel-title">Partner Cash ($M)</div>
       <div style="overflow-x:auto"><table class="fin-table" id="partnerTable"></table></div>
     </div>
 
@@ -352,25 +352,25 @@ function render(d) {
   // Distribution waterfall
   let dt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   dt += sr('P&L', Y);
-  dt += tr('Revenue', d.rev, fCK);
-  dt += tr('Expenses', d.exp.map(v => -v), fCK);
-  dt += tr('Operating Income', d.op_inc, fCK, 'subtotal-row');
+  dt += tr('Revenue', d.rev, fCM);
+  dt += tr('Expenses', d.exp.map(v => -v), fCM);
+  dt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
   dt += sr('Cash Adjustments', Y);
-  dt += tr('Loan Interest', d.loan_total_int.map(v => -v), fCK);
-  dt += tr('Loan Principal', d.loan_total_prin.map(v => -v), fCK);
-  dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCK);
-  dt += tr('Distributable Cash', d.distrib_cash, fCK, 'total-row-table');
+  dt += tr('Loan Interest', d.loan_total_int.map(v => -v), fCM);
+  dt += tr('Loan Principal', d.loan_total_prin.map(v => -v), fCM);
+  dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCM);
+  dt += tr('Distributable Cash', d.distrib_cash, fCM, 'total-row-table');
   dt += sr('Waterfall', Y);
-  dt += tr('Tax (Fed + HI)', d.tax_cash.map(v => -v), fCK);
-  dt += tr('Tier 0 (EB)', d.tier0_actual.map(v => -v), fCK);
+  dt += tr('Tax (Fed + HI)', d.tax_cash.map(v => -v), fCM);
+  dt += tr('Tier 0 (EB)', d.tier0_actual.map(v => -v), fCM);
   // Tier 1 with shortfall highlighting
   dt += `<tr><td>Tier 1 (Partners)</td>${d.tier1_actual.map((v, i) => {
     const short = d.tier1_shortfall[i] > 50;
-    return `<td${short ? ' style="color:var(--yellow)"' : ''}>${fCK(-v)}${short ? ' *' : ''}</td>`;
+    return `<td${short ? ' style="color:var(--yellow)"' : ''}>${fCM(-v)}${short ? ' *' : ''}</td>`;
   }).join('')}</tr>`;
-  dt += tr('PE/DD Repayment', d.pedd_payments.map(v => -v), fCK);
-  dt += tr('Tier 2 (Pro-Rata)', d.tier2.map(v => -v), fCK);
-  if (d.tier1_shortfall.some(v => v > 50)) dt += tr('T1 Shortfall \u2192 DD', d.tier1_shortfall.map(v => -v), fCK);
+  dt += tr('PE/DD Repayment', d.pedd_payments.map(v => -v), fCM);
+  dt += tr('Tier 2 (Pro-Rata)', d.tier2.map(v => -v), fCM);
+  if (d.tier1_shortfall.some(v => v > 50)) dt += tr('T1 Shortfall \u2192 DD', d.tier1_shortfall.map(v => -v), fCM);
   dt += '</tbody>';
   document.getElementById('distTable').innerHTML = dt;
 
@@ -379,13 +379,13 @@ function render(d) {
   for (const p of ['EB', 'JS', 'JJB']) {
     pt += sr(p, Y);
     const pd = d.partners[p];
-    pt += tr('Tax Dist', pd.tax_dist, fCK);
-    if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCK);
-    pt += tr('Tier 1', pd.tier_1, fCK);
-    if (pd.pedd) pt += tr('PE/DD', pd.pedd, fCK);
-    pt += tr('Tier 2', pd.tier_2, fCK);
-    if (pd.equity_buy_sell) pt += tr('Equity Buy/Sell', pd.equity_buy_sell, fCK);
-    pt += tr('Total ' + p, pd.total, fCK, 'subtotal-row');
+    pt += tr('Tax Dist', pd.tax_dist, fCM);
+    if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCM);
+    pt += tr('Tier 1', pd.tier_1, fCM);
+    if (pd.pedd) pt += tr('PE/DD', pd.pedd, fCM);
+    pt += tr('Tier 2', pd.tier_2, fCM);
+    if (pd.equity_buy_sell) pt += tr('Equity Buy/Sell', pd.equity_buy_sell, fCM);
+    pt += tr('Total ' + p, pd.total, fCM, 'subtotal-row');
   }
   pt += sr('EB Grants', Y);
   pt += `<tr><td colspan="${Y.length + 1}" style="color:var(--text-sub);font-size:10px">PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
