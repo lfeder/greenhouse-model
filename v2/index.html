@@ -356,8 +356,10 @@ function render(d) {
   dt += tr('Expenses', d.exp.map(v => -v), fCM);
   dt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
   dt += sr('Cash Adjustments', Y);
-  dt += tr('Loan Interest', d.loan_total_int.map(v => -v), fCM);
-  dt += tr('Loan Principal', d.loan_total_prin.map(v => -v), fCM);
+  dt += tr('Existing Loan Int', d.loan_total_int.map(v => -v), fCM);
+  dt += tr('Existing Loan Prin', d.loan_total_prin.map(v => -v), fCM);
+  dt += tr('Expansion Loan Int', d.expansion_int.map(v => -v), fCM);
+  dt += tr('Expansion Loan Prin', d.expansion_prin.map(v => -v), fCM);
   dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCM);
   dt += tr('Distributable Cash', d.distrib_cash, fCM, 'total-row-table');
   dt += sr('Waterfall', Y);

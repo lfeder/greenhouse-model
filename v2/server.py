@@ -145,8 +145,10 @@ def compute(s):
 
     result = model.run_full_model(rev, exp, s, dep_crops)
 
-    # Crop IRR (per-crop cashflow simulation)
+    # Crop IRR + expansion debt service tracking
     crop_irrs = []
+    expansion_int = [0.0] * model.N_YEARS
+    expansion_prin = [0.0] * model.N_YEARS
     for crop in crop_data:
         cr, ce = model.crop_annual_rev_exp(crop["base_rev"], crop["base_exp"], crop["end_q"], crop["ramp_years"], ri, ci)
         financing = s.get("financingPct", 65) / 100
@@ -155,24 +157,32 @@ def compute(s):
             loan_base = min(hard_assets, crop["capex"])
         else:
             loan_base = crop["capex"]
-        loan = loan_base * financing
-        equity = crop["capex"] - loan
+        loan_amt = loan_base * financing
+        equity = crop["capex"] - loan_amt
         rate = s.get("interestRate", 7) / 100
         term = s.get("loanTermYears", 10)
-        annual_ds = model._annual_pmt(loan, rate, term) if loan > 0 else 0
+        annual_ds = model._annual_pmt(loan_amt, rate, term) if loan_amt > 0 else 0
 
         cfs = []
         start_year = crop["start_q"] // 10
         end_year = crop["end_q"] // 10
+        bal = loan_amt
         for i, y in enumerate(model.YEARS):
-            cf = cr[i] - ce[i]  # operating income
-            # Debt service (IO during build + 6mo, then P&I)
+            cf = cr[i] - ce[i]
             io_end_y = end_year + (1 if (crop["end_q"] % 10) > 2 else 0)
-            if start_year <= y <= start_year + term - 1:
+            yr_int = 0
+            yr_prin = 0
+            if start_year <= y <= start_year + term - 1 and bal > 0:
                 if y < io_end_y:
-                    cf -= loan * rate  # IO
+                    yr_int = bal * rate
                 else:
-                    cf -= annual_ds  # P&I
+                    yr_int = bal * rate
+                    yr_prin = min(annual_ds - yr_int, bal)
+                    bal -= yr_prin
+                cf -= yr_int + yr_prin
+            if not crop.get("is_buy"):
+                expansion_int[i] += yr_int
+                expansion_prin[i] += yr_prin
             if y == start_year:
                 cf -= equity
             cfs.append(cf)
@@ -183,6 +193,8 @@ def compute(s):
             "capex": crop["capex"], "equity": equity,
             "irr": round(irr, 1), "cashflows": [round(c) for c in cfs],
         })
+
+    expansion_ds = [expansion_int[i] + expansion_prin[i] for i in range(model.N_YEARS)]
 
     # Total IRR (all built crops combined)
     built_cfs = [0] * model.N_YEARS
@@ -206,6 +218,9 @@ def compute(s):
         "crops": [{"key": c["key"], "label": c["label"], "acres": c["acres"], "capex": c["capex"]} for c in crop_data],
         "rev_rows": rev_rows,
         "exp_rows": exp_rows,
+        "expansion_int": expansion_int,
+        "expansion_prin": expansion_prin,
+        "expansion_ds": expansion_ds,
         # KPI data
         "total_capex": sum(c["capex"] for c in crop_data if not c.get("is_buy")),
         "shared_capex": (s.get("landCostPerAc", 125000) * 20 + s.get("packhouseSF", 30000) * s.get("packhouseCostPerSF", 100) + s.get("housingPeople", 25) * 50000) if not debug else 0,
