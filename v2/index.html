@@ -42,7 +42,7 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title">IRR by Crop</div>
+      <div class="panel-title">IRR on Equity / Return on Total Investment</div>
       <div class="roi-grid" id="irrGrid"></div>
     </div>
 
@@ -357,10 +357,7 @@ function render(d) {
     ig += `<div class="roi-item" title="${tip.replace(/"/g,'&quot;')}">
       <div><div class="roi-label">${crop.label}</div>
       <div style="font-size:8px;color:var(--text-dim)">${fK(crop.capex)} capex | ${fK(crop.equity)} equity</div></div>
-      <div style="display:flex;gap:12px;align-items:baseline">
-        <div class="roi-value" style="color:var(--green)">${crop.irr.toFixed(1)}%</div>
-        <div class="roi-value" style="color:var(--green)">${crop.unlev.toFixed(1)}%</div>
-      </div>
+      <div class="roi-value" style="color:var(--green)">${crop.irr.toFixed(1)}% / ${crop.unlev.toFixed(1)}%</div>
     </div>`;
   }
   document.getElementById('irrGrid').innerHTML = ig;
