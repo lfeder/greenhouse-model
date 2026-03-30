@@ -50,14 +50,14 @@
   },
 
   "distribution_base": {
-    "2026": {"EB": 26.0, "JS": 31.5, "JJB": 42.5},
+    "2026": {"EB": 25.5, "JS": 34.5, "JJB": 40.0},
     "note": "Starting ownership for distributions. Changes driven by js_buyout and eb_grants."
   },
 
   "js_buyout": {
-    "pct_per_year": 3.0,
-    "years": [2027, 2028, 2029, 2030],
-    "valuations": {"2027": 9750000, "2028": 11500000, "2029": 13250000, "2030": 15000000},
+    "pct_per_year": 2.75,
+    "years": [2026, 2027, 2028, 2029],
+    "valuations": {"2026": 9750000, "2027": 11500000, "2028": 13250000, "2029": 15000000},
     "note": "JJB buys 3%/yr from JS. Payment = 3% x valuation at year-end."
   },
 

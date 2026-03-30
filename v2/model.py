@@ -263,7 +263,8 @@ def compute_ownership(settings, cum_pedd_by_year, equity_by_year=None, biz_value
     buyout_years = JS_BUYOUT["years"]
     buyout_pct = JS_BUYOUT["pct_per_year"]
 
-    exp_grant_pct = settings.get("ebExpansionGrantPct", 0)
+    is_expansion = not settings.get("debug", False)
+    exp_grant_pct = settings.get("ebExpansionGrantPct", 0) if is_expansion else 0
     exp_grant_start = settings.get("ebExpansionGrantStartYear", 2027)
     exp_grant_end = settings.get("ebExpansionGrantEndYear", 2035)
 
