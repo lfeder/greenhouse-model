@@ -218,26 +218,36 @@ def calc_tax_dist(taxable_inc, fed_dep, state_dep, ownership, nol_remaining):
     }
 
 def calc_tax_cash_timing(liabilities):
-    """Convert annual tax liability → cash payment timing.
+    """Convert annual tax liability → cash payment timing with component breakdown.
 
     2026: $0 (no 2025 liability, no safe harbor)
     2027: 2026 final + 2 quarterly estimates for 2027
     2028+: Q4 prior est + settlement + Q1-Q3 current estimates
+
+    Returns (totals, details) where details[i] has the components.
     """
-    result = []
+    totals = []
+    details = []
     for i, year in enumerate(YEARS):
         prior = liabilities[i - 1] if i > 0 else 0
         two_prior = liabilities[i - 2] if i > 1 else 0
         if year == 2026:
-            result.append(0)
+            totals.append(0)
+            details.append({"note": "No 2025 liability", "total": 0})
         elif year == 2027:
-            result.append(liabilities[0] + liabilities[0] / 4 * 2)
+            final_26 = liabilities[0]
+            q_est = liabilities[0] / 4
+            total = final_26 + q_est * 2
+            totals.append(total)
+            details.append({"final_prior": final_26, "q_est": q_est, "n_quarters": 2, "total": total})
         else:
             q4 = two_prior / 4
             settle = max(0, prior - two_prior)
             cur_est = prior / 4 * 3
-            result.append(q4 + settle + cur_est)
-    return result
+            total = q4 + settle + cur_est
+            totals.append(total)
+            details.append({"q4_prior_est": q4, "settlement": settle, "cur_est_3q": cur_est, "total": total})
+    return totals, details
 
 
 # ============================================================
@@ -587,7 +597,7 @@ def run_full_model(rev, exp, settings, dep_crops=None):
         tax_liab.append(td["total"])
         tax_detail.append(td)
 
-    tax_cash = calc_tax_cash_timing(tax_liab)
+    tax_cash, tax_cash_detail = calc_tax_cash_timing(tax_liab)
     distrib_cash = [o - ds - cr for o, ds, cr in zip(op_inc, loans["total_ds"], capex_res)]
 
     # Waterfall
@@ -606,7 +616,7 @@ def run_full_model(rev, exp, settings, dep_crops=None):
     return {
         "years": YEARS, "rev": rev, "exp": exp,
         "op_inc": op_inc, "capex_res": capex_res,
-        "taxable_inc": taxable_inc, "tax_liab": tax_liab, "tax_cash": tax_cash,
+        "taxable_inc": taxable_inc, "tax_liab": tax_liab, "tax_cash": tax_cash, "tax_cash_detail": tax_cash_detail,
         "distrib_cash": distrib_cash, "tax_detail": tax_detail,
         "loans": loans, "dep": dep,
         "ownership": ownership, "partners": partners,

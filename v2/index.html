@@ -207,8 +207,8 @@ function buildSidebar() {
   </div>`;
 
   h += `<div class="panel"><div class="panel-title">Inflation</div>
-    ${S('revInflation', {label:'Revenue Escalation',min:0,max:8,step:2,def:4,fmt:v=>v+'%/yr'})}
-    ${S('costInflation', {label:'Cost Escalation',min:0,max:8,step:2,def:3,fmt:v=>v+'%/yr'})}
+    ${S('revInflation', {label:'Revenue Escalation',min:3,max:5,step:0.5,def:4,fmt:v=>v.toFixed(1)+'%/yr'})}
+    ${S('costInflation', {label:'Cost Escalation',min:3,max:5,step:0.5,def:3,fmt:v=>v.toFixed(1)+'%/yr'})}
   </div>`;
 
   h += `<div class="panel"><div class="panel-title">EB Expansion Grant (from JS)</div>
@@ -392,8 +392,51 @@ function render(d) {
   dt += tr('Expansion DS', d.expansion_ds.map(v => -v), fCM);
   dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCM);
   dt += tr('Distributable Cash', d.distrib_cash, fCM, 'total-row-table');
+  // Tax rows with tooltips — all data from model, no math here
+  dt += sr('Tax', Y);
+
+  // Liability tooltip: just format pre-computed tax_detail from model
+  const liabTips = Y.map((y, i) => {
+    const td = d.tax_detail[i];
+    let t = y + ' TAX LIABILITY\n';
+    t += 'Fed taxable: ' + fK(td.fed_taxable) + '\n';
+    t += 'EB share: ' + fK(td.eb_fed) + '\n';
+    if (td.nol_used > 0) t += 'NOL used: ' + fK(td.nol_used) + '\n';
+    t += 'EB net fed: ' + fK(td.eb_net_fed) + '\n';
+    t += 'Fed tax (EB): ' + fK(td.fed_tax) + '\n';
+    t += 'Fed dist: ' + fK(td.fed_dist) + '\n';
+    t += 'HI taxable: ' + fK(td.hi_taxable) + '\n';
+    t += 'HI tax (EB): ' + fK(td.hi_tax) + '\n';
+    t += 'HI dist: ' + fK(td.hi_dist) + '\n';
+    t += 'Total: ' + fK(td.total);
+    return t;
+  });
+  dt += `<tr><td>Tax Liability (accrual)</td>${d.tax_liab.map((v, i) =>
+    `<td title="${liabTips[i].replace(/"/g,'&quot;')}" style="cursor:help">${fCM(v)}</td>`
+  ).join('')}</tr>`;
+
+  // Cash timing tooltip: format pre-computed tax_cash_detail from model
+  const cashTips = Y.map((y, i) => {
+    const cd = d.tax_cash_detail[i];
+    let t = y + ' TAX CASH DIST\n';
+    if (cd.note) { t += cd.note; }
+    else if (cd.final_prior !== undefined) {
+      t += '4/15: prior final = ' + fK(cd.final_prior) + '\n';
+      t += cd.n_quarters + ' x Q est = ' + fK(cd.q_est) + '\n';
+      t += 'Total: ' + fK(cd.total);
+    } else {
+      t += 'Q4 prior est: ' + fK(cd.q4_prior_est) + '\n';
+      t += 'Settlement: ' + fK(cd.settlement) + '\n';
+      t += 'Q1-Q3 est: ' + fK(cd.cur_est_3q) + '\n';
+      t += 'Total: ' + fK(cd.total);
+    }
+    return t;
+  });
+  dt += `<tr><td>Tax Cash Dist (paid)</td>${d.tax_cash.map((v, i) =>
+    `<td title="${cashTips[i].replace(/"/g,'&quot;')}" style="cursor:help">${fCM(-v)}</td>`
+  ).join('')}</tr>`;
+
   dt += sr('Waterfall', Y);
-  dt += tr('Tax (Fed + HI)', d.tax_cash.map(v => -v), fCM);
   dt += tr('Tier 0 (EB)', d.tier0_actual.map(v => -v), fCM);
   // Tier 1 with shortfall highlighting
   dt += `<tr><td>Tier 1 (Partners)</td>${d.tier1_actual.map((v, i) => {

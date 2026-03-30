@@ -42,7 +42,7 @@
   "interestRate": 7,
   "loanTermYears": 10,
   "revInflation": 4,
-  "costInflation": 3,
+  "costInflation": 4,
   "tBillRate": 4,
   "ebExpansionGrantPct": 0.5,
   "ebExpansionGrantStartYear": 2028,
