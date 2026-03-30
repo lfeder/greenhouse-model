@@ -1059,6 +1059,20 @@ def run_everything(s):
     pedd_grant = min(EB_GRANT_PEDD["max_pct"], int(result["cum_pedd"] / 500_000) * EB_GRANT_PEDD["per_500k"])
     result["pedd_grant"] = pedd_grant
 
+    # No-expansion baseline for comparison (when expansion is on)
+    partners_no_exp = None
+    if not s.get("debug", False):
+        s_noexp = dict(s)
+        s_noexp["debug"] = True
+        rev_ne, exp_ne, _, _, _, _, _ = build_rev_exp(s_noexp)
+        result_ne = run_full_model(rev_ne, exp_ne, s_noexp, [])
+        # Use base ownership (no dilution) for no-expansion
+        own_ne, _ = compute_ownership(s_noexp, result_ne["cum_pedd_by_year"], {}, [0]*N_YEARS)
+        partners_ne = compute_partner_cash({**result_ne, "tax_cash_dist": result_ne["tax_cash"]}, own_ne)
+        partners_no_exp = {p: partners_ne[p]["total"] for p in ["EB", "JS", "JJB"]}
+        partners_no_exp["_op_inc_terminal"] = result_ne["op_inc"][-1]
+        partners_no_exp["_ownership"] = {"JJB": own_ne[-1]["JJB"], "EB": own_ne[-1]["EB"], "JS": own_ne[-1]["JS"]}
+
     write_csv(result)
 
     return {
@@ -1074,6 +1088,7 @@ def run_everything(s):
         "expansion_int": expansion_int, "expansion_prin": expansion_prin,
         "expansion_ds": [expansion_int[i] + expansion_prin[i] for i in range(N_YEARS)],
         "ownership_detail": ownership_detail,
+        "partners_no_exp": partners_no_exp,
         **kpis,
     }
 

@@ -458,6 +458,12 @@ function render(d) {
     pt += tr('Tier 2', pd.tier_2, fCM);
     if (pd.equity_buy_sell) pt += tr('Equity Buy/Sell', pd.equity_buy_sell, fCM);
     pt += tr('Total ' + p, pd.total, fCM, 'subtotal-row');
+    // No-expansion comparison row (only when expansion is on)
+    if (d.partners_no_exp && d.partners_no_exp[p]) {
+      pt += tr('No Expansion', d.partners_no_exp[p], fCM);
+      const diff = pd.total.map((v, i) => v - d.partners_no_exp[p][i]);
+      pt += tr('Expansion Impact', diff, fCM);
+    }
   }
   pt += '</tbody>';
   document.getElementById('partnerTable').innerHTML = pt;
@@ -465,19 +471,26 @@ function render(d) {
   // Valuation — PE dropdowns per year, partner values
   // PE dropdowns stored in settings.yearPE
   const peOpts = [3,4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
-  let vt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  const hasNoExp = d.partners_no_exp && d.partners_no_exp._op_inc_terminal;
+  const noExpCol = hasNoExp ? '<th>No Exp</th>' : '';
+
+  let vt = `<thead><tr><th></th>${yh(Y)}${noExpCol}</tr></thead><tbody>`;
   // PE dropdown row
   vt += `<tr><td style="color:var(--text-muted)">P/E Multiple</td>${Y.map(y =>
     `<td><select data-year="${y}" class="pe-sel" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>`
-  ).join('')}</tr>`;
-  // Biz value row
+  ).join('')}${hasNoExp ? `<td><select id="noExpPE" class="pe-sel-noexp" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>` : ''}</tr>`;
+
   const yearPE = settings.yearPE || {};
   const bizVals = Y.map((y, i) => d.op_inc[i] * (yearPE[String(y)] || 8));
-  vt += tr('Business Value', bizVals, fCM);
-  // Partner value rows
+  const noExpPE = settings.noExpPE || 8;
+  const noExpBiz = hasNoExp ? d.partners_no_exp._op_inc_terminal * noExpPE : 0;
+  const noExpOwn = hasNoExp ? d.partners_no_exp._ownership : {};
+
+  vt += `<tr><td>Business Value</td>${bizVals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpBiz)}</td>` : ''}</tr>`;
   for (const p of ['JJB', 'EB', 'JS']) {
     const vals = Y.map((_, i) => d.ownership[i][p] / 100 * bizVals[i]);
-    vt += tr(p, vals, fCM);
+    const noExpVal = hasNoExp ? (noExpOwn[p] || 0) / 100 * noExpBiz : 0;
+    vt += `<tr><td>${p}</td>${vals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpVal)}</td>` : ''}</tr>`;
   }
   vt += '</tbody>';
   document.getElementById('valuationTable').innerHTML = vt;
@@ -492,6 +505,11 @@ function render(d) {
       updateSetting('yearPE', settings.yearPE);
     };
   });
+  const noExpSel = document.getElementById('noExpPE');
+  if (noExpSel) {
+    noExpSel.value = settings.noExpPE || 8;
+    noExpSel.onchange = () => updateSetting('noExpPE', Number(noExpSel.value));
+  }
 }
 
 
