@@ -1013,7 +1013,8 @@ def run_everything(s):
         equity_by_year[start_year] = equity_by_year.get(start_year, 0) + crop_equity
 
     # Business values for dilution pricing (op_inc × default PE)
-    biz_values = [result["op_inc"][i] * 8 for i in range(N_YEARS)]  # 8x PE default
+    year_pe = s.get("yearPE", {})
+    biz_values = [result["op_inc"][i] * int(year_pe.get(str(YEARS[i]), 8)) for i in range(N_YEARS)]
 
     # Ownership with dilution
     ownership, ownership_detail = compute_ownership(s, result["cum_pedd_by_year"], equity_by_year, biz_values)

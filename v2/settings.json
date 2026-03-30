@@ -47,7 +47,7 @@
   "ebExpansionGrantPct": 0.5,
   "ebExpansionGrantStartYear": 2028,
   "ebExpansionGrantEndYear": 2033,
-  "debug": false,
+  "debug": true,
   "yearPE": {},
   "existFedYearsLeft": 8,
   "existFedAnnual": 200000,

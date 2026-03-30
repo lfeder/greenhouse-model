@@ -47,7 +47,7 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title">Ownership & Equity</div>
+      <div class="panel-title">Ownership, Equity & Valuation</div>
       <div style="overflow-x:auto"><table class="fin-table" id="ownershipTable"></table></div>
     </div>
 
@@ -62,8 +62,8 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title">Partner Valuations</div>
-      <div id="valuationTable"></div>
+      <div class="panel-title">Partner Valuations ($M)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="valuationTable"></table></div>
     </div>
   </div>
 </div>
@@ -360,9 +360,12 @@ function render(d) {
   for (const p of ['JJB', 'EB', 'JS']) {
     ot += `<tr class="subtotal-row"><td>${p}</td>${d.ownership.map(o => `<td>${o[p].toFixed(1)}%</td>`).join('')}</tr>`;
   }
+  // EB grant summary
+  ot += `<tr><td colspan="${Y.length+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
+
   // Detail toggle
   if (d.ownership_detail) {
-    ot += `<tr><td colspan="${Y.length+1}" style="padding-top:8px">
+    ot += `<tr><td colspan="${Y.length+1}" style="padding-top:4px">
       <a href="#" onclick="document.getElementById('ownershipDetail').style.display=document.getElementById('ownershipDetail').style.display==='none'?'':'none';return false"
          style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
     ot += `</tbody><tbody id="ownershipDetail" style="display:none">`;
@@ -413,27 +416,39 @@ function render(d) {
     if (pd.equity_buy_sell) pt += tr('Equity Buy/Sell', pd.equity_buy_sell, fCM);
     pt += tr('Total ' + p, pd.total, fCM, 'subtotal-row');
   }
-  pt += sr('EB Grants', Y);
-  pt += `<tr><td colspan="${Y.length + 1}" style="color:var(--text-sub);font-size:10px">PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
   pt += '</tbody>';
   document.getElementById('partnerTable').innerHTML = pt;
 
-  // Valuation
-  const lastOwn = d.ownership[lastIdx];
-  const lastOpInc = d.op_inc[lastIdx];
-  let vt = '<table style="width:100%;font-size:11px;font-family:inherit;border-collapse:collapse">';
-  vt += `<tr><th style="text-align:left;padding:4px 8px;color:var(--accent);font-size:9px">P/E</th>`;
-  for (const p of ['JJB', 'EB', 'JS']) vt += `<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">${p} (${lastOwn[p].toFixed(1)}%)</th>`;
-  vt += '<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">Total</th></tr>';
-  for (const pe of [4,5,6,7,8,9,10,11,12]) {
-    const bv = lastOpInc * pe;
-    vt += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:4px 8px;color:var(--text-muted)">${pe}x</td>`;
-    for (const p of ['JJB', 'EB', 'JS']) vt += `<td style="text-align:right;padding:4px 8px;color:var(--text-sub)">${fK(lastOwn[p] / 100 * bv)}</td>`;
-    vt += `<td style="text-align:right;padding:4px 8px;color:var(--text)">${fK(bv)}</td></tr>`;
+  // Valuation — PE dropdowns per year, partner values
+  // PE dropdowns stored in settings.yearPE
+  const peOpts = [4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
+  let vt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  // PE dropdown row
+  vt += `<tr><td style="color:var(--text-muted)">P/E Multiple</td>${Y.map(y =>
+    `<td><select data-year="${y}" class="pe-sel" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>`
+  ).join('')}</tr>`;
+  // Biz value row
+  const yearPE = settings.yearPE || {};
+  const bizVals = Y.map((y, i) => d.op_inc[i] * (yearPE[String(y)] || 8));
+  vt += tr('Business Value', bizVals, fCM);
+  // Partner value rows
+  for (const p of ['JJB', 'EB', 'JS']) {
+    const vals = Y.map((_, i) => d.ownership[i][p] / 100 * bizVals[i]);
+    vt += tr(p, vals, fCM);
   }
-  vt += '</table>';
-  vt += `<div style="font-size:9px;color:var(--text-dim);margin-top:6px">${Y[lastIdx]} Op Income: ${fK(lastOpInc)}</div>`;
+  vt += '</tbody>';
   document.getElementById('valuationTable').innerHTML = vt;
+
+  // Set PE dropdown values and bind events
+  document.querySelectorAll('.pe-sel').forEach(sel => {
+    const y = sel.dataset.year;
+    sel.value = (settings.yearPE || {})[y] || 8;
+    sel.onchange = () => {
+      if (!settings.yearPE) settings.yearPE = {};
+      settings.yearPE[y] = Number(sel.value);
+      updateSetting('yearPE', settings.yearPE);
+    };
+  });
 }
 
 
