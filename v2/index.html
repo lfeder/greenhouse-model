@@ -376,7 +376,11 @@ function render(d) {
     for (const row of d.ownership_detail) {
       const label = row[0];
       const vals = row.slice(1);
-      ot += `<tr><td>${label}</td>${vals.map(v => `<td>${typeof v === 'number' ? v.toFixed(1) + '%' : v}</td>`).join('')}</tr>`;
+      const isDollar = label.includes('Capital ($)');
+      ot += `<tr><td>${label}</td>${vals.map(v => {
+        if (isDollar) return `<td>${v > 0 ? fK(v) : '\u2014'}</td>`;
+        return `<td>${typeof v === 'number' ? v.toFixed(1) + '%' : v}</td>`;
+      }).join('')}</tr>`;
     }
   }
   ot += '</tbody>';

@@ -287,7 +287,7 @@ def compute_ownership(settings, cum_pedd_by_year, equity_by_year=None, biz_value
 
     # Prepare detail tracking
     start_jjb, start_eb, start_js = [], [], []
-    buyout_row, dilution_row = [], []
+    buyout_row, dilution_row, capital_row = [], [], []
     pedd_grant_row, exp_grant_row = [], []
     end_jjb, end_eb, end_js = [], [], []
 
@@ -313,6 +313,7 @@ def compute_ownership(settings, cum_pedd_by_year, equity_by_year=None, biz_value
             eb = eb / 100 * biz_val / post_money * 100
             js = js / 100 * biz_val / post_money * 100
             dilution = jjb - old_jjb
+        capital_row.append(eq_deploy)
         dilution_row.append(dilution)
 
         # 3. EB grant (PEDD)
@@ -343,6 +344,7 @@ def compute_ownership(settings, cum_pedd_by_year, equity_by_year=None, biz_value
         ["Starting EB %"] + [round(v, 1) for v in start_eb],
         ["Starting JS %"] + [round(v, 1) for v in start_js],
         ["JJB buys from JS"] + [round(v, 1) for v in buyout_row],
+        ["JJB Capital ($)"] + [round(v) for v in capital_row],
         ["JJB Funds Expansion"] + [round(v, 1) for v in dilution_row],
         ["EB grant (PEDD)"] + [round(v, 1) for v in pedd_grant_row],
         ["EB grant (expansion)"] + [round(v, 1) for v in exp_grant_row],
