@@ -204,6 +204,27 @@ function buildSidebar() {
     ${S('lettuceExpPct', {label:'Lettuce',min:60,max:80,step:5,def:70,fmt:FP})}
   </div>`;
 
+  // Phasing grid
+  const qOpts = [];
+  for (let y = 2026; y <= 2033; y++) for (let q = 1; q <= 4; q++) qOpts.push(`<option value="${y*10+q}">Q${q}-${String(y).slice(2)}</option>`);
+  const qOptStr = qOpts.join('');
+  const buildOpts = [6,9,12,18,24].map(m => `<option value="${m}">${m}mo</option>`).join('');
+  const rampOpts = [0,1,2,3].map(y => `<option value="${y}">${y}yr</option>`).join('');
+  const phaseCrops = [['K','Keiki'],['J','Japanese'],['E','English'],['T','Tomato'],['L','Lettuce']];
+  h += `<div class="panel"><div class="panel-title">Crop Phasing</div>
+    <table style="width:100%;font-size:9px;border-collapse:collapse">
+    <tr><th style="text-align:left;color:var(--text-muted);padding:3px">Crop</th><th style="color:var(--text-muted);padding:3px">Start</th><th style="color:var(--text-muted);padding:3px">Build</th><th style="color:var(--text-muted);padding:3px">Ramp</th></tr>
+    ${phaseCrops.map(([k, label]) => {
+      const lk = k.toLowerCase();
+      return `<tr><td style="padding:3px;color:var(--text-sub)">${label}</td>
+        <td><select data-key="${lk}StartQ" class="phase-sel" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${qOptStr}</select></td>
+        <td><select data-key="${lk}BuildMonths" class="phase-sel" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${buildOpts}</select></td>
+        <td><select data-key="${lk}RampYears" class="phase-sel" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${rampOpts}</select></td>
+      </tr>`;
+    }).join('')}
+    </table>
+  </div>`;
+
   h += `<div class="panel"><div class="panel-title">Financing</div>
     ${S('financingPct', {label:'Loan-to-Cost',min:50,max:90,step:10,def:65,fmt:FP})}
     ${S('interestRate', {label:'Interest Rate',min:5,max:9,step:1,def:7,fmt:v=>v.toFixed(1)+'%'})}
@@ -573,6 +594,12 @@ function toggleTheme() {
 
   await loadSettings();
   buildSidebar();
+  // Set phasing dropdown values and bind events
+  document.querySelectorAll('.phase-sel').forEach(sel => {
+    const key = sel.dataset.key;
+    sel.value = settings[key] || sel.options[0].value;
+    sel.onchange = () => updateSetting(key, Number(sel.value));
+  });
   await compute();
 })();
 </script>

@@ -989,9 +989,12 @@ def compute_crop_irrs(crop_data, s):
         crop_bal_row = []
         start_year = crop["start_q"] // 10
         end_year = crop["end_q"] // 10
-        bal = loan_amt
+        bal = 0  # loan drawn at construction start
         for i, y in enumerate(YEARS):
             cf = cr[i] - ce[i]
+            # Loan drawn at start of construction
+            if y == start_year:
+                bal = loan_amt
             io_end_y = end_year + (1 if (crop["end_q"] % 10) > 2 else 0)
             yr_int = yr_prin = 0
             if start_year <= y <= start_year + term - 1 and bal > 0:
