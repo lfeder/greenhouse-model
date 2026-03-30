@@ -40,7 +40,6 @@
     <div class="panel">
       <div class="panel-title">IRR by Crop</div>
       <div class="roi-grid" id="irrGrid"></div>
-      <div id="irrDetail"></div>
     </div>
 
     <div class="panel">
@@ -325,10 +324,15 @@ function render(d) {
   rt += '</tbody>';
   document.getElementById('revExpTable').innerHTML = rt;
 
-  // IRR grid
+  // IRR grid with tooltip cashflows
   let ig = '';
   for (const crop of d.crop_irrs) {
-    ig += `<div class="roi-item" style="cursor:pointer" onclick="showIRRDetail('${crop.key}')">
+    let tip = crop.label + ' IRR: ' + crop.irr.toFixed(1) + '%\n';
+    for (let i = 0; i < Y.length; i++) {
+      const cf = crop.cashflows[i];
+      if (Math.abs(cf) > 50) tip += Y[i] + ': ' + fK(cf) + '\n';
+    }
+    ig += `<div class="roi-item" title="${tip.replace(/"/g,'&quot;')}">
       <div><div class="roi-label">${crop.label}</div>
       <div style="font-size:8px;color:var(--text-dim)">${fK(crop.capex)} capex | ${fK(crop.equity)} equity</div></div>
       <div class="roi-value" style="color:var(--green)">${crop.irr.toFixed(1)}%</div>
@@ -406,21 +410,6 @@ function render(d) {
   document.getElementById('valuationTable').innerHTML = vt;
 }
 
-function showIRRDetail(key) {
-  const crop = lastData.crop_irrs.find(c => c.key === key);
-  if (!crop) return;
-  let h = `<div style="margin-top:10px;font-size:9px;color:var(--accent);font-weight:700;text-transform:uppercase">${crop.label} \u2014 IRR = ${crop.irr.toFixed(1)}%</div>`;
-  h += `<table class="fin-table" style="font-size:10px;margin-top:6px"><thead><tr><th>Year</th><th>Net CF</th><th>Cum CF</th></tr></thead><tbody>`;
-  let cum = 0;
-  for (let i = 0; i < lastData.years.length; i++) {
-    const cf = crop.cashflows[i];
-    cum += cf;
-    if (Math.abs(cf) > 50 || Math.abs(cum) > 50)
-      h += `<tr><td>${lastData.years[i]}</td><td>${fCK(cf)}</td><td>${fCK(cum)}</td></tr>`;
-  }
-  h += '</tbody></table>';
-  document.getElementById('irrDetail').innerHTML = h;
-}
 
 // --- THEME ---
 function toggleTheme() {
