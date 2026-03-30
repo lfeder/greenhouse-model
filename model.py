@@ -556,6 +556,109 @@ def compute_partner_cash(model, ownership_trajectory):
 # ============================================================
 # QUICK TEST
 # ============================================================
+# ============================================================
+# 11. CSV OUTPUT (for debugging in Excel)
+# ============================================================
+
+def write_output_csv(model, ownership, partners, grant_pct, loans, dep, exist_debt, path="output.csv"):
+    """Write all computed data to CSV. Open in Excel to verify any number."""
+    import csv
+    from pathlib import Path
+
+    p = Path(__file__).parent / path
+    with open(p, "w", newline="") as f:
+        w = csv.writer(f)
+        hdr = [""] + [str(y) for y in YEARS]
+
+        # P&L
+        w.writerow(["P&L"])
+        w.writerow(hdr)
+        w.writerow(["Revenue"] + [round(v) for v in model["rev"]])
+        w.writerow(["Expenses"] + [round(v) for v in model["exp"]])
+        w.writerow(["Operating Income"] + [round(v) for v in model["op_inc"]])
+        w.writerow([])
+
+        # Debt Service
+        w.writerow(["DEBT SERVICE"])
+        w.writerow(hdr)
+        w.writerow(["Loan Interest"] + [round(v) for v in model["loan_int"]])
+        w.writerow(["Loan Principal"] + [round(v) for v in model["loan_prin"]])
+        w.writerow(["Total DS"] + [round(v) for v in model["total_ds"]])
+        w.writerow(["Capex Reserve (2%)"] + [round(v) for v in model["capex_res"]])
+        w.writerow(["Distributable Cash"] + [round(v) for v in model["distrib_cash"]])
+        w.writerow([])
+
+        # Tax Detail
+        w.writerow(["TAX DETAIL"])
+        w.writerow(hdr)
+        w.writerow(["Taxable Inc (OpInc-Int)"] + [round(v) for v in model["taxable_inc"]])
+        w.writerow(["Fed Depreciation"] + [round(v) for v in model["fed_dep"]])
+        fed_taxable = [model["taxable_inc"][i] - model["fed_dep"][i] for i in range(len(YEARS))]
+        w.writerow(["Fed Taxable"] + [round(v) for v in fed_taxable])
+        w.writerow(["State Depreciation"] + [round(v) for v in model["state_dep"]])
+        hi_taxable = [model["taxable_inc"][i] - model["state_dep"][i] for i in range(len(YEARS))]
+        w.writerow(["HI Taxable"] + [round(v) for v in hi_taxable])
+        w.writerow(["EB Fed Taxable"] + [round(td["eb_fed_taxable"]) for td in model["tax_detail"]])
+        w.writerow(["NOL Used"] + [round(td["nol_used"]) for td in model["tax_detail"]])
+        w.writerow(["EB Net Fed"] + [round(td["eb_net_fed"]) for td in model["tax_detail"]])
+        w.writerow(["Fed Tax (EB)"] + [round(td["fed_tax"]) for td in model["tax_detail"]])
+        w.writerow(["Fed Dist (entity)"] + [round(td["fed_dist"]) for td in model["tax_detail"]])
+        w.writerow(["HI Tax (EB)"] + [round(td["hi_tax"]) for td in model["tax_detail"]])
+        w.writerow(["HI Dist (entity)"] + [round(td["hi_dist"]) for td in model["tax_detail"]])
+        w.writerow(["Tax Liability"] + [round(v) for v in model["total_tax_liab"]])
+        w.writerow(["Tax Cash Dist"] + [round(v) for v in model["tax_cash_dist"]])
+        w.writerow([])
+
+        # Waterfall
+        w.writerow(["DISTRIBUTION WATERFALL"])
+        w.writerow(hdr)
+        w.writerow(["Distributable Cash"] + [round(v) for v in model["distrib_cash"]])
+        w.writerow(["Tax Dist"] + [round(v) for v in model["tax_cash_dist"]])
+        w.writerow(["Tier 0 (EB)"] + [round(v) for v in model["tier0_actual"]])
+        w.writerow(["Tier 1"] + [round(v) for v in model["tier1_actual"]])
+        w.writerow(["T1 Shortfall"] + [round(v) for v in model["tier1_shortfall"]])
+        w.writerow(["PE/DD Repayment"] + [round(v) for v in model["pedd_payments"]])
+        w.writerow(["Tier 2"] + [round(v) for v in model["tier2"]])
+        w.writerow([])
+
+        # PE/DD Detail
+        w.writerow(["PE/DD DETAIL"])
+        w.writerow(hdr)
+        for name in [p["name"] for p in PEDD_INSTRUMENTS] + ["T1Short"]:
+            if name in model["detail"]:
+                d = model["detail"][name]
+                w.writerow([f"{name} Prin Paid"] + [round(v) for v in d["prin_paid"]])
+                w.writerow([f"{name} Int Paid"] + [round(v) for v in d["int_paid"]])
+                w.writerow([f"{name} End Bal"] + [round(v) for v in d["end_bal"]])
+                w.writerow([f"{name} Int Owed"] + [round(v) for v in d["int_owed"]])
+        w.writerow([])
+
+        # Existing Debt
+        w.writerow(["EXISTING DEBT"])
+        w.writerow(hdr)
+        w.writerow(["Existing DS"] + [round(v) for v in exist_debt])
+        w.writerow([])
+
+        # Ownership
+        w.writerow(["OWNERSHIP %"])
+        w.writerow(hdr)
+        for p in ["JJB", "EB", "JS"]:
+            w.writerow([p] + [round(o[p], 1) for o in ownership])
+        w.writerow([])
+
+        # Partner Cash
+        w.writerow(["PARTNER CASH"])
+        w.writerow(hdr)
+        for p in ["EB", "JS", "JJB"]:
+            for row_name, row_data in partners[p].items():
+                w.writerow([f"{p} {row_name}"] + [round(v) for v in row_data])
+            w.writerow([])
+
+        w.writerow(["EB Grant %", grant_pct])
+
+    return str(p)
+
+
 if __name__ == "__main__":
     # Debug mode: existing ops only
     rev = [DEBUG_DEFAULTS["rev_2026"] * (1 + DEBUG_DEFAULTS["growth"])**i for i in range(10)]
