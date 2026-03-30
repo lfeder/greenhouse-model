@@ -1,84 +1,66 @@
 """
 Greenhouse Expansion Financial Model
 All calculations in one readable Python file.
-HTML page sends slider values, this returns computed tables.
+Constants loaded from constants.json (shared with HTML).
 """
 
-YEARS = list(range(2026, 2036))
+import json
+from pathlib import Path
 
 # ============================================================
-# 1. CONSTANTS
+# 1. LOAD CONSTANTS FROM SHARED JSON
 # ============================================================
 
-BASE_REV_PER_AC = 11_500_000 / 12  # ~$958K/ac from 12ac K+J in 2026
-EXISTING_KJ_REV = 11_500_000
-EXISTING_L_REV = 3_000_000
-EXISTING_EXP_RATIO = 0.66
+_CONST_PATH = Path(__file__).parent / "constants.json"
+with open(_CONST_PATH) as f:
+    C = json.load(f)
 
-# Existing debt (not expansion)
-EXISTING_DEBT_LETTUCE = 1_000_000   # $1M/yr, pays off Q1 2031
-EXISTING_DEBT_LETTUCE_END = 2031
-EXISTING_DEBT_LAND = 430_000        # $430K/yr through 2045
-EXISTING_DEBT_LAND_END = 2045
+YEARS = C["years"]
+
+# Existing ops
+BASE_REV_PER_AC = C["existing_ops"]["base_rev_per_ac"]
+EXISTING_KJ_REV = C["existing_ops"]["kj_rev"]
+EXISTING_L_REV = C["existing_ops"]["lettuce_rev"]
+EXISTING_EXP_RATIO = C["existing_ops"]["exp_ratio"]
+
+# Existing debt
+EXISTING_DEBT_LETTUCE = C["existing_debt"]["lettuce_annual"]
+EXISTING_DEBT_LETTUCE_END = C["existing_debt"]["lettuce_end_year"]
+EXISTING_DEBT_LAND = C["existing_debt"]["land_annual"]
+EXISTING_DEBT_LAND_END = C["existing_debt"]["land_end_year"]
 
 # Tiers
-TIER0 = 300_000
-TIER1_SCHEDULE = {2026: 500_000, 2027: 600_000}  # 2028+ = 750,000
+TIER0 = C["tiers"]["tier0"]
+TIER1_SCHEDULE = {int(k): v for k, v in C["tiers"]["tier1"].items() if k != "default"}
+TIER1_DEFAULT = C["tiers"]["tier1"]["default"]
 
-# Ownership vesting schedule
-OWNERSHIP_BASE = {
-    2026: {"EB": 26.0, "JS": 31.5, "JJB": 42.5},
-    2027: {"EB": 26.5, "JS": 28.5, "JJB": 45.0},
-    2028: {"EB": 27.0, "JS": 25.5, "JJB": 47.5},
-    2029: {"EB": 27.5, "JS": 22.5, "JJB": 50.0},
-}
-VESTING_DELTAS = {"JJB": 2.5, "EB": 0.5, "JS": -3.0}  # per year 2027-2029
+# Ownership
+OWNERSHIP_BASE = {int(k): v for k, v in C["ownership_base"].items()}
+VESTING_DELTAS = C["vesting_deltas"]
 
-# JJB buying equity from JS
-JS_BUYOUT_VAL = {2026: 8_000_000, 2027: 9_750_000, 2028: 11_500_000, 2029: 13_250_000}
-JS_ANNUAL_LOSS = 0.03
-EB_ANNUAL_GAIN = 0.005
+# JS buyout
+JS_BUYOUT_VAL = {int(k): v for k, v in C["js_buyout"]["valuations"].items()}
+JS_ANNUAL_LOSS = C["js_buyout"]["js_annual_loss"]
+EB_ANNUAL_GAIN = C["js_buyout"]["eb_annual_gain"]
 
-# PE/DD instruments (as of 12/31/2025)
-PEDD_INSTRUMENTS = [
-    {"name": "PE3", "label": "PE Tranche 3", "balance": 515_000, "accrued_int": 147_120, "rate_type": "tbill", "rate_spread": 0.025},
-    {"name": "PE1", "label": "PE Tranche 1", "balance": 1_000_000, "accrued_int": 0, "rate": 0.0},
-    {"name": "PE2", "label": "PE Tranche 2", "balance": 500_000, "accrued_int": 79_571, "rate": 0.05},
-    {"name": "DD",  "label": "Deferred Dist", "balance": 380_000, "accrued_int": 0, "rate": 0.0},
-]
+# PE/DD instruments
+PEDD_INSTRUMENTS = C["pedd_instruments"]
 
-# Tax brackets (MFJ 2026)
-FED_BRACKETS = [
-    (23_850, 0.10), (96_950, 0.12), (206_700, 0.22), (394_600, 0.24),
-    (501_050, 0.32), (751_600, 0.35), (float("inf"), 0.37),
-]
-HI_BRACKETS = [
-    (4_800, 0.014), (9_600, 0.032), (19_200, 0.055), (28_800, 0.064),
-    (38_400, 0.068), (48_000, 0.072), (72_000, 0.076), (96_000, 0.079),
-    (300_000, 0.0825), (350_000, 0.09), (400_000, 0.10), (float("inf"), 0.11),
-]
-FED_NOL = 600_000
+# Tax
+FED_NOL = C["tax"]["fed_nol"]
+FED_BRACKETS = [(b[0] if b[0] is not None else float("inf"), b[1]) for b in C["tax"]["fed_brackets"]]
+HI_BRACKETS = [(b[0] if b[0] is not None else float("inf"), b[1]) for b in C["tax"]["hi_brackets"]]
 
-# Loan schedules (hardcoded from amortization tables)
-FCL_SCHEDULE = {
-    2026: {"interest": 310_725, "principal": 783_267, "end_bal": 3_935_227},
-    2027: {"interest": 253_099, "principal": 840_893, "end_bal": 3_094_334},
-    2028: {"interest": 191_233, "principal": 902_759, "end_bal": 2_191_576},
-    2029: {"interest": 124_819, "principal": 969_173, "end_bal": 1_222_402},
-    2030: {"interest": 53_516, "principal": 1_040_476, "end_bal": 181_926},
-    2031: {"interest": 1_624, "principal": 180_708, "end_bal": 1_219},
-}
+# Loans
+_fcl = C["loans"]["fcl"]["schedule"]
+FCL_SCHEDULE = {int(k): v for k, v in _fcl.items()}
+_jjbdp = C["loans"]["jjbdp"]["schedule"]
+JJBDP_SCHEDULE = {int(k): v for k, v in _jjbdp.items()}
+BIPAH = C["loans"]["bipah"]
+PAIDOFF_2026 = C["loans"]["paidoff_2026"]
 
-JJBDP_SCHEDULE = {
-    2026: {"interest": 37_500, "principal": 86_082, "end_bal": 413_918},
-    2027: {"interest": 31_044, "principal": 92_539, "end_bal": 321_379},
-    2028: {"interest": 24_103, "principal": 99_479, "end_bal": 221_900},
-    2029: {"interest": 16_643, "principal": 106_940, "end_bal": 114_960},
-    2030: {"interest": 8_622, "principal": 114_960, "end_bal": 0},
-}
-
-BIPAH = {"orig_bal": 4_665_000, "rate": 0.065, "term_months": 240}  # started Jan 2025
-PAIDOFF_2026 = {"interest": 2_934, "principal": 51_901}  # AgCredit + JJB Solar residuals
+# Debug defaults
+DEBUG_DEFAULTS = C["debug_defaults"]
 
 
 # ============================================================
@@ -92,7 +74,7 @@ def bipah_monthly_pmt():
 
 def bipah_annual_schedule(year):
     """BIPAH: started Jan 2025, monthly payments."""
-    month_start = (year - 2025) * 12
+    month_start = (year - BIPAH["start_year"]) * 12
     r = BIPAH["rate"] / 12
     pmt = bipah_monthly_pmt()
     # Compute balance at month_start
@@ -272,7 +254,7 @@ def compute_ownership_trajectory(equity_by_year, biz_values, js_transfer_pct=0):
 # ============================================================
 
 def get_tier1(year):
-    return TIER1_SCHEDULE.get(year, 750_000)
+    return TIER1_SCHEDULE.get(year, TIER1_DEFAULT)
 
 def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
     """Run the full distribution waterfall.
@@ -576,8 +558,8 @@ def compute_partner_cash(model, ownership_trajectory):
 # ============================================================
 if __name__ == "__main__":
     # Debug mode: existing ops only
-    rev = [14_200_000 * 1.05**i for i in range(10)]
-    exp = [9_700_000 * 1.05**i for i in range(10)]
+    rev = [DEBUG_DEFAULTS["rev_2026"] * (1 + DEBUG_DEFAULTS["growth"])**i for i in range(10)]
+    exp = [DEBUG_DEFAULTS["exp_2026"] * (1 + DEBUG_DEFAULTS["growth"])**i for i in range(10)]
 
     loans = compute_loan_schedules()
     dep = compute_depreciation(crops=[])
