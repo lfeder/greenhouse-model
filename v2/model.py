@@ -679,7 +679,14 @@ def _build_output_rows(data):
     rows.append(R("HI Tax (EB)", [td["hi_tax"] for td in data["tax_detail"]]))
     rows.append(R("HI Dist", [td["hi_dist"] for td in data["tax_detail"]]))
     rows.append(R("Tax Liability", data["tax_liab"]))
+    rows.append([])
+    rows.append(["TAX CASH TIMING"]); rows.append(hdr)
     rows.append(R("Tax Cash Dist", data["tax_cash"]))
+    if "tax_cash_detail" in data:
+        rows.append(R("Q4 Prior Est", [d.get("q4_prior_est", 0) for d in data["tax_cash_detail"]]))
+        rows.append(R("Settlement", [d.get("settlement", 0) for d in data["tax_cash_detail"]]))
+        rows.append(R("Q1-Q3 Cur Est", [d.get("cur_est_3q", 0) for d in data["tax_cash_detail"]]))
+        rows.append(R("Prior Final", [d.get("final_prior", 0) for d in data["tax_cash_detail"]]))
     rows.append([])
 
     rows.append(R("Capex Reserve", data["capex_res"]))
