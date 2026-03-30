@@ -50,7 +50,8 @@ input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 
 
 .chart-panel { margin-bottom: 18px; }
 
-.fin-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'DM Mono', monospace; }
+.fin-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'DM Mono', monospace; table-layout: fixed; }
+.fin-table th:first-child, .fin-table td:first-child { width: 140px; }
 .fin-table th { font-size: 14px; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 700; }
 .fin-table th:first-child { text-align: left; }
 .fin-table td { text-align: right; padding: 5px 8px; border-bottom: 1px solid #1a2e1a; color: var(--text-sub); }
