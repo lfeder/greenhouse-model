@@ -237,9 +237,9 @@ def calc_tax_cash_timing(liabilities):
         elif year == 2027:
             final_26 = liabilities[0]
             q_est = liabilities[0] / 4
-            total = final_26 + q_est * 2
+            total = final_26 + q_est * 3  # 4/15 final + Q1(4/15) + Q2(6/15) + Q3(9/15)
             totals.append(total)
-            details.append({"final_prior": final_26, "q_est": q_est, "n_quarters": 2, "total": total})
+            details.append({"final_prior": final_26, "q_est": q_est, "n_quarters": 3, "total": total})
         else:
             q4 = two_prior / 4
             settle = max(0, prior - two_prior)
