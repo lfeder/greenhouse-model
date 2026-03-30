@@ -343,7 +343,7 @@ def compute_ownership(settings, cum_pedd_by_year, equity_by_year=None, biz_value
         ["Starting EB %"] + [round(v, 1) for v in start_eb],
         ["Starting JS %"] + [round(v, 1) for v in start_js],
         ["JJB buys from JS"] + [round(v, 1) for v in buyout_row],
-        ["JJB equity dilution"] + [round(v, 1) for v in dilution_row],
+        ["JJB Funds Expansion"] + [round(v, 1) for v in dilution_row],
         ["EB grant (PEDD)"] + [round(v, 1) for v in pedd_grant_row],
         ["EB grant (expansion)"] + [round(v, 1) for v in exp_grant_row],
         ["Ending JJB %"] + [round(v, 1) for v in end_jjb],
