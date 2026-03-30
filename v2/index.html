@@ -52,13 +52,15 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title">Distributions ($M)</div>
-      <div style="overflow-x:auto"><table class="fin-table" id="distTable"></table></div>
-    </div>
-
-    <div class="panel">
       <div class="panel-title">Partner Cash ($M)</div>
       <div style="overflow-x:auto"><table class="fin-table" id="partnerTable"></table></div>
+      <div style="padding-top:8px">
+        <a href="#" onclick="document.getElementById('distDetail').style.display=document.getElementById('distDetail').style.display==='none'?'':'none';return false"
+           style="color:var(--accent);font-size:9px;text-decoration:none">show/hide distribution detail</a>
+      </div>
+      <div id="distDetail" style="display:none;padding-top:8px">
+        <div style="overflow-x:auto"><table class="fin-table" id="distTable"></table></div>
+      </div>
     </div>
 
     <div class="panel">
