@@ -789,6 +789,202 @@ def write_gsheet(model):
 
 
 # ============================================================
+# 13. BUILD CROPS FROM SETTINGS
+# ============================================================
+
+CROP_DEFS = [
+    ("K",  "Keiki",          "newKAcres",  "cukeExpPct",    "cucumberCostPerAc", 1.0,   None),
+    ("J",  "Japanese",       "newJAcres",  "cukeExpPct",    "cucumberCostPerAc", 1.0,   None),
+    ("E",  "English",        "newEAcres",  "cukeExpPct",    "cucumberCostPerAc", None,   "englishRevPct"),
+    ("T",  "Tomato (Build)", "newTAcres",  "tomatoExpPct",  "tomatoCostPerAc",   None,   "tomatoRevPct"),
+    ("L",  "Lettuce",        "newLAcres",  "lettuceExpPct", "lettuceCostPerAc",  None,   None),
+]
+
+def build_crops(s):
+    """Build crop list from slider settings."""
+    crops = []
+    for key, label, acres_key, exp_key, cost_key, fixed_mult, mult_key in CROP_DEFS:
+        acres = s.get(acres_key, 0)
+        if acres <= 0:
+            continue
+        if key == "L":
+            base_rev = s.get("lettuceLbs", 600000) * s.get("lettucePrice", 7.0)
+        else:
+            mult = s.get(mult_key, (fixed_mult or 1.0) * 100) / 100 if mult_key else (fixed_mult or 1.0)
+            base_rev = acres * BASE_REV_PER_AC * mult
+        exp_pct = s.get(exp_key, 70) / 100
+        start_q = s.get(f"{key.lower()}StartQ", 20271)
+        build_mo = s.get(f"{key.lower()}BuildMonths", 12)
+        ramp_yr = s.get(f"{key.lower()}RampYears", 2)
+        end_q = get_end_quarter(start_q, build_mo)
+        crops.append({
+            "key": key, "label": label, "acres": acres,
+            "base_rev": base_rev, "base_exp": base_rev * exp_pct,
+            "capex": acres * s.get(cost_key, 1000000),
+            "start_q": start_q, "end_q": end_q,
+            "build_months": build_mo, "ramp_years": ramp_yr,
+            "end_year": end_q // 10,
+        })
+    # Tomato purchase (always)
+    t_mult = s.get("tomatoRevPct", 120) / 100
+    tb_rev = 6 * BASE_REV_PER_AC * t_mult
+    tb_exp_pct = s.get("tomatoExpPct", 70) / 100
+    tb_start_q = s.get("tStartQ", 20281)
+    tb_build = s.get("tbBuildMonths", 6)
+    tb_end_q = get_end_quarter(tb_start_q, tb_build)
+    crops.append({
+        "key": "TB", "label": "Tomato (Purchased)", "acres": 6,
+        "base_rev": tb_rev, "base_exp": tb_rev * tb_exp_pct,
+        "capex": s.get("tomatoPurchasePrice", 8000000),
+        "start_q": tb_start_q, "end_q": tb_end_q,
+        "build_months": tb_build, "ramp_years": s.get("tbRampYears", 1),
+        "end_year": tb_end_q // 10, "is_buy": True,
+    })
+    return crops
+
+
+def build_rev_exp(s):
+    """Build per-component revenue/expense arrays from settings."""
+    ri = s.get("revInflation", 4)
+    ci = s.get("costInflation", 3)
+    debug = s.get("debug", False)
+
+    rev_rows = {}
+    exp_rows = {}
+    rev = [0.0] * N_YEARS
+    exp = [0.0] * N_YEARS
+
+    # Existing ops — K, J, E, L
+    for label, base in [("Existing Keiki", EXISTING_K_REV), ("Existing Japanese", EXISTING_J_REV), ("Existing English", EXISTING_E_REV)]:
+        r = [base * (1 + ri / 100) ** (y - 2026) for y in YEARS]
+        e = [base * EXISTING_EXP_RATIO * (1 + ci / 100) ** (y - 2026) for y in YEARS]
+        for i in range(N_YEARS):
+            rev[i] += r[i]; exp[i] += e[i]
+        rev_rows[label] = r; exp_rows[label] = e
+
+    # Existing lettuce
+    el_rev = [0.0] * N_YEARS; el_exp = [0.0] * N_YEARS
+    for i, y in enumerate(YEARS):
+        n = y - 2026
+        rm = (1 + ri / 100) ** n; cm = (1 + ci / 100) ** n
+        l_base = EXISTING_L_REV if y <= 2026 else s.get("lettuceLbs", 600000) * s.get("lettucePrice", 7.0)
+        el_rev[i] = l_base * rm
+        el_exp[i] = l_base * (EXISTING_EXP_RATIO if y <= 2026 else s.get("lettuceExpPct", 70) / 100) * cm
+        rev[i] += el_rev[i]; exp[i] += el_exp[i]
+    rev_rows["Existing Lettuce"] = el_rev; exp_rows["Existing Lettuce"] = el_exp
+
+    # New crops
+    crop_data = [] if debug else build_crops(s)
+    dep_crops = []
+    for crop in crop_data:
+        cr, ce = crop_annual_rev_exp(crop["base_rev"], crop["base_exp"], crop["end_q"], crop["ramp_years"], ri, ci)
+        if not crop.get("is_buy"):
+            for i in range(N_YEARS):
+                rev[i] += cr[i]; exp[i] += ce[i]
+            rev_rows[crop["label"]] = cr; exp_rows[crop["label"]] = ce
+            dep_crops.append({"end_year": crop["end_year"], "capex": crop["capex"]})
+
+    return rev, exp, rev_rows, exp_rows, crop_data, dep_crops
+
+
+def compute_crop_irrs(crop_data, s):
+    """Compute per-crop IRR and expansion debt service."""
+    ri = s.get("revInflation", 4)
+    ci = s.get("costInflation", 3)
+    financing = s.get("financingPct", 65) / 100
+    rate = s.get("interestRate", 7) / 100
+    term = s.get("loanTermYears", 10)
+
+    crop_irrs = []
+    expansion_int = [0.0] * N_YEARS
+    expansion_prin = [0.0] * N_YEARS
+
+    for crop in crop_data:
+        cr, ce = crop_annual_rev_exp(crop["base_rev"], crop["base_exp"], crop["end_q"], crop["ramp_years"], ri, ci)
+        if crop.get("is_buy"):
+            loan_base = min(s.get("tomatoHardAssets", 5000000), crop["capex"])
+        else:
+            loan_base = crop["capex"]
+        loan_amt = loan_base * financing
+        equity = crop["capex"] - loan_amt
+        annual_ds = _annual_pmt(loan_amt, rate, term) if loan_amt > 0 else 0
+
+        cfs = []
+        start_year = crop["start_q"] // 10
+        end_year = crop["end_q"] // 10
+        bal = loan_amt
+        for i, y in enumerate(YEARS):
+            cf = cr[i] - ce[i]
+            io_end_y = end_year + (1 if (crop["end_q"] % 10) > 2 else 0)
+            yr_int = yr_prin = 0
+            if start_year <= y <= start_year + term - 1 and bal > 0:
+                yr_int = bal * rate
+                if y >= io_end_y:
+                    yr_prin = min(annual_ds - yr_int, bal)
+                    bal -= yr_prin
+                cf -= yr_int + yr_prin
+            if not crop.get("is_buy"):
+                expansion_int[i] += yr_int
+                expansion_prin[i] += yr_prin
+            if y == start_year:
+                cf -= equity
+            cfs.append(cf)
+
+        irr = calc_irr(cfs) * 100 if any(c != 0 for c in cfs) else 0
+        crop_irrs.append({
+            "key": crop["key"], "label": crop["label"],
+            "capex": crop["capex"], "equity": equity,
+            "irr": round(irr, 1), "cashflows": [round(c) for c in cfs],
+        })
+
+    # Total IRR (built crops only, excludes TB)
+    built_cfs = [0] * N_YEARS
+    for ci_data in crop_irrs:
+        if ci_data["key"] != "TB":
+            for i in range(N_YEARS):
+                built_cfs[i] += ci_data["cashflows"][i]
+    total_irr = calc_irr(built_cfs) * 100 if any(c != 0 for c in built_cfs) else 0
+
+    return crop_irrs, round(total_irr, 1), expansion_int, expansion_prin
+
+
+def compute_kpis(s, crop_data, debug):
+    """Compute KPI card values."""
+    crop_capex = sum(c["capex"] for c in crop_data if not c.get("is_buy"))
+    shared_capex = (s.get("landCostPerAc", 125000) * 20 + s.get("packhouseSF", 30000) * s.get("packhouseCostPerSF", 100) + s.get("housingPeople", 25) * 50000) if not debug else 0
+    return {"total_capex": crop_capex, "shared_capex": shared_capex, "financing_pct": s.get("financingPct", 65)}
+
+
+# ============================================================
+# 14. RUN EVERYTHING (single entry point for server)
+# ============================================================
+
+def run_everything(s):
+    """Single entry point: settings → all computed data for HTML."""
+    rev, exp, rev_rows, exp_rows, crop_data, dep_crops = build_rev_exp(s)
+    result = run_full_model(rev, exp, s, dep_crops)
+    crop_irrs, total_irr, expansion_int, expansion_prin = compute_crop_irrs(crop_data, s)
+    kpis = compute_kpis(s, crop_data, s.get("debug", False))
+
+    write_csv(result)
+
+    return {
+        **{k: v for k, v in result.items() if k != "loans"},
+        "loan_data": {n: [{"interest": d["interest"], "principal": d["principal"], "end_bal": d["end_bal"]} for d in sched] for n, sched in result["loans"]["data"].items()},
+        "loan_total_int": result["loans"]["total_int"],
+        "loan_total_prin": result["loans"]["total_prin"],
+        "loan_total_ds": result["loans"]["total_ds"],
+        "crop_irrs": crop_irrs,
+        "total_irr": total_irr,
+        "crops": [{"key": c["key"], "label": c["label"], "acres": c["acres"], "capex": c["capex"]} for c in crop_data],
+        "rev_rows": rev_rows, "exp_rows": exp_rows,
+        "expansion_int": expansion_int, "expansion_prin": expansion_prin,
+        "expansion_ds": [expansion_int[i] + expansion_prin[i] for i in range(N_YEARS)],
+        **kpis,
+    }
+
+
+# ============================================================
 # STANDALONE TEST
 # ============================================================
 
