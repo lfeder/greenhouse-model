@@ -41,7 +41,7 @@
   "financingPct": 70,
   "interestRate": 7,
   "loanTermYears": 10,
-  "revInflation": 4.5,
+  "revInflation": 4,
   "costInflation": 3.5,
   "tBillRate": 4,
   "buyinValuation": 20000000,

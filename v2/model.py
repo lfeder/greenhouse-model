@@ -198,8 +198,16 @@ def calc_tax_dist(taxable_inc, fed_dep, state_dep, ownership, nol_remaining):
     # Federal
     fed_taxable = taxable_inc - fed_dep
     eb_fed = fed_taxable * eb_pct
-    nol_used = min(nol_remaining, max(0, eb_fed))
-    eb_net_fed = max(0, eb_fed - nol_used)
+    nol_used = 0
+    nol_generated = 0
+    if eb_fed >= 0:
+        # Profitable year: use NOL to reduce taxable income
+        nol_used = min(nol_remaining, eb_fed)
+        eb_net_fed = eb_fed - nol_used
+    else:
+        # Loss year: generate new NOL carryforward
+        nol_generated = -eb_fed
+        eb_net_fed = 0
     fed_tax = calc_tax(eb_net_fed, FED_BRACKETS)
     fed_dist = fed_tax / eb_pct if eb_pct > 0 else 0
 
@@ -213,7 +221,8 @@ def calc_tax_dist(taxable_inc, fed_dep, state_dep, ownership, nol_remaining):
         "fed_dist": fed_dist, "hi_dist": hi_dist, "total": fed_dist + hi_dist,
         "fed_tax": fed_tax, "hi_tax": hi_tax,
         "eb_fed": eb_fed, "eb_net_fed": eb_net_fed, "eb_hi": eb_hi,
-        "nol_used": nol_used, "nol_remaining": nol_remaining - nol_used,
+        "nol_used": nol_used, "nol_generated": nol_generated,
+        "nol_remaining": nol_remaining - nol_used + nol_generated,
         "fed_taxable": fed_taxable, "hi_taxable": hi_taxable,
     }
 

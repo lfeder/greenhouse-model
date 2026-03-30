@@ -47,6 +47,11 @@
     </div>
 
     <div class="panel">
+      <div class="panel-title">Taxable Income ($M)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="taxTable"></table></div>
+    </div>
+
+    <div class="panel">
       <div class="panel-title">Distributions</div>
       <div style="overflow-x:auto"><table class="fin-table" id="ownershipTable"></table></div>
     </div>
@@ -356,6 +361,35 @@ function render(d) {
     </div>`;
   }
   document.getElementById('irrGrid').innerHTML = ig;
+
+  // Tax detail table
+  let tx = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  tx += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
+  tx += tr('Loan Interest', d.loan_total_int.map(v => -v), fCM);
+  tx += tr('Taxable Income', d.taxable_inc, fCM);
+  tx += sr('Federal', Y);
+  tx += tr('Bonus Depreciation', d.dep.fed.map(v => -v), fCM);
+  const fedTaxable = Y.map((_, i) => d.tax_detail[i].fed_taxable);
+  tx += tr('Fed Taxable', fedTaxable, fCM, 'subtotal-row');
+  tx += tr('EB Share', d.tax_detail.map(td => td.eb_fed), fCM);
+  tx += tr('NOL Used', d.tax_detail.map(td => -td.nol_used), fCM);
+  tx += tr('NOL Generated', d.tax_detail.map(td => td.nol_generated), fCM);
+  tx += tr('NOL Balance', d.tax_detail.map(td => td.nol_remaining), fCM);
+  tx += tr('EB Net Taxable', d.tax_detail.map(td => td.eb_net_fed), fCM);
+  tx += tr('Fed Tax (EB)', d.tax_detail.map(td => -td.fed_tax), fCM);
+  tx += tr('Fed Dist (entity)', d.tax_detail.map(td => -td.fed_dist), fCM);
+  tx += sr('Hawaii', Y);
+  tx += tr('State Depreciation', d.dep.state.map(v => -v), fCM);
+  const hiTaxable = Y.map((_, i) => d.tax_detail[i].hi_taxable);
+  tx += tr('HI Taxable', hiTaxable, fCM, 'subtotal-row');
+  tx += tr('EB HI Taxable', d.tax_detail.map(td => td.eb_hi), fCM);
+  tx += tr('HI Tax (EB)', d.tax_detail.map(td => -td.hi_tax), fCM);
+  tx += tr('HI Dist (entity)', d.tax_detail.map(td => -td.hi_dist), fCM);
+  tx += sr('Total', Y);
+  tx += tr('Tax Liability', d.tax_liab, fCM, 'subtotal-row');
+  tx += tr('Tax Cash Dist', d.tax_cash.map(v => -v), fCM, 'total-row-table');
+  tx += '</tbody>';
+  document.getElementById('taxTable').innerHTML = tx;
 
   // Ownership — summary rows + collapsible detail
   let ot = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
