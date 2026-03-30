@@ -21,8 +21,10 @@ N_YEARS = len(YEARS)
 
 # Existing ops
 BASE_REV_PER_AC = C["existing_ops"]["base_rev_per_ac"]
-EXISTING_KJ_REV = C["existing_ops"]["kj_rev"]
-EXISTING_L_REV  = C["existing_ops"]["lettuce_rev"]
+EXISTING_K_REV = C["existing_ops"]["keiki_rev"]
+EXISTING_J_REV = C["existing_ops"]["japanese_rev"]
+EXISTING_E_REV = C["existing_ops"]["english_rev"]
+EXISTING_L_REV = C["existing_ops"]["lettuce_rev"]
 EXISTING_EXP_RATIO = C["existing_ops"]["exp_ratio"]
 PAIDOFF_2026 = C["existing_ops"]["paidoff_2026"]
 
@@ -794,7 +796,7 @@ if __name__ == "__main__":
     settings = json.load(open(_DIR / "settings.json"))
 
     # Existing ops only (debug mode)
-    base_rev = EXISTING_KJ_REV + EXISTING_L_REV
+    base_rev = EXISTING_K_REV + EXISTING_J_REV + EXISTING_E_REV + EXISTING_L_REV
     base_exp = base_rev * EXISTING_EXP_RATIO
     g = DEFAULT_GROWTH
     rev = [base_rev * (1 + g)**i for i in range(N_YEARS)]

@@ -97,24 +97,36 @@ def compute(s):
     dep_crops = []
     crop_data = []
 
-    # Existing ops (always included)
-    ekj_rev = [0.0] * model.N_YEARS
-    ekj_exp = [0.0] * model.N_YEARS
+    # Existing ops (always included) — ordered: K, J, E, L
+    exist = {
+        "Existing Keiki":    model.EXISTING_K_REV,
+        "Existing Japanese": model.EXISTING_J_REV,
+        "Existing English":  model.EXISTING_E_REV,
+    }
+    for label, base in exist.items():
+        r = [0.0] * model.N_YEARS
+        e = [0.0] * model.N_YEARS
+        for i, y in enumerate(model.YEARS):
+            n = y - 2026
+            r[i] = base * (1 + ri / 100) ** n
+            e[i] = base * model.EXISTING_EXP_RATIO * (1 + ci / 100) ** n
+            rev[i] += r[i]
+            exp[i] += e[i]
+        rev_rows[label] = r
+        exp_rows[label] = e
+
+    # Existing lettuce (switches to slider lbs/price after 2026)
     el_rev = [0.0] * model.N_YEARS
     el_exp = [0.0] * model.N_YEARS
     for i, y in enumerate(model.YEARS):
         n = y - 2026
         rm = (1 + ri / 100) ** n
         cm = (1 + ci / 100) ** n
-        ekj_rev[i] = model.EXISTING_KJ_REV * rm
-        ekj_exp[i] = model.EXISTING_KJ_REV * model.EXISTING_EXP_RATIO * cm
         l_base = model.EXISTING_L_REV if y <= 2026 else s.get("lettuceLbs", 600000) * s.get("lettucePrice", 7.0)
         el_rev[i] = l_base * rm
         el_exp[i] = l_base * (model.EXISTING_EXP_RATIO if y <= 2026 else s.get("lettuceExpPct", 70) / 100) * cm
-        rev[i] += ekj_rev[i] + el_rev[i]
-        exp[i] += ekj_exp[i] + el_exp[i]
-    rev_rows["Existing K/J"] = ekj_rev
-    exp_rows["Existing K/J"] = ekj_exp
+        rev[i] += el_rev[i]
+        exp[i] += el_exp[i]
     rev_rows["Existing Lettuce"] = el_rev
     exp_rows["Existing Lettuce"] = el_exp
 
