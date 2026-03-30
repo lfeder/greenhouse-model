@@ -745,9 +745,45 @@ def write_gsheet(model):
 
     rows.append(["EB PEDD Grant %", model["pedd_grant"]])
 
-    # Clear and write in one batch
+    # Clear and write model output
     ws.clear()
     ws.update(range_name="A1", values=rows)
+
+    # Write constants.json to a "Constants" tab
+    def _ensure_tab(sh, name):
+        try:
+            return sh.worksheet(name)
+        except gspread.exceptions.WorksheetNotFound:
+            return sh.add_worksheet(title=name, rows=200, cols=20)
+
+    def _json_to_rows(obj, prefix=""):
+        """Flatten JSON to key/value rows."""
+        rows = []
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                rows.extend(_json_to_rows(v, f"{prefix}{k}."))
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                rows.extend(_json_to_rows(v, f"{prefix}[{i}]."))
+        else:
+            rows.append([prefix.rstrip("."), str(obj)])
+        return rows
+
+    const_ws = _ensure_tab(sh, "Constants")
+    const_ws.clear()
+    const_rows = [["Key", "Value"]] + _json_to_rows(C)
+    const_ws.update(range_name="A1", values=const_rows)
+
+    # Write settings.json to a "Settings" tab
+    settings_ws = _ensure_tab(sh, "Settings")
+    settings_ws.clear()
+    try:
+        with open(_DIR / "settings.json") as f:
+            sdata = json.load(f)
+        settings_rows = [["Key", "Value"]] + [[k, str(v)] for k, v in sdata.items()]
+        settings_ws.update(range_name="A1", values=settings_rows)
+    except Exception:
+        pass
 
 
 # ============================================================
