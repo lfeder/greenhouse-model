@@ -368,15 +368,13 @@ function render(d) {
   for (const p of ['JJB', 'EB', 'JS']) {
     ot += `<tr><td>${p}</td>${d.ownership.map(o => `<td>${o[p].toFixed(1)}%</td>`).join('')}</tr>`;
   }
-  // EB grant summary
-  ot += `<tr><td colspan="${Y.length+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
-
   // Detail toggle
   if (d.ownership_detail) {
     ot += `<tr><td colspan="${Y.length+1}" style="padding-top:4px">
       <a href="#" onclick="document.getElementById('ownershipDetail').style.display=document.getElementById('ownershipDetail').style.display==='none'?'':'none';return false"
          style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
     ot += `</tbody><tbody id="ownershipDetail" style="display:none">`;
+    ot += `<tr><td colspan="${Y.length+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
     for (const row of d.ownership_detail) {
       const label = row[0];
       const vals = row.slice(1);
