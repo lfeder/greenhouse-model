@@ -796,8 +796,8 @@ CROP_DEFS = [
     ("K",  "Keiki",          "newKAcres",  "cukeExpPct",    "cucumberCostPerAc", 1.0,   None),
     ("J",  "Japanese",       "newJAcres",  "cukeExpPct",    "cucumberCostPerAc", 1.0,   None),
     ("E",  "English",        "newEAcres",  "cukeExpPct",    "cucumberCostPerAc", None,   "englishRevPct"),
-    ("T",  "Tomato (Build)", "newTAcres",  "tomatoExpPct",  "tomatoCostPerAc",   None,   "tomatoRevPct"),
     ("L",  "Lettuce",        "newLAcres",  "lettuceExpPct", "lettuceCostPerAc",  None,   None),
+    ("T",  "Tomato (Build)", "newTAcres",  "tomatoExpPct",  "tomatoCostPerAc",   None,   "tomatoRevPct"),
 ]
 
 def build_crops(s):
@@ -932,10 +932,16 @@ def compute_crop_irrs(crop_data, s):
             cfs.append(cf)
 
         irr = calc_irr(cfs) * 100 if any(c != 0 for c in cfs) else 0
+
+        # Cash-on-cash: steady-state annual (op inc - debt svc) / equity
+        base_op_inc = crop["base_rev"] - crop["base_exp"]
+        coc = ((base_op_inc - annual_ds) / equity * 100) if equity > 0 else 0
+
         crop_irrs.append({
             "key": crop["key"], "label": crop["label"],
             "capex": crop["capex"], "equity": equity,
-            "irr": round(irr, 1), "cashflows": [round(c) for c in cfs],
+            "irr": round(irr, 1), "coc": round(coc, 1),
+            "cashflows": [round(c) for c in cfs],
         })
 
     # Total IRR (built crops only, excludes TB)

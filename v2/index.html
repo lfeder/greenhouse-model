@@ -335,7 +335,10 @@ function render(d) {
     ig += `<div class="roi-item" title="${tip.replace(/"/g,'&quot;')}">
       <div><div class="roi-label">${crop.label}</div>
       <div style="font-size:8px;color:var(--text-dim)">${fK(crop.capex)} capex | ${fK(crop.equity)} equity</div></div>
-      <div class="roi-value" style="color:var(--green)">${crop.irr.toFixed(1)}%</div>
+      <div style="text-align:right">
+        <div class="roi-value" style="color:var(--green)">${crop.irr.toFixed(1)}%</div>
+        <div style="font-size:8px;color:var(--text-dim)">${crop.coc.toFixed(1)}% CoC</div>
+      </div>
     </div>`;
   }
   document.getElementById('irrGrid').innerHTML = ig;
