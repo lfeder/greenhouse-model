@@ -6,10 +6,6 @@
     "lettuce_rev": 3000000,
     "exp_ratio": 0.66,
     "base_rev_per_ac": 958333,
-    "existing_ds": {
-      "lettuce_facility": {"annual": 1000000, "end_year": 2031, "end_fraction": 0.25},
-      "land_loan": {"annual": 430000, "end_year": 2045}
-    },
     "paidoff_2026": {"interest": 2934, "principal": 51901, "note": "AgCredit + JJB Solar"}
   },
 
@@ -50,18 +46,27 @@
     "tier1": {"2026": 500000, "2027": 600000, "default": 750000}
   },
 
-  "ownership_base": {
+  "distribution_base": {
     "2026": {"EB": 26.0, "JS": 31.5, "JJB": 42.5},
-    "2027": {"EB": 26.5, "JS": 28.5, "JJB": 45.0},
-    "2028": {"EB": 27.0, "JS": 25.5, "JJB": 47.5},
-    "2029": {"EB": 27.5, "JS": 22.5, "JJB": 50.0}
+    "note": "Starting ownership for distributions. Changes driven by js_buyout and eb_grants."
   },
-  "vesting_deltas": {"JJB": 2.5, "EB": 0.5, "JS": -3.0},
 
   "js_buyout": {
-    "valuations": {"2026": 8000000, "2027": 9750000, "2028": 11500000, "2029": 13250000},
-    "js_annual_loss": 0.03,
-    "eb_annual_gain": 0.005
+    "pct_per_year": 3.0,
+    "years": [2027, 2028, 2029, 2030],
+    "valuations": {"2027": 9750000, "2028": 11500000, "2029": 13250000, "2030": 15000000},
+    "note": "JJB buys 3%/yr from JS. Payment = 3% x valuation at year-end."
+  },
+
+  "eb_grant_pedd": {
+    "per_500k": 0.5,
+    "max_pct": 2.0,
+    "source_split": {"JS": 0.25, "JJB": 0.25},
+    "note": "+0.5% per $500K of PE/DD P&I repaid, max +2%. Funded equally from JS and JJB."
+  },
+
+  "eb_grant_expansion": {
+    "note": "JS gives EB a % per year during expansion. Rate, start year, and stop year are sliders."
   },
 
   "pedd_instruments": [
