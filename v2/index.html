@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Greenhouse Expansion Planner v2</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">Greenhouse Expansion Planner</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
+      <div id="versionLabel" style="font-size:10px;color:var(--text)">v2</div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div id="sidebar"></div>
+
+  <!-- MAIN -->
+  <div style="min-width:0">
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div class="panel chart-panel">
+      <div style="position:relative;height:255px"><canvas id="chart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Revenue & Expense ($M)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="revExpTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">IRR by Crop</div>
+      <div class="roi-grid" id="irrGrid"></div>
+      <div id="irrDetail"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Ownership & Equity</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="ownershipTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">P&L, Distributions & Tax ($K)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="distTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Partner Cash ($K)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="partnerTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Partner Valuations</div>
+      <div id="valuationTable"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ZERO MATH — display only. All computation via /api/compute.
+// ============================================================
+
+let settings = {};
+let lastData = null;
+let chart = null;
+
+// --- API ---
+async function loadSettings() {
+  const r = await fetch('/api/settings');
+  settings = await r.json();
+}
+
+async function compute(partial) {
+  if (partial) Object.assign(settings, partial);
+  const r = await fetch('/api/compute', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(settings),
+  });
+  lastData = await r.json();
+  render(lastData);
+}
+
+function updateSetting(key, value) {
+  settings[key] = value;
+  compute({[key]: value});
+}
+
+// --- FORMATTERS ---
+function fK(n) {
+  if (n == null || isNaN(n)) return '\u2014';
+  const abs = Math.abs(n), sign = n < 0 ? '\u2212' : '';
+  if (abs >= 1e6) return sign + (abs / 1e6).toFixed(1) + 'M';
+  if (abs >= 1e3) return sign + Math.round(abs / 1e3).toLocaleString() + 'K';
+  return sign + Math.round(abs).toLocaleString();
+}
+function fCK(n) { // table cell in $K
+  if (Math.abs(n) < 50) return '\u2014';
+  const k = Math.round(Math.abs(n) / 1e3);
+  return (n < 0 ? '\u2212' : '') + k.toLocaleString();
+}
+function fCM(n) { // table cell in $M
+  if (Math.abs(n) < 500) return '\u2014';
+  return (n < 0 ? '\u2212' : '') + (Math.abs(n) / 1e6).toFixed(1);
+}
+
+// --- SLIDER BUILDER ---
+function sliderBg(pct) {
+  const s = getComputedStyle(document.documentElement);
+  return `linear-gradient(to right,${s.getPropertyValue('--slider-fill').trim()} ${pct}%,${s.getPropertyValue('--slider-track').trim()} ${pct}%)`;
+}
+
+function makeSlider(key, opts) {
+  const val = settings[key] ?? opts.def;
+  const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
+  const sub = opts.sub ? `<div class="slider-sublabel">${opts.sub(val)}</div>` : '';
+  return `<div class="slider-group">
+    <div class="slider-header">
+      <div style="flex:1;padding-right:10px"><div class="slider-label">${opts.label}</div>${sub}</div>
+      <span class="slider-value" id="sv-${key}">${opts.fmt(val)}</span>
+    </div>
+    <input type="range" id="sl-${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${val}"
+      style="background:${sliderBg(pct)}"
+      oninput="onSlider('${key}',this,${JSON.stringify(opts).replace(/"/g,'&quot;')})">
+  </div>`;
+}
+
+function onSlider(key, el, opts) {
+  const val = Number(el.value);
+  const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
+  el.style.background = sliderBg(pct);
+  document.getElementById('sv-' + key).textContent = opts.fmt(val);
+  updateSetting(key, val);
+}
+
+// --- TABLE HELPERS ---
+function yh(years) { return years.map(y => `<th>'${String(y).slice(2)}</th>`).join(''); }
+function sr(label, years) { return `<tr class="section-header"><td colspan="${years.length + 1}">${label}</td></tr>`; }
+function tr(label, data, fn, cls) { fn = fn || fCM; return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${data.map(v => `<td>${fn(v)}</td>`).join('')}</tr>`; }
+
+// --- BUILD SIDEBAR ---
+function buildSidebar() {
+  const S = (k, o) => makeSlider(k, o);
+  const F = v => `${v} ac`;
+  const FM = v => (v < 0 ? '\u2212' : '') + (Math.abs(v) / 1e6).toFixed(2) + 'M';
+  const FP = v => v + '%';
+  const FD = v => '$' + (v / 1e3).toFixed(0) + 'K';
+
+  let h = '';
+  h += `<div class="panel"><div class="panel-title">New Greenhouse Acres</div>
+    ${S('newKAcres', {label:'Keiki',min:0,max:10,step:2,def:2,fmt:F})}
+    ${S('newJAcres', {label:'Japanese',min:0,max:10,step:2,def:2,fmt:F})}
+    ${S('newEAcres', {label:'English',min:0,max:10,step:2,def:2,fmt:F})}
+    ${S('englishRevPct', {label:'English Rev % of K/J',min:75,max:95,step:5,def:80,fmt:FP})}
+    ${S('newTAcres', {label:'Tomato (Build)',min:0,max:10,step:2,def:2,fmt:F})}
+    ${S('tomatoRevPct', {label:'Tomato Rev % of K/J',min:90,max:130,step:10,def:120,fmt:FP})}
+    ${S('newLAcres', {label:'Lettuce',min:0,max:2.5,step:2.5,def:2.5,fmt:F})}
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Lettuce Revenue</div>
+    ${S('lettuceLbs', {label:'Lbs / Year',min:400000,max:1200000,step:200000,def:600000,fmt:v=>(v/1e3).toFixed(0)+'K lb'})}
+    ${S('lettucePrice', {label:'Price / lb',min:6,max:8,step:0.5,def:7,fmt:v=>'$'+v.toFixed(2)})}
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Capital Costs</div>
+    ${S('cucumberCostPerAc', {label:'Cucumber GH / Acre',min:600000,max:1500000,step:200000,def:1000000,fmt:FM})}
+    ${S('tomatoCostPerAc', {label:'Tomato GH / Acre',min:1000000,max:2000000,step:200000,def:1500000,fmt:FM})}
+    ${S('lettuceCostPerAc', {label:'Lettuce GH / Acre',min:3000000,max:5000000,step:500000,def:4000000,fmt:FM})}
+    ${S('landCostPerAc', {label:'Land (20 acres)',min:100000,max:150000,step:10000,def:125000,fmt:v=>FD(v)+'/ac'})}
+    ${S('packhouseSF', {label:'Packhouse Size',min:20000,max:40000,step:5000,def:30000,fmt:v=>(v/1e3).toFixed(0)+'K SF'})}
+    ${S('packhouseCostPerSF', {label:'Packhouse $/SF',min:50,max:150,step:25,def:100,fmt:v=>'$'+v+'/sf'})}
+    ${S('housingPeople', {label:'Housing (new people)',min:10,max:50,step:10,def:25,fmt:v=>v+' people'})}
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Buy 6ac Tomato Facility</div>
+    ${S('tomatoPurchasePrice', {label:'Purchase Price',min:3000000,max:15000000,step:2500000,def:8000000,fmt:FM})}
+    ${S('tomatoHardAssets', {label:'Hard Asset Value',min:2000000,max:10000000,step:1000000,def:5000000,fmt:FM})}
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Operating Expenses (% of Rev)</div>
+    ${S('cukeExpPct', {label:'Cucumber',min:60,max:80,step:5,def:70,fmt:FP})}
+    ${S('tomatoExpPct', {label:'Tomato',min:60,max:80,step:5,def:70,fmt:FP})}
+    ${S('lettuceExpPct', {label:'Lettuce',min:60,max:80,step:5,def:70,fmt:FP})}
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Financing</div>
+    ${S('financingPct', {label:'Loan-to-Cost',min:50,max:90,step:10,def:65,fmt:FP})}
+    ${S('interestRate', {label:'Interest Rate',min:5,max:9,step:1,def:7,fmt:v=>v.toFixed(1)+'%'})}
+    ${S('loanTermYears', {label:'Loan Term',min:5,max:25,step:5,def:10,fmt:v=>v+' yr'})}
+    <div style="font-size:9px;color:var(--text-muted);padding-top:8px">Interest-only during build + 6mo</div>
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Inflation</div>
+    ${S('revInflation', {label:'Revenue Escalation',min:0,max:8,step:2,def:4,fmt:v=>v+'%/yr'})}
+    ${S('costInflation', {label:'Cost Escalation',min:0,max:8,step:2,def:3,fmt:v=>v+'%/yr'})}
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">EB Expansion Grant (from JS)</div>
+    ${S('ebExpansionGrantPct', {label:'Annual %',min:0,max:2,step:0.5,def:0.5,fmt:v=>v.toFixed(1)+'%'})}
+    ${S('ebExpansionGrantStartYear', {label:'Start Year',min:2026,max:2032,step:1,def:2027,fmt:v=>''+v})}
+    ${S('ebExpansionGrantEndYear', {label:'End Year',min:2028,max:2035,step:1,def:2035,fmt:v=>''+v})}
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Mode</div>
+    <div class="toggle-row">
+      <input type="checkbox" id="debugToggle" ${settings.debug ? 'checked' : ''}
+        onchange="updateSetting('debug',this.checked)">
+      <label for="debugToggle">Debug (existing ops only)</label>
+    </div>
+    <div style="font-size:9px;color:var(--text-dim);padding-top:4px">
+      Fed tax: brackets · HI: brackets · NOL: $600K<br>
+      Tier 0: $300K · Tier 1: $500K/$600K/$750K<br>
+      Capex reserve: 2% of rev
+    </div>
+  </div>`;
+
+  document.getElementById('sidebar').innerHTML = h;
+}
+
+// --- RENDER ALL ---
+function render(d) {
+  const Y = d.years;
+
+  // KPIs
+  const lastIdx = Y.length - 1;
+  const steadyRev = d.rev[lastIdx], steadyExp = d.exp[lastIdx];
+  const steadyOpInc = steadyRev - steadyExp;
+  document.getElementById('kpiGrid').innerHTML = [
+    ['Total IRR', d.total_irr + '%', 'all built crops'],
+    ['Steady Rev', fK(steadyRev), Y[lastIdx]],
+    ['Steady Op Inc', fK(steadyOpInc), ((steadyOpInc / steadyRev * 100) || 0).toFixed(1) + '% margin'],
+  ].map(([l, v, s]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div><div class="kpi-sub">${s}</div></div>`).join('');
+
+  // Revenue & expense table
+  let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  rt += sr('Revenue', Y);
+  // Existing + new crop rows would need crop-level data from server
+  // For now, show totals
+  rt += tr('Total Revenue', d.rev, fCM);
+  rt += tr('Total Expenses', d.exp.map(v => -v), fCM);
+  rt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
+  rt += '</tbody>';
+  document.getElementById('revExpTable').innerHTML = rt;
+
+  // IRR grid
+  let ig = '';
+  for (const crop of d.crop_irrs) {
+    ig += `<div class="roi-item" style="cursor:pointer" onclick="showIRRDetail('${crop.key}')">
+      <div><div class="roi-label">${crop.label}</div>
+      <div style="font-size:8px;color:var(--text-dim)">${fK(crop.capex)} capex | ${fK(crop.equity)} equity</div></div>
+      <div class="roi-value" style="color:var(--green)">${crop.irr.toFixed(1)}%</div>
+    </div>`;
+  }
+  document.getElementById('irrGrid').innerHTML = ig;
+
+  // Ownership
+  let ot = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  ot += sr('Ownership %', Y);
+  for (const p of ['JJB', 'EB', 'JS']) {
+    ot += `<tr><td>${p}</td>${d.ownership.map(o => `<td>${o[p].toFixed(1)}%</td>`).join('')}</tr>`;
+  }
+  ot += '</tbody>';
+  document.getElementById('ownershipTable').innerHTML = ot;
+
+  // Distribution waterfall
+  let dt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  dt += sr('P&L', Y);
+  dt += tr('Revenue', d.rev, fCK);
+  dt += tr('Expenses', d.exp.map(v => -v), fCK);
+  dt += tr('Operating Income', d.op_inc, fCK, 'subtotal-row');
+  dt += sr('Cash Adjustments', Y);
+  dt += tr('Loan Interest', d.loan_total_int.map(v => -v), fCK);
+  dt += tr('Loan Principal', d.loan_total_prin.map(v => -v), fCK);
+  dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCK);
+  dt += tr('Distributable Cash', d.distrib_cash, fCK, 'total-row-table');
+  dt += sr('Waterfall', Y);
+  dt += tr('Tax (Fed + HI)', d.tax_cash.map(v => -v), fCK);
+  dt += tr('Tier 0 (EB)', d.tier0_actual.map(v => -v), fCK);
+  // Tier 1 with shortfall highlighting
+  dt += `<tr><td>Tier 1 (Partners)</td>${d.tier1_actual.map((v, i) => {
+    const short = d.tier1_shortfall[i] > 50;
+    return `<td${short ? ' style="color:var(--yellow)"' : ''}>${fCK(-v)}${short ? ' *' : ''}</td>`;
+  }).join('')}</tr>`;
+  dt += tr('PE/DD Repayment', d.pedd_payments.map(v => -v), fCK);
+  dt += tr('Tier 2 (Pro-Rata)', d.tier2.map(v => -v), fCK);
+  if (d.tier1_shortfall.some(v => v > 50)) dt += tr('T1 Shortfall \u2192 DD', d.tier1_shortfall.map(v => -v), fCK);
+  dt += '</tbody>';
+  document.getElementById('distTable').innerHTML = dt;
+
+  // Partner cash
+  let pt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  for (const p of ['EB', 'JS', 'JJB']) {
+    pt += sr(p, Y);
+    const pd = d.partners[p];
+    pt += tr('Tax Dist', pd.tax_dist, fCK);
+    if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCK);
+    pt += tr('Tier 1', pd.tier_1, fCK);
+    if (pd.pedd) pt += tr('PE/DD', pd.pedd, fCK);
+    pt += tr('Tier 2', pd.tier_2, fCK);
+    if (pd.equity_buy_sell) pt += tr('Equity Buy/Sell', pd.equity_buy_sell, fCK);
+    pt += tr('Total ' + p, pd.total, fCK, 'subtotal-row');
+  }
+  pt += sr('EB Grants', Y);
+  pt += `<tr><td colspan="${Y.length + 1}" style="color:var(--text-sub);font-size:10px">PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
+  pt += '</tbody>';
+  document.getElementById('partnerTable').innerHTML = pt;
+
+  // Valuation
+  const lastOwn = d.ownership[lastIdx];
+  const lastOpInc = d.op_inc[lastIdx];
+  let vt = '<table style="width:100%;font-size:11px;font-family:inherit;border-collapse:collapse">';
+  vt += `<tr><th style="text-align:left;padding:4px 8px;color:var(--accent);font-size:9px">P/E</th>`;
+  for (const p of ['JJB', 'EB', 'JS']) vt += `<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">${p} (${lastOwn[p].toFixed(1)}%)</th>`;
+  vt += '<th style="text-align:right;padding:4px 8px;color:var(--accent);font-size:9px">Total</th></tr>';
+  for (const pe of [4,5,6,7,8,9,10,11,12]) {
+    const bv = lastOpInc * pe;
+    vt += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:4px 8px;color:var(--text-muted)">${pe}x</td>`;
+    for (const p of ['JJB', 'EB', 'JS']) vt += `<td style="text-align:right;padding:4px 8px;color:var(--text-sub)">${fK(lastOwn[p] / 100 * bv)}</td>`;
+    vt += `<td style="text-align:right;padding:4px 8px;color:var(--text)">${fK(bv)}</td></tr>`;
+  }
+  vt += '</table>';
+  vt += `<div style="font-size:9px;color:var(--text-dim);margin-top:6px">${Y[lastIdx]} Op Income: ${fK(lastOpInc)}</div>`;
+  document.getElementById('valuationTable').innerHTML = vt;
+}
+
+function showIRRDetail(key) {
+  const crop = lastData.crop_irrs.find(c => c.key === key);
+  if (!crop) return;
+  let h = `<div style="margin-top:10px;font-size:9px;color:var(--accent);font-weight:700;text-transform:uppercase">${crop.label} \u2014 IRR = ${crop.irr.toFixed(1)}%</div>`;
+  h += `<table class="fin-table" style="font-size:10px;margin-top:6px"><thead><tr><th>Year</th><th>Net CF</th><th>Cum CF</th></tr></thead><tbody>`;
+  let cum = 0;
+  for (let i = 0; i < lastData.years.length; i++) {
+    const cf = crop.cashflows[i];
+    cum += cf;
+    if (Math.abs(cf) > 50 || Math.abs(cum) > 50)
+      h += `<tr><td>${lastData.years[i]}</td><td>${fCK(cf)}</td><td>${fCK(cum)}</td></tr>`;
+  }
+  h += '</tbody></table>';
+  document.getElementById('irrDetail').innerHTML = h;
+}
+
+// --- THEME ---
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const isLight = document.body.classList.contains('light');
+  document.getElementById('themeToggle').textContent = isLight ? 'dark' : 'light';
+  localStorage.setItem('gh-expansion-theme', isLight ? 'light' : 'dark');
+}
+
+// --- INIT ---
+(async function() {
+  const theme = localStorage.getItem('gh-expansion-theme');
+  if (theme === 'light') { document.body.classList.add('light'); document.getElementById('themeToggle').textContent = 'dark'; }
+
+  await loadSettings();
+  buildSidebar();
+  await compute();
+})();
+</script>
+</body>
+</html>
