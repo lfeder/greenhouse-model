@@ -935,12 +935,16 @@ def compute_crop_irrs(crop_data, s):
 
         # Cash-on-cash: steady-state annual (op inc - debt svc) / equity
         base_op_inc = crop["base_rev"] - crop["base_exp"]
-        coc = ((base_op_inc - annual_ds) / equity * 100) if equity > 0 else 0
+        net_inc = base_op_inc - annual_ds
+        coc = (net_inc / equity * 100) if equity > 0 else 0
 
         crop_irrs.append({
             "key": crop["key"], "label": crop["label"],
             "capex": crop["capex"], "equity": equity,
             "irr": round(irr, 1), "coc": round(coc, 1),
+            "coc_detail": {"base_rev": round(crop["base_rev"]), "base_exp": round(crop["base_exp"]),
+                           "op_inc": round(base_op_inc), "debt_svc": round(annual_ds),
+                           "net_inc": round(net_inc), "equity": round(equity)},
             "cashflows": [round(c) for c in cfs],
         })
 
