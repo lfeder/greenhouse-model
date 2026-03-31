@@ -56,9 +56,17 @@ async function load() {
   // Depreciation table
   const yh = Y.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
   const tr = (l, data, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${l}</td>${data.map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`;
+  const detail = d.dep.detail || [];
   let dt = `<thead><tr><th></th>${yh}</tr></thead><tbody>`;
-  dt += tr('Federal', d.dep_fed);
-  dt += tr('State (HI)', d.dep_state);
+  // Federal section
+  dt += `<tr class="section-header"><td colspan="${Y.length+1}">Federal</td></tr>`;
+  const lbl = row => row.capex ? row.label + ' (' + fCM(row.capex) + ')' : row.label;
+  for (const row of detail) dt += tr(lbl(row), row.fed);
+  dt += tr('Total Federal', d.dep.fed, 'subtotal-row');
+  // State section
+  dt += `<tr class="section-header"><td colspan="${Y.length+1}">State (HI)</td></tr>`;
+  for (const row of detail) dt += tr(lbl(row), row.state);
+  dt += tr('Total State', d.dep.state, 'subtotal-row');
   dt += '</tbody>';
   document.getElementById('depTable').innerHTML = dt;
 

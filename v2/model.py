@@ -392,6 +392,8 @@ def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
     cum_pedd = 0
     cum_pedd_by_year = []
 
+    pedd_done = False  # True once all PE/DD fully repaid
+
     for i, year in enumerate(YEARS):
         t1_full = get_tier1(year)
         remaining = distrib_cash[i] - tax_dist[i]
@@ -400,6 +402,22 @@ def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
         t0 = min(TIER0, max(0, remaining))
         remaining -= t0
         tier0_actual.append(t0)
+
+        if pedd_done:
+            # After PE/DD repaid: all remaining goes to T1 (no T2 split)
+            t1 = max(0, remaining)
+            remaining = 0
+            tier1_actual.append(t1)
+            tier1_shortfall.append(0)
+            for inst in instruments:
+                detail[inst["name"]]["prin_paid"].append(0)
+                detail[inst["name"]]["int_paid"].append(0)
+                detail[inst["name"]]["end_bal"].append(0)
+                detail[inst["name"]]["int_owed"].append(0)
+            pedd_payments.append(0)
+            tier2.append(0)
+            cum_pedd_by_year.append(cum_pedd)
+            continue
 
         # Tier 1
         t1 = min(t1_full, max(0, remaining))
@@ -448,6 +466,10 @@ def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
         tier2.append(max(0, remaining))
         cum_pedd_by_year.append(cum_pedd)
 
+        # Check if PE/DD is now fully repaid — takes effect next year
+        if all(inst["remaining"] <= 0 and inst["int_owed"] <= 0 for inst in instruments):
+            pedd_done = True
+
     return {
         "detail": detail, "pedd_payments": pedd_payments,
         "tier0_actual": tier0_actual, "tier1_actual": tier1_actual,
@@ -462,10 +484,14 @@ def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
 
 def compute_depreciation(crops, settings):
     s = settings
-    fed = [s.get("existFedAnnual", 200000) if i < s.get("existFedYearsLeft", 8) else 0 for i in range(N_YEARS)]
-    state = [s.get("existStateAnnual", 1000000) if YEARS[i] <= s.get("existStateEndYear", 2029) else 0 for i in range(N_YEARS)]
+    exist_fed = [s.get("existFedAnnual", 200000) if i < s.get("existFedYearsLeft", 8) else 0 for i in range(N_YEARS)]
+    exist_state = [s.get("existStateAnnual", 1000000) if YEARS[i] <= s.get("existStateEndYear", 2029) else 0 for i in range(N_YEARS)]
     bonus_pct = s.get("fedBonusPct", 100) / 100
     state_life = s.get("stateUsefulLife", 10)
+
+    fed = list(exist_fed)
+    state = list(exist_state)
+    detail = [{"label": "Existing", "fed": list(exist_fed), "state": list(exist_state)}]
 
     for crop in crops:
         pis = crop["end_year"]
@@ -473,16 +499,23 @@ def compute_depreciation(crops, settings):
         bonus = capex * bonus_pct
         sl_fed = (capex - bonus) / 20 if bonus_pct < 1 else 0
         sl_state = capex / state_life
+        cf = [0] * N_YEARS
+        cs = [0] * N_YEARS
 
         for i, y in enumerate(YEARS):
             if y == pis:
                 fed[i] += bonus
+                cf[i] += bonus
             if y >= pis and sl_fed > 0:
                 fed[i] += sl_fed
+                cf[i] += sl_fed
             if pis <= y < pis + state_life:
                 state[i] += sl_state
+                cs[i] += sl_state
 
-    return {"fed": fed, "state": state}
+        detail.append({"label": crop.get("label", f"Phase {pis}"), "capex": capex, "fed": cf, "state": cs})
+
+    return {"fed": fed, "state": state, "detail": detail}
 
 
 # ============================================================
@@ -877,13 +910,16 @@ def build_crops(s):
         build_mo = s.get(f"{key.lower()}BuildMonths", 12)
         ramp_yr = s.get(f"{key.lower()}RampYears", 2)
         end_q = get_end_quarter(start_q, build_mo)
+        gh_capex = acres * s.get(cost_key, 1000000)
+        needs_land = s.get(f"{key.lower()}NeedsLand", False)
+        land_cost = 2 * acres * s.get("landCostPerAc", 125000) if needs_land else 0
         crops.append({
             "key": key, "label": label, "acres": acres,
             "base_rev": base_rev, "base_exp": base_rev * exp_pct,
-            "capex": acres * s.get(cost_key, 1000000),
+            "capex": gh_capex + land_cost, "gh_capex": gh_capex, "land_cost": land_cost,
             "start_q": start_q, "end_q": end_q,
             "build_months": build_mo, "ramp_years": ramp_yr,
-            "end_year": end_q // 10,
+            "end_year": end_q // 10, "needs_land": needs_land,
         })
     # Tomato purchase (always)
     t_mult = s.get("tomatoRevPct", 120) / 100
@@ -943,7 +979,39 @@ def build_rev_exp(s):
             for i in range(N_YEARS):
                 rev[i] += cr[i]; exp[i] += ce[i]
             rev_rows.append([crop["label"], cr]); exp_rows.append([crop["label"], ce])
-            dep_crops.append({"end_year": crop["end_year"], "capex": crop["capex"]})
+            dep_crops.append({"end_year": crop["end_year"], "capex": crop["capex"], "label": crop["label"]})
+
+    # Land cost is now per-crop (folded into crop capex above) — exclude from depreciation
+    # For depreciation: only pass gh_capex (not land) for crops that have land
+    # Fix dep_crops to exclude land portion
+    dep_crops_fixed = []
+    for dc in dep_crops:
+        # Find matching crop to check for land
+        match = [c for c in crop_data if c.get("label") == dc["label"]]
+        if match and match[0].get("land_cost", 0) > 0:
+            dep_crops_fixed.append({**dc, "capex": dc["capex"] - match[0]["land_cost"]})
+        else:
+            dep_crops_fixed.append(dc)
+    dep_crops = dep_crops_fixed
+
+    # Packhouse + Housing — shared infrastructure with independent timing
+    if not debug and crop_data:
+        build_crops_only = [c for c in crop_data if not c.get("is_buy")]
+        if build_crops_only:
+            pack_capex = (s.get("packhouseSF", 30000) * s.get("packhouseCostPerSF", 100)
+                          + s.get("housingPeople", 25) * 50000)
+            earliest_start_q = min(c["start_q"] for c in build_crops_only)
+            pack_start_q = s.get("packStartQ", earliest_start_q)
+            pack_build_mo = s.get("packBuildMonths", 12)
+            pack_end_q = get_end_quarter(pack_start_q, pack_build_mo)
+            crop_data.append({
+                "key": "PACK", "label": "Packhouse", "acres": 0,
+                "base_rev": 0, "base_exp": 0, "capex": pack_capex,
+                "start_q": pack_start_q, "end_q": pack_end_q,
+                "build_months": pack_build_mo, "ramp_years": 0,
+                "end_year": pack_end_q // 10, "is_infra": True,
+            })
+            dep_crops.append({"end_year": pack_end_q // 10, "capex": pack_capex, "label": "Packhouse"})
 
     # Total GH acres per year (existing + new as they come online)
     # Existing: K ~7.8ac, J ~3.9ac, E ~0.4ac, L ~2.5ac ≈ 14.6ac
@@ -1018,6 +1086,10 @@ def compute_crop_irrs(crop_data, s):
             "interest": crop_int_row, "principal": crop_prin_row, "balance": crop_bal_row,
         }
 
+        # Infra: debt service only, no IRR card
+        if crop.get("is_infra"):
+            continue
+
         irr = calc_irr(cfs) * 100 if any(c != 0 for c in cfs) else 0
 
         # Cash-on-cash: steady-state annual (op inc - debt svc) / equity
@@ -1046,8 +1118,8 @@ def compute_crop_irrs(crop_data, s):
 
 def compute_kpis(s, crop_data, debug):
     """Compute KPI card values."""
-    crop_capex = sum(c["capex"] for c in crop_data if not c.get("is_buy"))
-    shared_capex = (s.get("landCostPerAc", 125000) * 20 + s.get("packhouseSF", 30000) * s.get("packhouseCostPerSF", 100) + s.get("housingPeople", 25) * 50000) if not debug else 0
+    crop_capex = sum(c["capex"] for c in crop_data if not c.get("is_buy") and not c.get("is_infra"))
+    shared_capex = sum(c["capex"] for c in crop_data if c.get("is_infra"))
     return {"total_capex": crop_capex, "shared_capex": shared_capex, "financing_pct": s.get("financingPct", 65)}
 
 
@@ -1106,6 +1178,28 @@ def run_everything(s):
 
     write_csv(result)
 
+    # Gantt data for frontend
+    existing_ac = {
+        "K": round(EXISTING_K_REV / BASE_REV_PER_AC, 1),
+        "J": round(EXISTING_J_REV / BASE_REV_PER_AC, 1),
+        "E": round(EXISTING_E_REV / BASE_REV_PER_AC, 1),
+        "L": 2.5, "T": 0,
+    }
+    gantt_data = []
+    for c in crop_data:
+        if c.get("is_buy"):
+            continue
+        gantt_data.append({
+            "key": c["key"], "label": c["label"],
+            "acres_existing": existing_ac.get(c["key"], 0),
+            "acres_new": c.get("acres", 0),
+            "start_q": c["start_q"], "build_months": c.get("build_months", 12),
+            "end_q": c["end_q"], "ramp_years": c.get("ramp_years", 0),
+            "needs_land": c.get("needs_land", False),
+            "capex": c.get("capex", 0),
+            "is_infra": c.get("is_infra", False),
+        })
+
     return {
         **{k: v for k, v in result.items() if k != "loans"},
         "loan_data": {n: [{"interest": d["interest"], "principal": d["principal"], "end_bal": d["end_bal"]} for d in sched] for n, sched in result["loans"]["data"].items()},
@@ -1114,13 +1208,14 @@ def run_everything(s):
         "loan_total_ds": result["loans"]["total_ds"],
         "crop_irrs": crop_irrs,
         "total_irr": total_irr,
-        "crops": [{"key": c["key"], "label": c["label"], "acres": c["acres"], "capex": c["capex"]} for c in crop_data],
+        "crops": [{"key": c["key"], "label": c["label"], "acres": c["acres"], "capex": c["capex"]} for c in crop_data if not c.get("is_infra")],
         "rev_rows": rev_rows, "exp_rows": exp_rows, "total_acres": total_acres,
         "expansion_int": expansion_int, "expansion_prin": expansion_prin,
         "expansion_ds": [expansion_int[i] + expansion_prin[i] for i in range(N_YEARS)],
         "expansion_loan_detail": expansion_loan_detail,
         "ownership_detail": ownership_detail,
         "partners_no_exp": partners_no_exp,
+        "gantt_data": gantt_data,
         **kpis,
     }
 

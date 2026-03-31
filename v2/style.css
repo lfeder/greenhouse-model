@@ -65,4 +65,57 @@ input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 
 .roi-label { font-size: 10px; color: var(--text-muted); }
 .roi-value { font-size: 14px; font-weight: 700; }
 
+/* Gantt Chart */
+.gantt-container { font-size: 10px; }
+.gantt-header, .gantt-row {
+  display: grid;
+  grid-template-columns: 90px 44px 32px 1fr;
+  align-items: center;
+  gap: 0;
+}
+.gantt-header { border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 2px; }
+.gantt-row { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.gantt-label { padding: 0 4px; white-space: nowrap; overflow: hidden; }
+.gantt-crop-name { font-size: 10px; color: var(--text-sub); line-height: 1.2; }
+.gantt-existing { font-size: 9px; color: var(--text-muted); }
+.gantt-acres-cell { text-align: center; padding: 0 2px; }
+.gantt-land-cell { text-align: center; padding: 0 2px; }
+.gantt-acres {
+  width: 38px; background: var(--panel-dark); color: var(--text-sub);
+  border: 1px solid var(--border); border-radius: 3px;
+  font-family: inherit; font-size: 10px; padding: 2px; text-align: center;
+}
+.gantt-acres::-webkit-inner-spin-button { opacity: 0.5; }
+.gantt-land-cb { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; }
+.gantt-timeline-header {
+  display: grid;
+  grid-template-columns: repeat(40, 1fr);
+}
+.gantt-year {
+  text-align: center; font-size: 9px; color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+.gantt-timeline {
+  display: grid;
+  grid-template-columns: repeat(40, 1fr);
+  position: relative;
+  min-height: 20px;
+  align-items: center;
+}
+.gantt-q-line { height: 100%; pointer-events: none; grid-row: 1; }
+.gantt-bar {
+  height: 14px; border-radius: 2px; z-index: 1; grid-row: 1;
+  user-select: none; -webkit-user-select: none;
+}
+.gantt-bar-build {
+  background: repeating-linear-gradient(135deg, var(--accent), var(--accent) 2px, transparent 2px, transparent 5px);
+  opacity: 0.7;
+}
+.gantt-bar-ramp {
+  background: var(--accent); opacity: 0.4;
+}
+.gantt-bar-prod {
+  background: var(--accent); opacity: 0.85;
+}
+
 @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
