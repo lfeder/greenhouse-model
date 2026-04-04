@@ -89,8 +89,10 @@ SCENARIOS = {
                "financingMode":"sbic", "jjbEquityCap":10000000, "sbicKicker":5, "sbicEquityPct":10, "sbicCap":25000000, "thirdPartyBuysJS":False},
     "B_3P":   {"newKAcres":4, "newJAcres":6, "newEAcres":6, "newTAcres":0, "newLAcres":0, "packhouseAcres":0.6, "housingPods":6, "landAcres":30, "debug":False,
                "financingMode":"3p", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
-    "C":      {"newKAcres":4, "newJAcres":6, "newEAcres":6, "newTAcres":8, "newLAcres":2.5, "packhouseAcres":1, "housingPods":10, "landAcres":50, "debug":False,
+    "C_SBIC": {"newKAcres":4, "newJAcres":6, "newEAcres":6, "newTAcres":8, "newLAcres":2.5, "packhouseAcres":1, "housingPods":10, "landAcres":50, "debug":False,
                "financingMode":"sbic_3p", "jjbEquityCap":10000000, "sbicKicker":5, "sbicEquityPct":10, "sbicCap":25000000, "thirdPartyBuysJS":False},
+    "C_3P":   {"newKAcres":4, "newJAcres":6, "newEAcres":6, "newTAcres":8, "newLAcres":2.5, "packhouseAcres":1, "housingPods":10, "landAcres":50, "debug":False,
+               "financingMode":"3p", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
     "D":      {"debug": True, "sbicKicker":0},
 }
 
