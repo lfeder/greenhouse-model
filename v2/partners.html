@@ -216,7 +216,7 @@ function render(d) {
   if (d.scenario_summary) {
     const sc = d.scenario_summary;
     const scKeys = ['A','B_SBIC','B_3P','C_SBIC','C_3P','D'];
-    const scLabels = {A:'A', B_SBIC:'B-SBIC', B_3P:'B-3P', C_SBIC:'C-SBIC', C_3P:'C-3P', D:'D'};
+    const scLabels = {A:'A', B_SBIC:'B', B_3P:'B', C_SBIC:'C', C_3P:'C', D:'D'};
     const scHdr = scKeys.map(k => '<th>' + scLabels[k] + '</th>').join('');
     const scRow = (label, fn, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${scKeys.map(k => `<td>${fn(sc[k])}</td>`).join('')}</tr>`;
     const D = sc['D'];
