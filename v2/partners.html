@@ -253,17 +253,6 @@ function render(d) {
     for (const p of ['EB','JS','JJB','SBIC']) {
       st += scRow(p + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
     }
-    st += `<tr><td colspan="${scKeys.length+1}" style="padding-top:4px">
-      <a href="#" onclick="document.getElementById('scOwnershipDetail').style.display=document.getElementById('scOwnershipDetail').style.display==='none'?'':'none';return false"
-         style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
-    st += `<tr id="scOwnershipDetail" style="display:none"><td colspan="${scKeys.length+1}" style="font-size:9px;color:var(--text-muted);padding:8px">
-      JS\u2192JJB: 2.75%/yr vesting (2026-2029)<br>
-      JJB: equity dilution at buy-in valuation<br>
-      SBIC: equity kicker (% set per scenario)<br>
-      3P: equity at 3P buy-in valuation<br>
-      EB: PEDD grant (+0.5% per $500K repaid)<br>
-      EB: expansion promote (annual % from JS/JJB)
-    </td></tr>`;
 
     // Valuation
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Valuation</td></tr>`;
