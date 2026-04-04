@@ -133,10 +133,10 @@ def compute_scenario_summary(base_settings):
         steady_op = d["op_inc"][display_idx]
         mult = rev_band_multiple(steady_rev)
         biz_val = steady_op * mult
-        own = d["ownership"][display_idx] if d.get("ownership") else {"JJB": 50, "EB": 27.5, "JS": 22.5}
+        own = d["ownership"][display_idx] if d.get("ownership") else {"JJB": 50, "EB": 27.5, "JS": 22.5, "SBIC": 0, "TP": 0}
         partners = d.get("partners", {})
         summary = {"multiple": mult, "rev": steady_rev, "op_inc": steady_op, "biz_val": biz_val}
-        for p in ["EB", "JS", "JJB", "SBIC"]:
+        for p in ["EB", "JS", "JJB", "SBIC", "TP"]:
             pt = partners.get(p, {}).get("total", [0]*N_YEARS)
             avg_dist = sum(pt[1:display_idx+1]) / max(1, display_idx)
             summary[f"{p}_pct"] = own.get(p, 0)
@@ -174,6 +174,7 @@ def compute_scenario_summary(base_settings):
         summary["own_JS"] = own.get("JS", 0)
         summary["own_JJB"] = own.get("JJB", 0)
         summary["own_SBIC"] = own.get("SBIC", 0)
+        summary["own_TP"] = own.get("TP", 0)
 
         # SBIC implied valuation (reverse solve from equity %)
         sbic_eq_pct = s.get("sbicEquityPct", 0)
@@ -272,9 +273,9 @@ def run_everything(s):
         # Use base ownership (no dilution) for no-expansion
         own_ne, _ = compute_ownership(s_noexp, result_ne["cum_pedd_by_year"], {}, [0]*N_YEARS)
         partners_ne = compute_partner_cash({**result_ne, "tax_cash_dist": result_ne["tax_cash"]}, own_ne)
-        partners_no_exp = {p: partners_ne[p]["total"] for p in ["EB", "JS", "JJB", "SBIC"]}
+        partners_no_exp = {p: partners_ne[p]["total"] for p in ["EB", "JS", "JJB", "SBIC", "TP"]}
         partners_no_exp["_op_inc_terminal"] = result_ne["op_inc"][-1]
-        partners_no_exp["_ownership"] = {"JJB": own_ne[-1]["JJB"], "EB": own_ne[-1]["EB"], "JS": own_ne[-1]["JS"], "SBIC": own_ne[-1].get("SBIC", 0)}
+        partners_no_exp["_ownership"] = {"JJB": own_ne[-1]["JJB"], "EB": own_ne[-1]["EB"], "JS": own_ne[-1]["JS"], "SBIC": own_ne[-1].get("SBIC", 0), "TP": own_ne[-1].get("TP", 0)}
 
         # JJB bridge loan: fund shortfalls, repay from surpluses
         guarantee = {}

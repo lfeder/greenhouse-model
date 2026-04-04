@@ -20,7 +20,7 @@
         <a href="depreciation.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Depreciation</a>
         <a href="employees.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Employees</a>
       </div>
-      <span style="font-size:10px;color:var(--text-sub)">04-04 05:17</span>
+      <span style="font-size:10px;color:var(--text-sub)">04-04 05:24</span>
       <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
     </div>
   </div>
@@ -250,7 +250,7 @@ function render(d) {
 
     // Ownership
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Ownership</td></tr>`;
-    for (const p of ['EB','JS','JJB','SBIC']) {
+    for (const p of ['EB','JS','JJB','SBIC','TP']) {
       st += scRow(p + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
     }
 
@@ -262,7 +262,7 @@ function render(d) {
     st += scRowX('Biz Value', s => s.biz_val, D.biz_val, 'subtotal-row');
 
     // Per-partner
-    for (const p of ['EB','JS','JJB','SBIC']) {
+    for (const p of ['EB','JS','JJB','SBIC','TP']) {
       st += `<tr class="section-header"><td colspan="${scKeys.length+1}">${p}</td></tr>`;
       st += scRow('Ownership', s => s[p+'_pct'].toFixed(1) + '%');
       st += scRowX('Avg Dist', s => s[p+'_dist'], D[p+'_dist']);
@@ -282,8 +282,8 @@ function render(d) {
       ot += `<tr><td>JJB Equity In</td>${vals.map(v => `<td>${v > 0 ? fCM(v) : '\u2014'}</td>`).join('')}</tr>`;
     }
   }
-  for (const p of ['EB', 'JS', 'JJB', 'SBIC']) {
-    ot += `<tr><td>${pName(p)}</td>${sl(d.ownership).map(o => `<td>${o[p].toFixed(1)}%</td>`).join('')}</tr>`;
+  for (const p of ['EB', 'JS', 'JJB', 'SBIC', 'TP']) {
+    ot += `<tr><td>${pName(p)}</td>${sl(d.ownership).map(o => `<td>${(o[p] || 0).toFixed(1)}%</td>`).join('')}</tr>`;
   }
   if (d.ownership_detail) {
     ot += `<tr><td colspan="${Y.length-_DN+1}" style="padding-top:4px">
@@ -346,9 +346,10 @@ function render(d) {
 
   // Partner cash
   let pt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-  for (const p of ['EB', 'JS', 'JJB', 'SBIC']) {
-    pt += sr(pName(p), Y);
+  for (const p of ['EB', 'JS', 'JJB', 'SBIC', 'TP']) {
     const pd = d.partners[p];
+    if (!pd) continue;
+    pt += sr(pName(p), Y);
     pt += tr('Tax Dist', pd.tax_dist, fCM);
     if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCM);
     pt += tr('Tier 1', pd.tier_1, fCM);
@@ -388,8 +389,8 @@ function render(d) {
   const noExpOwn = hasNoExp ? d.partners_no_exp._ownership : {};
 
   vt += `<tr><td>Business Value</td>${bizVals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpBiz)}</td>` : ''}</tr>`;
-  for (const p of ['EB', 'JS', 'JJB', 'SBIC']) {
-    const vals = DY.map((_, i) => d.ownership[i][p] / 100 * bizVals[i]);
+  for (const p of ['EB', 'JS', 'JJB', 'SBIC', 'TP']) {
+    const vals = DY.map((_, i) => (d.ownership[i][p] || 0) / 100 * bizVals[i]);
     const noExpVal = hasNoExp ? (noExpOwn[p] || 0) / 100 * noExpBiz : 0;
     vt += `<tr><td>${pName(p)}</td>${vals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpVal)}</td>` : ''}</tr>`;
   }

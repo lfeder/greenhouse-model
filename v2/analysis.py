@@ -65,6 +65,7 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
     eb = DIST_BASE["EB"]
     js = DIST_BASE["JS"]
     sbic = 0.0
+    tp = 0.0
 
     buyout_years = JS_BUYOUT["years"]
     buyout_pct = JS_BUYOUT["pct_per_year"]
@@ -85,20 +86,21 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
     pedd_grant_earned = 0
     sbic_kicker_granted = False
     tp_js_bought = False
-    result = []       # [{year, JJB, EB, JS, SBIC}, ...]
+    result = []       # [{year, JJB, EB, JS, SBIC, TP}, ...]
     detail_rows = []  # [[label, y0, y1, ...], ...] for display
 
     # Prepare detail tracking
-    start_jjb, start_eb, start_js, start_sbic = [], [], [], []
+    start_jjb, start_eb, start_js, start_sbic, start_tp = [], [], [], [], []
     buyout_row = []
-    jjb_capital_row, jjb_dilution_row = [], []
-    tp_capital_row, tp_dilution_row = [], []
+    jjb_capital_row, jjb_equity_row = [], []
+    tp_capital_row, tp_equity_row = [], []
     sbic_row = []
     pedd_grant_row, exp_grant_row = [], []
-    end_jjb, end_eb, end_js, end_sbic = [], [], [], []
+    end_jjb, end_eb, end_js, end_sbic, end_tp = [], [], [], [], []
 
     for i, year in enumerate(YEARS):
-        start_jjb.append(jjb); start_eb.append(eb); start_js.append(js); start_sbic.append(sbic)
+        start_jjb.append(jjb); start_eb.append(eb); start_js.append(js)
+        start_sbic.append(sbic); start_tp.append(tp)
         draws = equity_draws.get(year, {})
 
         # 1. Vesting: JJB buys from JS
@@ -109,9 +111,9 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
             buy = buyout_pct
         buyout_row.append(buy)
 
-        # 2. JJB equity draw → dilutes EB/JS at buyinValuation
+        # 2. JJB equity investment at buyinValuation
         jjb_amount = draws.get("jjb", 0)
-        jjb_dil = 0
+        jjb_new_pct = 0
         if jjb_amount > 0 and buyin_val > 0:
             post_money = buyin_val + jjb_amount
             new_pct = jjb_amount / post_money * 100
@@ -119,14 +121,15 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
             eb *= scale
             js *= scale
             sbic *= scale
+            tp *= scale
             jjb = jjb * scale + new_pct
-            jjb_dil = new_pct
+            jjb_new_pct = new_pct
         jjb_capital_row.append(jjb_amount)
-        jjb_dilution_row.append(jjb_dil)
+        jjb_equity_row.append(jjb_new_pct)
 
-        # 3. 3P equity draw → dilutes EB/JJB at thirdPartyValuation
+        # 3. 3P equity investment at thirdPartyValuation
         tp_amount = draws.get("3p", 0)
-        tp_dil = 0
+        tp_new_pct = 0
         if tp_amount > 0 and tp_valuation > 0:
             # If 3P buys JS: on first 3P draw, accelerate JJB buyout then 3P buys JS stake
             if tp_buys_js and not tp_js_bought and js > 0:
@@ -134,7 +137,7 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
                 if js_to_jjb > 0:
                     js -= js_to_jjb
                     jjb += js_to_jjb
-                sbic += js
+                tp += js
                 js = 0
                 tp_js_bought = True
 
@@ -144,10 +147,11 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
             eb *= scale
             jjb *= scale
             js *= scale
-            sbic = sbic * scale + new_pct
-            tp_dil = new_pct
+            sbic *= scale
+            tp = tp * scale + new_pct
+            tp_new_pct = new_pct
         tp_capital_row.append(tp_amount)
-        tp_dilution_row.append(tp_dil)
+        tp_equity_row.append(tp_new_pct)
 
         # 4. SBIC kicker: one-time % grant on first year with any equity draw
         sbic_grant = 0
@@ -184,8 +188,9 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
             exp_g = exp_grant_pct
         exp_grant_row.append(exp_g)
 
-        end_jjb.append(jjb); end_eb.append(eb); end_js.append(js); end_sbic.append(sbic)
-        result.append({"year": year, "JJB": round(jjb, 2), "EB": round(eb, 2), "JS": round(js, 2), "SBIC": round(sbic, 2)})
+        end_jjb.append(jjb); end_eb.append(eb); end_js.append(js)
+        end_sbic.append(sbic); end_tp.append(tp)
+        result.append({"year": year, "JJB": round(jjb, 2), "EB": round(eb, 2), "JS": round(js, 2), "SBIC": round(sbic, 2), "TP": round(tp, 2)})
 
     # Build detail rows for display
     detail_rows = [
@@ -193,18 +198,20 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
         ["Starting EB %"] + [round(v, 1) for v in start_eb],
         ["Starting JS %"] + [round(v, 1) for v in start_js],
         ["Starting SBIC %"] + [round(v, 1) for v in start_sbic],
+        ["Starting 3P %"] + [round(v, 1) for v in start_tp],
         ["JJB buys from JS"] + [round(v, 1) for v in buyout_row],
         ["JJB Capital ($)"] + [round(v) for v in jjb_capital_row],
-        ["JJB Dilution"] + [round(v, 1) for v in jjb_dilution_row],
+        ["JJB Equity Issued %"] + [round(v, 1) for v in jjb_equity_row],
         ["3P Capital ($)"] + [round(v) for v in tp_capital_row],
-        ["3P Dilution"] + [round(v, 1) for v in tp_dilution_row],
-        ["SBIC Kicker"] + [round(v, 1) for v in sbic_row],
+        ["3P Equity Issued %"] + [round(v, 1) for v in tp_equity_row],
+        ["SBIC Kicker %"] + [round(v, 1) for v in sbic_row],
         ["EB grant (PEDD)"] + [round(v, 1) for v in pedd_grant_row],
         ["EB promote"] + [round(v, 1) for v in exp_grant_row],
         ["Ending JJB %"] + [round(v, 1) for v in end_jjb],
         ["Ending EB %"] + [round(v, 1) for v in end_eb],
         ["Ending JS %"] + [round(v, 1) for v in end_js],
         ["Ending SBIC %"] + [round(v, 1) for v in end_sbic],
+        ["Ending 3P %"] + [round(v, 1) for v in end_tp],
     ]
 
     return result, detail_rows
@@ -322,7 +329,7 @@ def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
 def compute_partner_cash(model, ownership):
     """Per-partner annual distributions."""
     partners = {}
-    for p in ["EB", "JS", "JJB", "SBIC"]:
+    for p in ["EB", "JS", "JJB", "SBIC", "TP"]:
         own = [o[p] for o in ownership]
         rows = {}
         rows["tax_dist"] = [model["tax_cash_dist"][i] * own[i] / 100 for i in range(N_YEARS)]
