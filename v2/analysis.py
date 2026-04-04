@@ -112,6 +112,7 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
         buyout_row.append(buy)
 
         # 2. JJB equity investment at buyinValuation
+        #    SBIC has anti-dilution protection — not scaled
         jjb_amount = draws.get("jjb", 0)
         jjb_new_pct = 0
         if jjb_amount > 0 and buyin_val > 0:
@@ -120,7 +121,6 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
             scale = 1 - new_pct / 100
             eb *= scale
             js *= scale
-            sbic *= scale
             tp *= scale
             jjb = jjb * scale + new_pct
             jjb_new_pct = new_pct
@@ -147,7 +147,6 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
             eb *= scale
             jjb *= scale
             js *= scale
-            sbic *= scale
             tp = tp * scale + new_pct
             tp_new_pct = new_pct
         tp_capital_row.append(tp_amount)
