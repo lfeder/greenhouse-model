@@ -235,11 +235,20 @@ function render(d) {
 
     // $ Sources
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Sources</td></tr>`;
+    const ov = loadScOverrides();
     st += scRow('Bank', s => fCM(s.bank_total));
-    st += scRow('SBIC Loan', s => fCM(s.sbic_loan));
+    // SBIC Loan — editable in sbic/sbic_3p modes
+    const sbicModes = ['sbic', 'sbic_3p'];
+    st += `<tr><td>SBIC Loan</td>${scKeys.map(k => {
+      const mode = SCENARIOS[k] && SCENARIOS[k].financingMode;
+      if (!mode || !sbicModes.includes(mode)) return `<td>${fCM(sc[k].sbic_loan)}</td>`;
+      const capVal = (ov[k] && ov[k].sbicCap) || sc[k].sbic_loan;
+      return `<td><input type="text" class="sc-edit" value="${fCM(capVal)}"
+        onchange="updateScenarioParam('${k}','sbicCap',this.value)"
+        style="width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right"></td>`;
+    }).join('')}</tr>`;
     st += scRow('3P Equity', s => fCM(s.tp_equity));
     // JJB Equity — editable only in modes that use jjbEquityCap (3p, sbic_3p)
-    const ov = loadScOverrides();
     const editableModes = ['3p', 'sbic_3p'];
     st += `<tr><td>JJB Equity</td>${scKeys.map(k => {
       const mode = SCENARIOS[k] && SCENARIOS[k].financingMode;
