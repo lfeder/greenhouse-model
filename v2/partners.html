@@ -227,11 +227,9 @@ function render(d) {
     }).join('')}</tr>`;
     let st = `<thead><tr><th></th>${scHdr}</tr></thead><tbody>`;
 
-    // $ Uses
-    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Uses</td></tr>`;
-    st += scRow('CapEx + Startup', s => fCM(s.total_uses));
-    st += scRow('Bridge', s => fCM(s.bridge_total));
-    st += scRow('Total Uses', s => fCM(s.total_uses + s.bridge_total), 'subtotal-row');
+    // $ Uses & Sources
+    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Capital Stack</td></tr>`;
+    st += scRow('Total Uses', s => fCM(s.total_uses), 'subtotal-row');
 
     // $ Sources
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Sources</td></tr>`;
@@ -259,6 +257,7 @@ function render(d) {
         style="width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right"></td>`;
     }).join('')}</tr>`;
     st += scRow('Total Sources', s => fCM(s.bank_total + s.sbic_loan + s.tp_equity + s.jjb_equity), 'subtotal-row');
+    st += scRow('JJB Bridge Loan', s => fCM(s.bridge_total));
 
     // Ownership
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Ownership</td></tr>`;
