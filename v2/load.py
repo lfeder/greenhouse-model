@@ -402,7 +402,7 @@ def compute_kpis(s, crop_data, debug):
     bank_total = sum(c.get("bank_loan", 0) for c in build_crops)
     sbic_total = sum(c.get("sbic_loan", 0) for c in build_crops)
     tp_total = sum(c.get("third_party_equity", 0) for c in build_crops)
-    jjb_equity = sum(c.get("jjb_equity", 0) for c in build_crops) + startup_total
+    jjb_equity = sum(c.get("jjb_equity", 0) for c in build_crops)
     return {
         "total_capex": crop_capex, "shared_capex": shared_capex,
         "bank_total": bank_total, "sbic_total": sbic_total,

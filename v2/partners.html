@@ -20,7 +20,7 @@
         <a href="depreciation.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Depreciation</a>
         <a href="employees.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Employees</a>
       </div>
-      <span style="font-size:10px;color:var(--text-sub)">04-04 05:24</span>
+      <span style="font-size:10px;color:var(--text-sub)">04-04 05:31</span>
       <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
     </div>
   </div>
@@ -267,7 +267,10 @@ function render(d) {
       st += scRow('Ownership', s => s[p+'_pct'].toFixed(1) + '%');
       st += scRowX('Avg Dist', s => s[p+'_dist'], D[p+'_dist']);
       st += scRowX('Equity Value', s => s[p+'_val'], D[p+'_val']);
-      if (p === 'SBIC') st += scRow('SBIC IRR', s => s.sbic_irr ? s.sbic_irr + '%' : '\u2014');
+      if (p === 'SBIC') {
+        st += scRow('Implied Valuation', s => s.sbic_implied_val > 0 ? fCM(s.sbic_implied_val) : '\u2014');
+        st += scRow('IRR', s => s.sbic_irr ? s.sbic_irr + '%' : '\u2014');
+      }
     }
     st += '</tbody>';
     document.getElementById('scenarioTable').innerHTML = st;
