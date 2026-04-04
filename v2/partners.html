@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partner & Financing</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">Partner & Financing</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="display:flex;gap:12px;font-size:10px">
+        <a href="index.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Expansion</a>
+        <a href="partners.html" style="color:var(--accent);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em;font-weight:700">Partners</a>
+        <a href="debt.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Debt</a>
+        <a href="depreciation.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Depreciation</a>
+        <a href="employees.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Employees</a>
+      </div>
+      <span style="font-size:10px;color:var(--text-sub)">04-04 05:17</span>
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div id="sidebar"></div>
+
+  <!-- MAIN -->
+  <div style="min-width:0">
+    <div class="panel">
+      <div class="panel-title">Scenario Comparison ('33)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="scenarioTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('distBody').style.display=document.getElementById('distBody').style.display==='none'?'':'none'">Distributions ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div id="distBody">
+        <div style="overflow-x:auto"><table class="fin-table" id="ownershipTable"></table></div>
+        <div style="overflow-x:auto;margin-top:8px"><table class="fin-table" id="distTable"></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('partnerBody').style.display=document.getElementById('partnerBody').style.display==='none'?'':'none'">Partner Cash & Valuations ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div id="partnerBody">
+        <div style="overflow-x:auto"><table class="fin-table" id="partnerTable"></table></div>
+        <div style="overflow-x:auto;margin-top:8px"><table class="fin-table" id="valuationTable"></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('taxBody').style.display=document.getElementById('taxBody').style.display==='none'?'':'none'">Taxable Income ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div id="taxBody" style="display:none"><div style="overflow-x:auto"><table class="fin-table" id="taxTable"></table></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ZERO MATH — display only. All computation via /api/compute.
+// ============================================================
+
+let settings = {};
+let lastData = null;
+const _sliderOpts = {};
+
+// --- SCENARIO PARAM OVERRIDES ---
+const SC_OVERRIDES_KEY = 'scenario_overrides';
+function loadScOverrides() {
+  try { return JSON.parse(localStorage.getItem(SC_OVERRIDES_KEY)) || {}; } catch { return {}; }
+}
+function saveScOverrides(ov) {
+  localStorage.setItem(SC_OVERRIDES_KEY, JSON.stringify(ov));
+}
+function updateScenarioParam(sc, key, rawValue) {
+  const ov = loadScOverrides();
+  if (!ov[sc]) ov[sc] = {};
+  let val = parseFloat(String(rawValue).replace(/[^0-9.\-]/g, ''));
+  if (/M/i.test(rawValue)) val *= 1e6;
+  else if (/K/i.test(rawValue)) val *= 1e3;
+  else val *= 1e6;  // default to $M since all display is in $M
+  if (isNaN(val)) return;
+  ov[sc][key] = val;
+  saveScOverrides(ov);
+  compute();
+}
+
+async function loadSettings() {
+  const r = await fetch('/api/settings');
+  settings = await r.json();
+}
+
+async function compute(partial) {
+  if (partial) Object.assign(settings, partial);
+  settings._scenario_overrides = loadScOverrides();
+  const r = await fetch('/api/compute', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(settings),
+  });
+  lastData = await r.json();
+  render(lastData);
+}
+
+function updateSetting(key, value) {
+  activeScenario = null;
+  settings[key] = value;
+  compute({[key]: value});
+}
+
+const SCENARIOS = {
+  A:      {newKAcres:0, newJAcres:0, newEAcres:4.5, newTAcres:0, newLAcres:0, packhouseAcres:0.4, housingPods:2, landAcres:0, debug:false, financingMode:'jjb_only', jjbEquityCap:10000000, sbicKicker:0, sbicEquityPct:0, sbicCap:0, thirdPartyBuysJS:false},
+  B_SBIC: {newKAcres:4, newJAcres:6, newEAcres:6, newTAcres:0, newLAcres:0, packhouseAcres:0.6, housingPods:6, landAcres:30, debug:false, financingMode:'sbic', jjbEquityCap:10000000, sbicKicker:5, sbicEquityPct:10, sbicCap:25000000, thirdPartyBuysJS:false},
+  B_3P:   {newKAcres:4, newJAcres:6, newEAcres:6, newTAcres:0, newLAcres:0, packhouseAcres:0.6, housingPods:6, landAcres:30, debug:false, financingMode:'3p', jjbEquityCap:10000000, sbicKicker:0, sbicEquityPct:0, sbicCap:0, thirdPartyBuysJS:false},
+  C:      {newKAcres:4, newJAcres:6, newEAcres:6, newTAcres:8, newLAcres:2.5, packhouseAcres:1, housingPods:10, landAcres:50, debug:false, financingMode:'sbic_3p', jjbEquityCap:10000000, sbicKicker:5, sbicEquityPct:10, sbicCap:25000000, thirdPartyBuysJS:false},
+  D:      {debug:true, sbicKicker:0},
+};
+let activeScenario = null;
+function applyScenario(id) { activeScenario = id; compute(SCENARIOS[id]); }
+
+// --- FORMATTERS ---
+function fK(n) {
+  if (n == null || isNaN(n)) return '\u2014';
+  const abs = Math.abs(n), sign = n < 0 ? '\u2212' : '';
+  if (abs >= 1e6) return sign + (abs / 1e6).toFixed(1) + 'M';
+  if (abs >= 1e3) return sign + Math.round(abs / 1e3).toLocaleString() + 'K';
+  return sign + Math.round(abs).toLocaleString();
+}
+function fCM(n) { if (Math.abs(n) < 500) return '\u2014'; return (n < 0 ? '\u2212' : '') + (Math.abs(n) / 1e6).toFixed(1); }
+
+function sliderBg(pct) { return `linear-gradient(90deg,var(--accent) ${pct}%,var(--panel-dark) ${pct}%)`; }
+
+function makeSlider(key, opts) {
+  _sliderOpts[key] = opts;
+  const val = settings[key] ?? opts.def;
+  const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
+  const sub = opts.sub ? `<div class="slider-sublabel">${opts.sub(val)}</div>` : '';
+  return `<div class="slider-group">
+    <div class="slider-header">
+      <div style="flex:1;padding-right:10px"><div class="slider-label">${opts.label}</div>${sub}</div>
+      <span class="slider-value" id="sv-${key}">${opts.fmt(val)}</span>
+    </div>
+    <input type="range" id="sl-${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${val}"
+      style="background:${sliderBg(pct)}"
+      oninput="onSlider('${key}',this)">
+  </div>`;
+}
+
+function onSlider(key, el) {
+  const opts = _sliderOpts[key];
+  const val = Number(el.value);
+  const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
+  el.style.background = sliderBg(pct);
+  document.getElementById('sv-' + key).textContent = opts.fmt(val);
+  updateSetting(key, val);
+}
+
+// --- TABLE HELPERS ---
+let _DN = 2;
+function sl(arr) { return _DN ? arr.slice(0,-_DN) : arr; }
+function yh(Y) { return sl(Y).map(y => `<th>'${String(y).slice(2)}</th>`).join(''); }
+function sr(l, Y) { return `<tr class="section-header"><td colspan="${sl(Y).length+1}">${l}</td></tr>`; }
+function tr(l, d, fn, cls) { fn = fn || fCM; const s = _DN ? d.slice(0,-_DN) : d; return `<tr${cls ? ` class="${cls}"` : ''}><td>${l}</td>${s.map(v => `<td>${fn(v)}</td>`).join('')}</tr>`; }
+
+function pName(p) { return p; }
+
+// --- BUILD SIDEBAR ---
+function buildSidebar() {
+  const S = (k, o) => makeSlider(k, o);
+  const FM = v => (v < 0 ? '\u2212' : '') + (Math.abs(v) / 1e6).toFixed(2) + 'M';
+  const FP = v => v + '%';
+
+  let h = '';
+  h += `<div class="panel"><div class="panel-title">Scenario</div>
+    <div style="display:flex;gap:6px">
+      <button class="btn" style="${activeScenario==='A'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('A')">A</button>
+      <button class="btn" style="${activeScenario==='B'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('B')">B</button>
+      <button class="btn" style="${activeScenario==='C'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('C')">C</button>
+      <button class="btn" style="${activeScenario==='D'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('D')">D</button>
+    </div>
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Bank Loan</div>
+    ${S('financingPct', {label:'Bank LTV',min:50,max:80,step:5,def:70,fmt:FP})}
+    ${S('bankLoanCap', {label:'Bank Loan Cap',min:7500000,max:17500000,step:1250000,def:12500000,fmt:FM})}
+    ${S('bankRate', {label:'Bank Rate',min:5,max:9,step:0.5,def:7,fmt:v=>v.toFixed(1)+'%'})}
+    ${S('bankTerm', {label:'Bank Term',min:5,max:15,step:1,def:10,fmt:v=>v+' yr'})}
+  </div>`;
+
+
+  h += `<div class="panel"><div class="panel-title">EB Promote (from JS & JJB)</div>
+    ${S('ebExpansionGrantPct', {label:'Annual %',min:0,max:1,step:0.25,def:0.5,fmt:v=>v.toFixed(2)+'%'})}
+    ${S('ebExpansionGrantStartYear', {label:'Start Year',min:2026,max:2032,step:1,def:2027,fmt:v=>''+v})}
+    ${S('ebExpansionGrantEndYear', {label:'End Year',min:2028,max:2035,step:1,def:2035,fmt:v=>''+v})}
+  </div>`;
+
+
+  document.getElementById('sidebar').innerHTML = h;
+}
+
+// --- RENDER ---
+function render(d) {
+  const sb = document.getElementById('sidebar');
+  const sbScroll = sb ? sb.scrollTop : 0;
+  buildSidebar();
+  if (sb) sb.scrollTop = sbScroll;
+
+  const Y = d.years;
+
+  // Scenario comparison table
+  if (d.scenario_summary) {
+    const sc = d.scenario_summary;
+    const scKeys = ['A','B_SBIC','B_3P','C_SBIC','C_3P','D'];
+    const scLabels = {A:'A', B_SBIC:'B (SBIC)', B_3P:'B (3P)', C_SBIC:'C (SBIC)', C_3P:'C (3P)', D:'D'};
+    const scHdr = scKeys.map(k => '<th>' + scLabels[k] + '</th>').join('');
+    const scRow = (label, fn, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${scKeys.map(k => `<td>${fn(sc[k])}</td>`).join('')}</tr>`;
+    const D = sc['D'];
+    const scRowX = (label, valFn, dVal, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${scKeys.map(k => {
+      const v = valFn(sc[k]);
+      const mult = dVal > 0 && k !== 'D' ? ` <span style="color:var(--text-dim);font-size:9px">(${(v/dVal).toFixed(1)}x)</span>` : '';
+      return `<td>${fCM(v)}${mult}</td>`;
+    }).join('')}</tr>`;
+    let st = `<thead><tr><th></th>${scHdr}</tr></thead><tbody>`;
+
+    // $ Uses
+    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Uses</td></tr>`;
+    st += scRow('CapEx + Startup', s => fCM(s.total_uses));
+    st += scRow('Bridge', s => fCM(s.bridge_total));
+    st += scRow('Total Uses', s => fCM(s.total_uses + s.bridge_total), 'subtotal-row');
+
+    // $ Sources
+    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Sources</td></tr>`;
+    st += scRow('Bank', s => fCM(s.bank_total));
+    st += scRow('SBIC Loan', s => fCM(s.sbic_loan));
+    st += scRow('3P Equity', s => fCM(s.tp_equity));
+    // JJB Equity — editable cells (except D)
+    const ov = loadScOverrides();
+    st += `<tr><td>JJB Equity</td>${scKeys.map(k => {
+      if (k === 'D') return `<td>${fCM(sc[k].jjb_equity)}</td>`;
+      const capVal = (ov[k] && ov[k].jjbEquityCap) || sc[k].jjb_equity;
+      return `<td><input type="text" class="sc-edit" value="${fCM(capVal)}"
+        onchange="updateScenarioParam('${k}','jjbEquityCap',this.value)"
+        style="width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right"></td>`;
+    }).join('')}</tr>`;
+    st += scRow('Total Sources', s => fCM(s.bank_total + s.sbic_loan + s.tp_equity + s.jjb_equity), 'subtotal-row');
+
+    // Ownership
+    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Ownership</td></tr>`;
+    for (const p of ['EB','JS','JJB','SBIC']) {
+      st += scRow(p + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
+    }
+    st += `<tr><td colspan="${scKeys.length+1}" style="padding-top:4px">
+      <a href="#" onclick="document.getElementById('scOwnershipDetail').style.display=document.getElementById('scOwnershipDetail').style.display==='none'?'':'none';return false"
+         style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
+    st += `<tr id="scOwnershipDetail" style="display:none"><td colspan="${scKeys.length+1}" style="font-size:9px;color:var(--text-muted);padding:8px">
+      JS\u2192JJB: 2.75%/yr vesting (2026-2029)<br>
+      JJB: equity dilution at buy-in valuation<br>
+      SBIC: equity kicker (% set per scenario)<br>
+      3P: equity at 3P buy-in valuation<br>
+      EB: PEDD grant (+0.5% per $500K repaid)<br>
+      EB: expansion promote (annual % from JS/JJB)
+    </td></tr>`;
+
+    // Valuation
+    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Valuation</td></tr>`;
+    st += scRow('Revenue', s => fCM(s.rev));
+    st += scRow('EBITDA', s => fCM(s.op_inc));
+    st += scRow('Multiple', s => s.multiple + 'x');
+    st += scRowX('Biz Value', s => s.biz_val, D.biz_val, 'subtotal-row');
+
+    // Per-partner
+    for (const p of ['EB','JS','JJB','SBIC']) {
+      st += `<tr class="section-header"><td colspan="${scKeys.length+1}">${p}</td></tr>`;
+      st += scRow('Ownership', s => s[p+'_pct'].toFixed(1) + '%');
+      st += scRowX('Avg Dist', s => s[p+'_dist'], D[p+'_dist']);
+      st += scRowX('Equity Value', s => s[p+'_val'], D[p+'_val']);
+      if (p === 'SBIC') st += scRow('SBIC IRR', s => s.sbic_irr ? s.sbic_irr + '%' : '\u2014');
+    }
+    st += '</tbody>';
+    document.getElementById('scenarioTable').innerHTML = st;
+  }
+
+  // Ownership — summary rows + collapsible detail
+  let ot = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  if (d.ownership_detail) {
+    const capRow = d.ownership_detail.find(r => r[0].includes('Capital'));
+    if (capRow) {
+      const vals = _DN ? capRow.slice(1, -_DN) : capRow.slice(1);
+      ot += `<tr><td>JJB Equity In</td>${vals.map(v => `<td>${v > 0 ? fCM(v) : '\u2014'}</td>`).join('')}</tr>`;
+    }
+  }
+  for (const p of ['EB', 'JS', 'JJB', 'SBIC']) {
+    ot += `<tr><td>${pName(p)}</td>${sl(d.ownership).map(o => `<td>${o[p].toFixed(1)}%</td>`).join('')}</tr>`;
+  }
+  if (d.ownership_detail) {
+    ot += `<tr><td colspan="${Y.length-_DN+1}" style="padding-top:4px">
+      <a href="#" onclick="document.getElementById('ownershipDetail').style.display=document.getElementById('ownershipDetail').style.display==='none'?'':'none';return false"
+         style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
+    ot += `</tbody><tbody id="ownershipDetail" style="display:none">`;
+    ot += `<tr><td colspan="${Y.length-_DN+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
+    for (const row of d.ownership_detail) {
+      const label = row[0];
+      const vals = _DN ? row.slice(1, -_DN) : row.slice(1);
+      const isDollar = label.includes('($)');
+      ot += `<tr><td>${label}</td>${vals.map(v => {
+        if (isDollar) return `<td>${v > 0 ? fCM(v) : '\u2014'}</td>`;
+        return `<td>${typeof v === 'number' ? v.toFixed(1) + '%' : v}</td>`;
+      }).join('')}</tr>`;
+    }
+  }
+  ot += '</tbody>';
+  document.getElementById('ownershipTable').innerHTML = ot;
+
+  // Distribution waterfall
+  const cashTips = Y.map((y, i) => {
+    const cd = d.tax_cash_detail[i];
+    let t = y + ' TAX CASH DIST\n';
+    if (cd.note) { t += cd.note; }
+    else if (cd.final_prior !== undefined) {
+      t += '4/15: prior final = ' + fK(cd.final_prior) + '\n';
+      t += cd.n_quarters + ' x Q est = ' + fK(cd.q_est) + '\n';
+      t += 'Total: ' + fK(cd.total);
+    } else {
+      t += 'Q4 prior est: ' + fK(cd.q4_prior_est) + '\n';
+      t += 'Settlement: ' + fK(cd.settlement) + '\n';
+      t += 'Q1-Q3 est: ' + fK(cd.cur_est_3q) + '\n';
+      t += 'Total: ' + fK(cd.total);
+    }
+    return t;
+  });
+
+  let dt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  dt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
+  dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Existing DS</a></td>${sl(d.loan_total_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+  dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Expansion DS</a></td>${sl(d.expansion_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+  dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCM);
+  dt += tr('Distributable Cash', d.distrib_cash, fCM, 'total-row-table');
+
+  dt += sr('Waterfall', Y);
+  dt += `<tr><td>Tax</td>${sl(d.tax_cash).map((v, i) =>
+    `<td title="${cashTips[i].replace(/"/g,'&quot;')}" style="cursor:help">${fCM(-v)}</td>`
+  ).join('')}</tr>`;
+  dt += tr('Tier 0 (EB)', d.tier0_actual.map(v => -v), fCM);
+  dt += `<tr><td>Tier 1 (Partners)</td>${sl(d.tier1_actual).map((v, i) => {
+    const short = d.tier1_shortfall[i] > 50;
+    return `<td${short ? ' style="color:var(--yellow)"' : ''}>${fCM(-v)}${short ? ' *' : ''}</td>`;
+  }).join('')}</tr>`;
+  dt += tr('PE/DD Repayment', d.pedd_payments.map(v => -v), fCM);
+  dt += tr('Tier 2 (Pro-Rata)', d.tier2.map(v => -v), fCM);
+  if (d.tier1_shortfall.some(v => v > 50)) dt += tr('T1 Shortfall \u2192 DD', d.tier1_shortfall.map(v => -v), fCM);
+  dt += '</tbody>';
+  document.getElementById('distTable').innerHTML = dt;
+
+  // Partner cash
+  let pt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  for (const p of ['EB', 'JS', 'JJB', 'SBIC']) {
+    pt += sr(pName(p), Y);
+    const pd = d.partners[p];
+    pt += tr('Tax Dist', pd.tax_dist, fCM);
+    if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCM);
+    pt += tr('Tier 1', pd.tier_1, fCM);
+    if (pd.pedd) pt += tr('PE/DD', pd.pedd, fCM);
+    pt += tr('Tier 2', pd.tier_2, fCM);
+    if (pd.equity_buy_sell) pt += tr('Equity Buy/Sell', pd.equity_buy_sell, fCM);
+    const gt = d.partners_no_exp && d.partners_no_exp.guarantee;
+    if (gt && gt[p] && gt[p].balance.some(v => v > 50)) {
+      const net = gt[p].advance.map((v, i) => v - gt[p].repay[i]);
+      pt += tr('Bridge (net)', net, fCM);
+    }
+    pt += tr('Total ' + pName(p), pd.total, fCM, 'subtotal-row');
+    if (d.partners_no_exp && d.partners_no_exp[p]) {
+      pt += tr('No Expansion', d.partners_no_exp[p], fCM);
+      const diff = pd.total.map((v, i) => v - d.partners_no_exp[p][i]);
+      pt += tr('Expansion Impact', diff, fCM);
+    }
+  }
+  pt += '</tbody>';
+  document.getElementById('partnerTable').innerHTML = pt;
+
+  // Valuation — PE dropdowns per year, partner values
+  const peOpts = [3,4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
+  const hasNoExp = d.partners_no_exp && d.partners_no_exp._op_inc_terminal;
+  const noExpCol = hasNoExp ? '<th>No Exp</th>' : '';
+
+  let vt = `<thead><tr><th></th>${yh(Y)}${noExpCol}</tr></thead><tbody>`;
+  const DY = sl(Y);
+  vt += `<tr><td style="color:var(--text-muted)">P/E Multiple</td>${DY.map(y =>
+    `<td><select data-year="${y}" class="pe-sel" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>`
+  ).join('')}${hasNoExp ? `<td><select id="noExpPE" class="pe-sel-noexp" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>` : ''}</tr>`;
+
+  const yearPE = settings.yearPE || {};
+  const bizVals = DY.map((y, i) => d.op_inc[i] * (yearPE[String(y)] || 8));
+  const noExpPE = settings.noExpPE || 8;
+  const noExpBiz = hasNoExp ? d.partners_no_exp._op_inc_terminal * noExpPE : 0;
+  const noExpOwn = hasNoExp ? d.partners_no_exp._ownership : {};
+
+  vt += `<tr><td>Business Value</td>${bizVals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpBiz)}</td>` : ''}</tr>`;
+  for (const p of ['EB', 'JS', 'JJB', 'SBIC']) {
+    const vals = DY.map((_, i) => d.ownership[i][p] / 100 * bizVals[i]);
+    const noExpVal = hasNoExp ? (noExpOwn[p] || 0) / 100 * noExpBiz : 0;
+    vt += `<tr><td>${pName(p)}</td>${vals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpVal)}</td>` : ''}</tr>`;
+  }
+  vt += '</tbody>';
+  document.getElementById('valuationTable').innerHTML = vt;
+
+  // Set PE dropdown values and bind events
+  document.querySelectorAll('.pe-sel').forEach(sel => {
+    const y = sel.dataset.year;
+    sel.value = (settings.yearPE || {})[y] || 8;
+    sel.onchange = () => {
+      if (!settings.yearPE) settings.yearPE = {};
+      settings.yearPE[y] = Number(sel.value);
+      updateSetting('yearPE', settings.yearPE);
+    };
+  });
+  const noExpSel = document.getElementById('noExpPE');
+  if (noExpSel) {
+    noExpSel.value = settings.noExpPE || 8;
+    noExpSel.onchange = () => updateSetting('noExpPE', Number(noExpSel.value));
+  }
+
+  // Tax detail table
+  let tx = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  tx += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
+  const totalInt = d.total_interest || d.loan_total_int;
+  tx += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Total Interest</a></td>${sl(totalInt).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+  tx += tr('Taxable Income', d.taxable_inc, fCM);
+  tx += sr('Federal', Y);
+  tx += tr('Bonus Depreciation', d.dep.fed.map(v => -v), fCM);
+  const fedTaxable = Y.map((_, i) => d.tax_detail[i].fed_taxable);
+  tx += tr('Fed Taxable', fedTaxable, fCM, 'subtotal-row');
+  tx += tr('EB Share', d.tax_detail.map(td => td.eb_fed), fCM);
+  tx += tr('NOL Used', d.tax_detail.map(td => -td.nol_used), fCM);
+  tx += tr('NOL Generated', d.tax_detail.map(td => td.nol_generated), fCM);
+  tx += tr('NOL Balance', d.tax_detail.map(td => td.nol_remaining), fCM);
+  tx += tr('EB Net Taxable', d.tax_detail.map(td => td.eb_net_fed), fCM);
+  tx += tr('Fed Tax (EB)', d.tax_detail.map(td => -td.fed_tax), fCM);
+  tx += tr('Fed Tax (entity)', d.tax_detail.map(td => -td.fed_dist), fCM);
+  tx += sr('Hawaii', Y);
+  tx += tr('State Depreciation', d.dep.state.map(v => -v), fCM);
+  const hiTaxable = Y.map((_, i) => d.tax_detail[i].hi_taxable);
+  tx += tr('HI Taxable', hiTaxable, fCM, 'subtotal-row');
+  tx += tr('EB HI Taxable', d.tax_detail.map(td => td.eb_hi), fCM);
+  tx += tr('HI Tax (EB)', d.tax_detail.map(td => -td.hi_tax), fCM);
+  tx += tr('HI Tax (entity)', d.tax_detail.map(td => -td.hi_dist), fCM);
+  tx += sr('Total', Y);
+  tx += tr('Tax Liability', d.tax_liab, fCM, 'subtotal-row');
+  const cashTips2 = Y.map((y, i) => {
+    const cd = d.tax_cash_detail[i];
+    let t = y + ' TAX CASH DIST\n';
+    if (cd.note) { t += cd.note; }
+    else if (cd.final_prior !== undefined) {
+      t += '4/15: prior final = ' + fK(cd.final_prior) + '\n';
+      t += cd.n_quarters + ' x Q est = ' + fK(cd.q_est) + '\n';
+      t += 'Total: ' + fK(cd.total);
+    } else {
+      t += 'Q4 prior est: ' + fK(cd.q4_prior_est) + '\n';
+      t += 'Settlement: ' + fK(cd.settlement) + '\n';
+      t += 'Q1-Q3 est: ' + fK(cd.cur_est_3q) + '\n';
+      t += 'Total: ' + fK(cd.total);
+    }
+    return t;
+  });
+  tx += `<tr class="total-row-table"><td>Tax Cash Dist</td>${sl(d.tax_cash).map((v, i) =>
+    `<td title="${cashTips2[i].replace(/"/g,'&quot;')}" style="cursor:help">${fCM(-v)}</td>`
+  ).join('')}</tr>`;
+  tx += '</tbody>';
+  document.getElementById('taxTable').innerHTML = tx;
+}
+
+// --- THEME ---
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  const isLight = document.body.classList.contains('light');
+  document.getElementById('themeToggle').textContent = isLight ? 'dark' : 'light';
+  localStorage.setItem('gh-expansion-theme', isLight ? 'light' : 'dark');
+}
+
+// --- INIT ---
+(async function() {
+  const theme = localStorage.getItem('gh-expansion-theme');
+  if (theme === 'light') { document.body.classList.add('light'); document.getElementById('themeToggle').textContent = 'dark'; }
+
+  await loadSettings();
+  buildSidebar();
+  await compute();
+})();
+</script>
+</body>
+</html>
