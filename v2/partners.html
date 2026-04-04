@@ -166,7 +166,7 @@ function yh(Y) { return sl(Y).map(y => `<th>'${String(y).slice(2)}</th>`).join('
 function sr(l, Y) { return `<tr class="section-header"><td colspan="${sl(Y).length+1}">${l}</td></tr>`; }
 function tr(l, d, fn, cls) { fn = fn || fCM; const s = _DN ? d.slice(0,-_DN) : d; return `<tr${cls ? ` class="${cls}"` : ''}><td>${l}</td>${s.map(v => `<td>${fn(v)}</td>`).join('')}</tr>`; }
 
-function pName(p) { return p; }
+function pName(p) { return p === 'TP' ? '3P' : p; }
 
 // --- BUILD SIDEBAR ---
 function buildSidebar() {
@@ -251,7 +251,7 @@ function render(d) {
     // Ownership
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Ownership</td></tr>`;
     for (const p of ['EB','JS','JJB','SBIC','TP']) {
-      st += scRow(p + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
+      st += scRow(pName(p) + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
     }
 
     // Valuation
@@ -263,7 +263,7 @@ function render(d) {
 
     // Per-partner
     for (const p of ['EB','JS','JJB','SBIC','TP']) {
-      st += `<tr class="section-header"><td colspan="${scKeys.length+1}">${p}</td></tr>`;
+      st += `<tr class="section-header"><td colspan="${scKeys.length+1}">${pName(p)}</td></tr>`;
       st += scRow('Ownership', s => s[p+'_pct'].toFixed(1) + '%');
       st += scRowX('Avg Dist', s => s[p+'_dist'], D[p+'_dist']);
       st += scRowX('Equity Value', s => s[p+'_val'], D[p+'_val']);
