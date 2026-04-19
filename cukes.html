@@ -44,7 +44,7 @@
 
   <div class="panel" id="projPanel" style="display:none">
     <div class="panel-title">Expansion projection — grown lb/day</div>
-    <p class="note">Baseline = historical grown lb/day per variety (Grade 1, avg of 2025 and 2026 where both exist). Capacity factor = (existing + new acres) / existing acres. Retire uplift uses max(historical weeks, target week) per month, linearly interpolated; cumulative bumps +10/+7/+5/+2% at 9/10/11/12. For months with no English baseline (we didn't grow E then), Post-Exp E is imputed using J's lb/ac × total E acres × retire uplift. Seasonality index = (K+J monthly lb/day) / (annual avg), reference only.</p>
+    <p class="note">K/J baseline = historical grown lb/day × capacity factor × retire uplift. E uses: (actual current E + new E acres × J lb/ac) × retire uplift — same formula every month, so zero-E months fill in from new E acres only. Retire uplift uses max(historical weeks, target week), linearly interpolated; cumulative bumps +10/+7/+5/+2% at weeks 9/10/11/12. Seasonality index = (K+J monthly lb/day) / (annual avg), reference only.</p>
     <div id="projBody"></div>
   </div>
 </div>
@@ -335,19 +335,25 @@ function renderProjection() {
   const current = {}, projected = {};
   for (const v of vars) {
     current[v] = avgLbPerDayByMonth(_growByVM, v);
+  }
+  // K and J: capacity factor × retire uplift.
+  for (const v of ['K', 'J']) {
     const cf = capacityFactor(v);
     projected[v] = current[v].map((x, i) => x == null ? null : x * cf * retMultByMonth[i]);
   }
-
-  // Impute English for months with no E baseline: use J's lb/ac/day × total E acres.
+  // E: existing E actuals + (new E acres × J lb/ac), all × retire uplift.
+  // Works the same for zero-baseline months (existing part is 0).
   const jExistingAc = (_constants.existing_ops && _constants.existing_ops.japanese_acres) || 3.5;
-  const eExistingAc = (_constants.existing_ops && _constants.existing_ops.english_acres) || 0.8;
-  const eTotalAc = eExistingAc + (_settings.newEAcres || 0);
+  const newEAc = _settings.newEAcres || 0;
+  projected.E = Array(12).fill(null);
   for (let i = 0; i < 12; i++) {
-    if (current.E[i] != null && current.E[i] > 0) continue;  // have E actuals, leave as-is
+    const curE = current.E[i];
     const jLb = current.J[i];
-    if (jLb == null) continue;
-    projected.E[i] = (jLb / jExistingAc) * eTotalAc * retMultByMonth[i];
+    const baseE = curE != null ? curE : 0;
+    const newELb = (jLb != null && newEAc > 0) ? (jLb / jExistingAc) * newEAc : 0;
+    const pre = baseE + newELb;
+    if (pre > 0) projected.E[i] = pre * retMultByMonth[i];
+    else if (curE != null) projected.E[i] = 0;
   }
 
   const sumRow = obj => Array(12).fill(null).map((_, i) => {
@@ -392,6 +398,14 @@ function renderProjection() {
   html += row('Post-Exp E', projected.E);
   html += row('Post-Exp Total', projTot, 'diff-row');
   html += row('Δ (Post − Current)', delta);
+
+  const targets = { K: 6000, J: 3000, E: 2400 };
+  const targetTot = targets.K + targets.J + targets.E;
+  html += row('Target sold K', Array(12).fill(targets.K));
+  html += row('Target sold J', Array(12).fill(targets.J));
+  html += row('Target sold E', Array(12).fill(targets.E));
+  html += row('Target sold Total', Array(12).fill(targetTot), 'diff-row');
+  html += row('Surplus (Post − Target)', projTot.map(p => p == null ? null : p - targetTot));
   html += '</tbody></table></div>';
 
   document.getElementById('projBody').innerHTML = html;
