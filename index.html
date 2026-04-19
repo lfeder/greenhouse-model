@@ -80,9 +80,7 @@ function updateSetting(key, value) {
   compute({[key]: value});
 }
 
-let activeScenario = null;
-function applyScenario(id) {
-  activeScenario = id;
+function loadScenario(id) {
   if (id === 'D') {
     compute({debug: true});
   } else {
@@ -112,13 +110,8 @@ const SAVE_KEYS = [
   'housingStartQ','housingBuildMonths',
 ];
 
-async function saveScenario() {
-  let id = activeScenario;
-  if (!id || id === 'D') {
-    id = prompt('Save to which scenario? (A, B, or C)');
-    if (!id || !['A','B','C'].includes(id.toUpperCase())) return;
-    id = id.toUpperCase();
-  }
+async function saveScenario(id) {
+  if (!['A','B','C'].includes(id)) return;
   const overrides = {};
   for (const k of SAVE_KEYS) {
     if (settings[k] !== undefined) overrides[k] = settings[k];
@@ -137,14 +130,18 @@ function buildSidebar() {
   const S = (k, o) => makeSlider(k, o);
   let h = '';
   h += `<div class="panel"><div class="panel-title">Scenario</div>
+    <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;margin-bottom:4px">LOAD</div>
     <div style="display:flex;gap:6px">
-      <button class="btn" style="${activeScenario==='A'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('A')">A</button>
-      <button class="btn" style="${activeScenario==='B'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('B')">B</button>
-      <button class="btn" style="${activeScenario==='C'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('C')">C</button>
-      <button class="btn" style="${activeScenario==='D'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('D')">D</button>
+      <button class="btn" onclick="loadScenario('A')">A</button>
+      <button class="btn" onclick="loadScenario('B')">B</button>
+      <button class="btn" onclick="loadScenario('C')">C</button>
+      <button class="btn" onclick="loadScenario('D')">D</button>
     </div>
-    <div style="margin-top:8px">
-      <button class="btn" onclick="saveScenario()">Save</button>
+    <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;margin:10px 0 4px">SAVE CURRENT TO</div>
+    <div style="display:flex;gap:6px">
+      <button class="btn" onclick="saveScenario('A')">A</button>
+      <button class="btn" onclick="saveScenario('B')">B</button>
+      <button class="btn" onclick="saveScenario('C')">C</button>
     </div>
   </div>`;
   h += `<div class="panel"><div class="panel-title">Revenue Adjustments</div>
