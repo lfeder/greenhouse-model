@@ -174,8 +174,8 @@ function render(d) {
   // Scenario comparison table
   if (d.scenario_summary) {
     const sc = d.scenario_summary;
-    const scKeys = ['A','B_SBIC','B_3P','C_SBIC','C_3P','D'];
-    const scLabels = {A:'A', B_SBIC:'B', B_3P:'B', C_SBIC:'C', C_3P:'C', D:'D'};
+    const scKeys = ['A1','A2','A3','A4','D'];
+    const scLabels = {A1:'A1', A2:'A2', A3:'A3', A4:'A4', D:'D'};
     const scHdr = scKeys.map(k => '<th>' + scLabels[k] + '</th>').join('');
     const scRow = (label, fn, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${scKeys.map(k => `<td>${fn(sc[k])}</td>`).join('')}</tr>`;
     const D = sc['D'];

@@ -84,19 +84,19 @@ def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None):
 # Scenarios
 # ============================================================
 
-# Direct source caps per scenario column (expansion params come from settings.json).
+# Scenario comparison columns — all A-expansion variants with different financing.
 # SBIC loan and 3P equity are direct amounts; JJB fills the remainder after bank.
+# User edits per-column values live; overrides persist to financing_overrides.
 FINANCING_SCENARIOS = {
-    "A":      {"sbicCap":0,        "tpEquityCap":0,        "sbicEquityPct":0,  "thirdPartyBuysJS":False},
-    "B_SBIC": {"sbicCap":9900000,  "tpEquityCap":0,        "sbicEquityPct":5,  "thirdPartyBuysJS":False},
-    "B_3P":   {"sbicCap":0,        "tpEquityCap":8800000,  "sbicEquityPct":0,  "thirdPartyBuysJS":False},
-    "C_SBIC": {"sbicCap":25000000, "tpEquityCap":3800000,  "sbicEquityPct":10, "thirdPartyBuysJS":False},
-    "C_3P":   {"sbicCap":0,        "tpEquityCap":28800000, "sbicEquityPct":0,  "thirdPartyBuysJS":False},
-    "D":      {"debug": True},
+    "A1": {"sbicCap":0, "tpEquityCap":0, "sbicEquityPct":0, "thirdPartyBuysJS":False},
+    "A2": {"sbicCap":0, "tpEquityCap":0, "sbicEquityPct":0, "thirdPartyBuysJS":False},
+    "A3": {"sbicCap":0, "tpEquityCap":0, "sbicEquityPct":0, "thirdPartyBuysJS":False},
+    "A4": {"sbicCap":0, "tpEquityCap":0, "sbicEquityPct":0, "thirdPartyBuysJS":False},
+    "D":  {"debug": True},
 }
 
-# Map each financing column to its expansion scenario
-_EXPANSION_MAP = {"A": "A", "B_SBIC": "B", "B_3P": "B", "C_SBIC": "C", "C_3P": "C", "D": None}
+# All A-variants share scenario A's expansion params
+_EXPANSION_MAP = {"A1": "A", "A2": "A", "A3": "A", "A4": "A", "D": None}
 
 def rev_band_multiple(revenue):
     """Return EBITDA multiple based on revenue band."""
