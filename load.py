@@ -323,65 +323,22 @@ def build_rev_exp(s):
 def allocate_capital_stack(crop_data, s):
     """Allocate bank/SBIC/3P/JJB across crops.
 
-    Modes:
-      jjb_only: bank + JJB equity (no co-investor)
-      sbic:     bank + SBIC debt + JJB equity
-      3p:       bank + JJB equity + 3P equity (above JJB cap)
-      sbic_3p:  bank + SBIC debt + JJB equity + 3P equity (above JJB cap)
-
-    Global allocation: bank fills first (up to bank_cap at bank_ltv).
-    SBIC fills mezzanine debt (up to sbic_cap at target_ltv).
-    JJB equity fills remainder (up to jjb_cap).
-    3P fills any remaining equity need.
+    Bank fills first (capex × bank_ltv, capped at bank_cap).
+    SBIC and 3P are direct amounts from settings (sbicCap, tpEquityCap).
+    JJB equity is the remainder (can go negative if user over-specifies).
     """
     bank_cap = s["bankLoanCap"]
     bank_ltv = s["financingPct"] / 100
-    target_ltv = s["targetLtv"] / 100
-    jjb_cap = s["jjbEquityCap"]
-    mode = s["financingMode"]
-    sbic_cap = s["sbicCap"]
 
     build_crops = [c for c in crop_data if not c.get("is_buy")]
     total_capex = sum(c["capex"] for c in build_crops)
     total_startup = sum(c.get("startup_capital", 0) for c in build_crops)
     lendable_base = total_capex + total_startup
 
-    # Step 1: bank fills first
     total_bank = min(total_capex * bank_ltv, bank_cap)
-    total_sbic = 0
-    total_3p = 0
-
-    if mode == "jjb_only":
-        total_jjb = lendable_base - total_bank
-
-    elif mode == "sbic":
-        total_debt = lendable_base * target_ltv
-        total_bank = min(total_capex * bank_ltv, bank_cap, total_debt)
-        total_sbic = min(total_debt - total_bank, sbic_cap)
-        total_jjb = lendable_base - total_bank - total_sbic
-
-    elif mode == "3p":
-        jjb_needed = lendable_base - total_bank
-        if jjb_needed <= jjb_cap:
-            total_jjb = jjb_needed
-        else:
-            total_jjb = jjb_cap
-            total_3p = jjb_needed - jjb_cap
-
-    elif mode == "sbic_3p":
-        total_debt = lendable_base * target_ltv
-        total_bank = min(total_capex * bank_ltv, bank_cap, total_debt)
-        total_sbic = min(total_debt - total_bank, sbic_cap)
-        equity_needed = lendable_base - total_bank - total_sbic
-        if equity_needed <= jjb_cap:
-            total_jjb = equity_needed
-        else:
-            total_jjb = jjb_cap
-            total_3p = equity_needed - jjb_cap
-
-    else:
-        # Fallback: JJB covers everything after bank
-        total_jjb = lendable_base - total_bank
+    total_sbic = max(0, s.get("sbicCap", 0) or 0)
+    total_3p = max(0, s.get("tpEquityCap", 0) or 0)
+    total_jjb = lendable_base - total_bank - total_sbic - total_3p
 
     # Distribute pro-rata per crop by capex
     for crop in build_crops:

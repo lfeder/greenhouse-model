@@ -84,14 +84,15 @@ def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None):
 # Scenarios
 # ============================================================
 
-# Financing-only params per scenario column (expansion params come from settings.json)
+# Direct source caps per scenario column (expansion params come from settings.json).
+# SBIC loan and 3P equity are direct amounts; JJB fills the remainder after bank.
 FINANCING_SCENARIOS = {
-    "A":      {"financingMode":"jjb_only", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
-    "B_SBIC": {"financingMode":"sbic", "jjbEquityCap":10000000, "sbicKicker":5, "sbicEquityPct":5, "sbicCap":25000000, "thirdPartyBuysJS":False},
-    "B_3P":   {"financingMode":"3p", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
-    "C_SBIC": {"financingMode":"sbic_3p", "jjbEquityCap":10000000, "sbicKicker":10, "sbicEquityPct":10, "sbicCap":25000000, "thirdPartyBuysJS":False},
-    "C_3P":   {"financingMode":"3p", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
-    "D":      {"debug": True, "sbicKicker":0},
+    "A":      {"sbicCap":0,        "tpEquityCap":0,        "sbicEquityPct":0,  "thirdPartyBuysJS":False},
+    "B_SBIC": {"sbicCap":9900000,  "tpEquityCap":0,        "sbicEquityPct":5,  "thirdPartyBuysJS":False},
+    "B_3P":   {"sbicCap":0,        "tpEquityCap":8800000,  "sbicEquityPct":0,  "thirdPartyBuysJS":False},
+    "C_SBIC": {"sbicCap":25000000, "tpEquityCap":3800000,  "sbicEquityPct":10, "thirdPartyBuysJS":False},
+    "C_3P":   {"sbicCap":0,        "tpEquityCap":28800000, "sbicEquityPct":0,  "thirdPartyBuysJS":False},
+    "D":      {"debug": True},
 }
 
 # Map each financing column to its expansion scenario
@@ -120,7 +121,7 @@ def compute_scenario_summary(base_settings):
             s.update(exp_scenarios[exp_key])
         # Apply financing params
         s.update(fin_params)
-        # Apply per-column financing overrides (e.g. B_SBIC jjbEquityCap)
+        # Apply per-column financing overrides (sbicCap, tpEquityCap, sbicEquityPct)
         if name in fin_overrides:
             s.update(fin_overrides[name])
         d = _run_scenario(s)

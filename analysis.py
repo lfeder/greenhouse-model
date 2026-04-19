@@ -71,10 +71,10 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
     buyout_pct = JS_BUYOUT["pct_per_year"]
 
     is_expansion = not settings["debug"]
-    fin_mode = settings["financingMode"]
-    sbic_kicker = settings["sbicKicker"] if is_expansion and settings["_has_sbic"] and fin_mode in ("sbic", "sbic_3p") else 0
+    has_tp = settings.get("_3p_equity_total", 0) > 0
+    sbic_kicker = settings["sbicEquityPct"] if is_expansion and settings["_has_sbic"] else 0
     tp_valuation = settings["thirdPartyValuation"]
-    tp_buys_js = settings["thirdPartyBuysJS"] and fin_mode in ("3p", "sbic_3p") and is_expansion
+    tp_buys_js = settings["thirdPartyBuysJS"] and has_tp and is_expansion
     exp_grant_pct = settings["ebExpansionGrantPct"] if is_expansion else 0
     exp_grant_start = settings["ebExpansionGrantStartYear"]
     exp_grant_end = settings["ebExpansionGrantEndYear"]

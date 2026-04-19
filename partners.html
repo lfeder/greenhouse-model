@@ -65,12 +65,16 @@ let settings = {};
 let lastData = null;
 
 // --- SCENARIO PARAM OVERRIDES ---
-function updateFinancingOverride(sc, key, rawValue) {
+function updateFinancingOverride(sc, key, rawValue, kind) {
   let val = parseFloat(String(rawValue).replace(/[^0-9.\-]/g, ''));
-  if (/M/i.test(rawValue)) val *= 1e6;
-  else if (/K/i.test(rawValue)) val *= 1e3;
-  else val *= 1e6;  // default to $M since all display is in $M
   if (isNaN(val)) return;
+  if (kind === 'pct') {
+    // raw percentage, no scaling
+  } else {
+    if (/M/i.test(rawValue)) val *= 1e6;
+    else if (/K/i.test(rawValue)) val *= 1e3;
+    else val *= 1e6;  // default to $M since all display is in $M
+  }
   if (!settings.financing_overrides) settings.financing_overrides = {};
   if (!settings.financing_overrides[sc]) settings.financing_overrides[sc] = {};
   settings.financing_overrides[sc][key] = val;
@@ -96,9 +100,6 @@ function updateSetting(key, value) {
   settings[key] = value;
   compute({[key]: value});
 }
-
-// Financing mode per scenario column (structural, not data)
-const SC_FIN_MODE = {A:'jjb_only', B_SBIC:'sbic', B_3P:'3p', C_SBIC:'sbic_3p', C_3P:'3p', D:null};
 
 // Scenario buttons load expansion params from saved expansion_scenarios
 let activeScenario = null;
@@ -192,35 +193,41 @@ function render(d) {
     // $ Sources
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Sources</td></tr>`;
     const ov = settings.financing_overrides || {};
+    const editStyle = 'width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right';
+    const mkEdit = (k, field, val) => `<td><input type="text" class="sc-edit" value="${fCM(val)}"
+      onchange="updateFinancingOverride('${k}','${field}',this.value)"
+      style="${editStyle}"></td>`;
     st += scRow('Bank', s => fCM(s.bank_total));
-    // SBIC Loan — editable in sbic/sbic_3p modes
-    const sbicModes = ['sbic', 'sbic_3p'];
+    // SBIC Loan — editable in all scenario columns (not D)
     st += `<tr><td>SBIC Loan</td>${scKeys.map(k => {
-      const mode = SC_FIN_MODE[k];
-      if (!mode || !sbicModes.includes(mode)) return `<td>${fCM(sc[k].sbic_loan)}</td>`;
-      const capVal = (ov[k] && ov[k].sbicCap) || sc[k].sbic_loan;
-      return `<td><input type="text" class="sc-edit" value="${fCM(capVal)}"
-        onchange="updateFinancingOverride('${k}','sbicCap',this.value)"
-        style="width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right"></td>`;
+      if (k === 'D') return `<td>${fCM(sc[k].sbic_loan)}</td>`;
+      return mkEdit(k, 'sbicCap', sc[k].sbic_loan);
     }).join('')}</tr>`;
-    st += scRow('3P Equity', s => fCM(s.tp_equity));
-    // JJB Equity — editable only in modes that use jjbEquityCap (3p, sbic_3p)
-    const editableModes = ['3p', 'sbic_3p'];
-    st += `<tr><td>JJB Equity</td>${scKeys.map(k => {
-      const mode = SC_FIN_MODE[k];
-      if (!mode || !editableModes.includes(mode)) return `<td>${fCM(sc[k].jjb_equity)}</td>`;
-      const capVal = (ov[k] && ov[k].jjbEquityCap) || sc[k].jjb_equity;
-      return `<td><input type="text" class="sc-edit" value="${fCM(capVal)}"
-        onchange="updateFinancingOverride('${k}','jjbEquityCap',this.value)"
-        style="width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right"></td>`;
+    // 3P Equity — editable in all scenario columns (not D)
+    st += `<tr><td>3P Equity</td>${scKeys.map(k => {
+      if (k === 'D') return `<td>${fCM(sc[k].tp_equity)}</td>`;
+      return mkEdit(k, 'tpEquityCap', sc[k].tp_equity);
     }).join('')}</tr>`;
+    // JJB Equity — derived (total_uses - bank - sbic - 3p)
+    st += scRow('JJB Equity', s => fCM(s.jjb_equity));
     st += scRow('Total Sources', s => fCM(s.bank_total + s.sbic_loan + s.tp_equity + s.jjb_equity), 'subtotal-row');
     st += scRow('JJB Bridge Loan', s => fCM(s.bridge_total));
 
     // Ownership
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Ownership</td></tr>`;
     for (const p of ['EB','JS','JJB','SBIC','TP']) {
-      st += scRow(pName(p) + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
+      if (p === 'SBIC') {
+        // SBIC% editable — sets sbicEquityPct per column
+        st += `<tr><td>SBIC%</td>${scKeys.map(k => {
+          if (k === 'D') return `<td>${(sc[k].own_SBIC || 0).toFixed(1)}%</td>`;
+          const cur = (ov[k] && ov[k].sbicEquityPct !== undefined) ? ov[k].sbicEquityPct : (sc[k].own_SBIC || 0);
+          return `<td><input type="text" class="sc-edit" value="${Number(cur).toFixed(1)}"
+            onchange="updateFinancingOverride('${k}','sbicEquityPct',this.value,'pct')"
+            style="${editStyle}"></td>`;
+        }).join('')}</tr>`;
+      } else {
+        st += scRow(pName(p) + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
+      }
     }
     // Valuation
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Valuation</td></tr>`;
