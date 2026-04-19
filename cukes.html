@@ -41,7 +41,7 @@
         <button class="btn" style="margin-left:8px;font-size:9px" onclick="refreshData()">Refresh</button>
       </span>
     </div>
-    <p class="note">Current K/J/E = avg lb/day grown (cuke_harvest, 2025–26 per month). Sales = avg lb/day shipped (invoices, Farm=Cuke). Unsold = Current Total − Sales. K/J Post-Exp = current × capacity factor × retire uplift. E Post-Exp = (actual current E + new E acres × J lb/ac) × retire uplift. Retire uplift uses max(historical weeks, target week), linearly interpolated; cumulative bumps +10/+7/+5/+2% at weeks 9/10/11/12. Sheet data cached 24h — click Refresh to re-fetch.</p>
+    <p class="note">Current K/J/E = avg lb/day grown (cuke_harvest, 2025–26 per month). Sales = avg lb/day shipped (invoices, Farm=Cuke). Unsold = Current Total − Sales. K/J Post-Exp = current × capacity factor × retire uplift. E Post-Exp = (actual current E + new E acres × J lb/ac) × retire uplift. Retire uplift uses max(historical weeks, target week), linearly interpolated; cumulative bumps +10/+7/+5/+2% at weeks 9/10/11/12. Sheet data cached locally forever — click Refresh to re-fetch.</p>
     <div id="status">Loading…</div>
     <div id="projBody"></div>
   </div>
@@ -393,15 +393,12 @@ function renderProjection() {
 // monthly arrays, nothing depends on the raw rows — projection re-renders
 // only need the summary + current settings/constants + target week.
 const CACHE_KEY = 'cukeSummary_v1';
-const CACHE_TTL_MS = 24 * 3600 * 1000;
 
 function loadCache() {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (!obj.timestamp || Date.now() - obj.timestamp > CACHE_TTL_MS) return null;
-    return obj;
+    return JSON.parse(raw);
   } catch { return null; }
 }
 
