@@ -121,6 +121,7 @@ async function initData() {
   recalc();
 }
 initData();
+window.addEventListener('focus', initData);
 
 
 // Avg hrs/wk per headcount for hiring estimate

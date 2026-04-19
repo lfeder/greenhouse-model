@@ -446,11 +446,13 @@ function render(d) {
 }
 
 // --- INIT ---
-(async function() {
+async function refresh() {
   await loadSettings();
   buildSidebar();
   await compute();
-})();
+}
+refresh();
+window.addEventListener('focus', refresh);
 </script>
 </body>
 </html>
