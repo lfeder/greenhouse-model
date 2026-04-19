@@ -35,7 +35,7 @@
 <div class="wrap">
   <div class="panel">
     <div class="panel-title">Average lb/day by month — Grade 1</div>
-    <p class="note">Grow = cuke_harvest.GreenhouseNetWeight. Sales = invoices (Variety=Cuke). Grade 1 only. April 2026+ omitted.</p>
+    <p class="note">Grow = avg lb/day harvested (cuke_harvest, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Averaged across 2025–26 per month. Days at retire = avg max HarvestDay for GHs whose last harvest landed in that month. April 2026+ omitted.</p>
     <div id="status">Loading…</div>
     <div style="overflow-x:auto">
       <table class="fin-table" id="cukeTable" style="display:none"><thead id="thead"></thead><tbody id="tbody"></tbody></table>
@@ -122,52 +122,90 @@ function perDay(totals, y, m) {
   return lbs / daysInMonth(y, m);
 }
 
+// For each month 1..12, average the per-year values across years that have data.
+function avgAcrossYears(totals) {
+  const out = Array(12).fill(null);
+  for (let m = 1; m <= 12; m++) {
+    const vals = [];
+    for (const y of YEARS) {
+      if (m > CUTOFF[y]) continue;
+      const v = perDay(totals, y, m);
+      if (v != null) vals.push(v);
+    }
+    if (vals.length) out[m - 1] = vals.reduce((a, b) => a + b, 0) / vals.length;
+  }
+  return out;
+}
+
+// For each greenhouse, take max HarvestDay. Bucket by the month/year of the GH's
+// LAST harvest. Then average the max-days within each month across all years.
+function retireDaysByMonth(growRows) {
+  const byGh = {};
+  for (const r of growRows) {
+    if (!r.Greenhouse) continue;
+    if (!r._y || !r._m) continue;
+    if (!YEARS.includes(r._y)) continue;
+    if (r._m > CUTOFF[r._y]) continue;
+    const hd = Number(r.HarvestDay);
+    if (!isFinite(hd)) continue;
+    const dateKey = r._y * 10000 + r._m * 100 + r._d;
+    (byGh[r.Greenhouse] ||= []).push({ dateKey, m: r._m, day: hd });
+  }
+
+  const retireByMonth = {};  // month (1..12) -> [maxDays across GHs retiring in any year at that month]
+  for (const gh in byGh) {
+    const rows = byGh[gh];
+    const last = rows.reduce((a, b) => a.dateKey >= b.dateKey ? a : b);
+    const maxDay = rows.reduce((a, b) => a.day > b.day ? a : b).day;
+    (retireByMonth[last.m] ||= []).push(maxDay);
+  }
+
+  const out = Array(12).fill(null);
+  for (let m = 1; m <= 12; m++) {
+    const arr = retireByMonth[m];
+    if (arr && arr.length) out[m - 1] = arr.reduce((a, b) => a + b, 0) / arr.length;
+  }
+  return out;
+}
+
 function fmt(v) {
   if (v == null) return '<td class="empty">—</td>';
   const cls = v < 0 ? ' class="neg"' : '';
   return `<td${cls}>${Math.round(v).toLocaleString()}</td>`;
 }
 
-function render(growTotals, saleTotals) {
+function render(growTotals, saleTotals, retireDays) {
   document.getElementById('thead').innerHTML =
     '<tr><th></th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr>';
 
-  let html = '';
-  const rowFor = (label, y, picker) => {
-    const cells = MONTHS.map((_, i) => {
-      const m = i + 1;
-      if (m > CUTOFF[y]) return '<td class="empty">—</td>';
-      return fmt(picker(m));
-    }).join('');
-    return `<tr><td>${label}</td>${cells}</tr>`;
-  };
+  const rowCells = vals => vals.map(fmt).join('');
+  const row = (label, vals, cls) =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${rowCells(vals)}</tr>`;
 
-  for (const y of YEARS) html += rowFor(`Grow ${y}`, y, m => perDay(growTotals, y, m));
-  for (const y of YEARS) {
-    const cls = y === 2025 ? ' class="year-break"' : '';
-    const cells = MONTHS.map((_, i) => {
-      const m = i + 1;
-      if (m > CUTOFF[y]) return '<td class="empty">—</td>';
-      return fmt(perDay(saleTotals, y, m));
-    }).join('');
-    html += `<tr${cls}><td>Sales ${y}</td>${cells}</tr>`;
-  }
-  for (const y of YEARS) {
-    const cls = y === 2025 ? ' class="diff-row"' : '';
-    const cells = MONTHS.map((_, i) => {
-      const m = i + 1;
-      if (m > CUTOFF[y]) return '<td class="empty">—</td>';
-      const g = perDay(growTotals, y, m);
-      const s = perDay(saleTotals, y, m);
-      if (g == null && s == null) return '<td class="empty">—</td>';
-      return fmt((g || 0) - (s || 0));
-    }).join('');
-    html += `<tr${cls}><td>Diff ${y}</td>${cells}</tr>`;
-  }
+  const growAvg = avgAcrossYears(growTotals);
+  const salesAvg = avgAcrossYears(saleTotals);
+  const diff = growAvg.map((g, i) => {
+    const s = salesAvg[i];
+    if (g == null && s == null) return null;
+    return (g || 0) - (s || 0);
+  });
+
+  let html = '';
+  html += row('Days at retire', retireDays);
+  html += row('Grow', growAvg);
+  html += row('Sales', salesAvg);
+  html += row('Diff (Grow − Sales)', diff, 'diff-row');
 
   document.getElementById('tbody').innerHTML = html;
   document.getElementById('cukeTable').style.display = '';
   document.getElementById('status').style.display = 'none';
+}
+
+// Loose match: invoice sheet Farm/Variety fields vary in casing across tabs.
+function isCukeInvoice(r) {
+  const farm = String(r.Farm || '').toLowerCase();
+  const variety = String(r.Variety || '').toLowerCase();
+  return farm === 'cuke' || farm === 'cucumber' || variety === 'cuke' || variety === 'cucumber';
 }
 
 async function load() {
@@ -181,18 +219,13 @@ async function load() {
     const invoiceRows = [...parseGvizTable(invA), ...parseGvizTable(invB)];
     const growRows = parseGvizTable(growTbl);
 
-    const growTotals = aggregate(
-      growRows,
-      r => Math.round(r.Grade || 0) === 1,
-      r => r.GreenhouseNetWeight
-    );
-    const saleTotals = aggregate(
-      invoiceRows,
-      r => r.Variety === 'Cuke' && Math.round(r.Grade || 0) === 1,
-      r => r.Pounds
-    );
+    const grade1 = r => Math.round(r.Grade || 0) === 1;
 
-    render(growTotals, saleTotals);
+    const growTotals = aggregate(growRows, grade1, r => r.GreenhouseNetWeight);
+    const saleTotals = aggregate(invoiceRows, r => isCukeInvoice(r) && grade1(r), r => r.Pounds);
+    const retireDays = retireDaysByMonth(growRows.filter(grade1));
+
+    render(growTotals, saleTotals, retireDays);
   } catch (err) {
     console.error(err);
     document.getElementById('status').textContent = 'Load error: ' + (err && err.message || err);

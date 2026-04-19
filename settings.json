@@ -58,9 +58,8 @@
   "sbicKicker": 10,
   "sbicEquityPct": 10,
   "sbicCap": 25000000,
+  "tpEquityCap": 0,
   "targetLtv": 85,
-  "jjbEquityCap": 10000000,
-  "financingMode": "sbic",
   "thirdPartyValuation": 30000000,
   "thirdPartyBuysJS": false,
   "revInflation": 4,
@@ -99,12 +98,12 @@
     "A": {
       "housingPods": 2,
       "landAcres": 0,
-      "newEAcres": 4.5,
-      "newJAcres": 0,
-      "newKAcres": 0,
+      "newEAcres": 2.5,
+      "newJAcres": 2,
+      "newKAcres": 1,
       "newLAcres": 0,
       "newTAcres": 0,
-      "packhouseAcres": 0.4
+      "packhouseAcres": 0.3
     },
     "B": {
       "housingPods": 6,
@@ -141,5 +140,7 @@
       "jjbEquityCap": 8000000,
       "sbicCap": 25000000
     }
-  }
+  },
+  "financingMode": "sbic",
+  "jjbEquityCap": 10000000
 }
