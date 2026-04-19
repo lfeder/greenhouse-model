@@ -43,9 +43,10 @@
     </div>
     <p class="note">Current K/J/E = avg lb/day grown (cuke_harvest, 2025–26 per month, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Unsold = Current Total − Sales. Weeks used = max(historical retire, target week override). Seasonality = (K+J monthly lb/day) / (annual avg). Sheet data cached locally forever — click Refresh to re-fetch.</p>
     <div id="status">Loading…</div>
-    <div id="projControls" style="margin-bottom:10px"></div>
     <div id="projBody"></div>
   </div>
+
+  <div id="projControls" style="margin:4px 0 14px;display:none"></div>
 
   <div class="panel" id="postExpPanel" style="display:none">
     <div class="panel-title">Post-expansion projection &amp; sales targets</div>
@@ -364,15 +365,15 @@ function renderProjection() {
   const tableHdr = '<table class="fin-table"><thead><tr><th></th>' +
     MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
 
-  // --- Controls (box 1 header) ---
+  // --- Controls between boxes ---
   const btns = [8, 9, 10, 11, 12].map(w => {
     const active = w === _targetWeek ? 'border-color:var(--accent);color:var(--accent)' : '';
     return `<button class="btn" style="${active};margin-left:4px" onclick="setTargetWeek(${w})">W${w}</button>`;
   }).join('');
-  const cf = vars.map(v => `${v}=${capacityFactor(v).toFixed(2)}×`).join('  ');
-  document.getElementById('projControls').innerHTML =
-    `<span style="font-size:10px;color:var(--text-muted)">Target retire week: ${btns}
-     <span style="margin-left:16px">Capacity factor: ${cf}</span></span>`;
+  const controlsEl = document.getElementById('projControls');
+  controlsEl.innerHTML =
+    `<span style="font-size:10px;color:var(--text-muted)">Target retire week: ${btns}</span>`;
+  controlsEl.style.display = '';
 
   // --- Box 1: current state ---
   const salesAvg = _summary.salesAvg;
