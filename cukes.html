@@ -41,6 +41,12 @@
       <table class="fin-table" id="cukeTable" style="display:none"><thead id="thead"></thead><tbody id="tbody"></tbody></table>
     </div>
   </div>
+
+  <div class="panel" id="projPanel" style="display:none">
+    <div class="panel-title">Expansion projection — grown lb/day</div>
+    <p class="note">Baseline = historical grown lb/day per variety (Grade 1, avg of 2025 and 2026 where both exist). Capacity factor = (existing + new acres) / existing acres per variety. Retire uplift = cumulative product of +10%/+7%/+5%/+2% for target weeks 9/10/11/12. Applied to all capacity (existing + new).</p>
+    <div id="projBody"></div>
+  </div>
 </div>
 
 <script>
@@ -219,16 +225,136 @@ function isCukeInvoice(r) {
   return farm === 'cuke' || farm === 'cucumber' || variety === 'cuke' || variety === 'cucumber';
 }
 
+// Classify K/J/E from raw Variety or ProductCode strings (first letter).
+function classifyKJE(s) {
+  const v = String(s || '').trim().toUpperCase();
+  const c = v.charAt(0);
+  return (c === 'K' || c === 'J' || c === 'E') ? c : null;
+}
+
+// { 'K-2025-07': lbs, ... } of grown lbs per (variety, year, month), Grade 1.
+function growByVarietyMonth(growRows) {
+  const totals = {};
+  for (const r of growRows) {
+    if (Math.round(r.Grade || 0) !== 1) continue;
+    if (!r._y || !r._m) continue;
+    if (!YEARS.includes(r._y)) continue;
+    if (r._m > CUTOFF[r._y]) continue;
+    const v = classifyKJE(r.Variety);
+    if (!v) continue;
+    const key = `${v}-${r._y}-${r._m}`;
+    totals[key] = (totals[key] || 0) + (r.GreenhouseNetWeight || 0);
+  }
+  return totals;
+}
+
+// Avg lb/day by month for one variety, averaged across years with data.
+function avgLbPerDayByMonth(totals, variety) {
+  const out = Array(12).fill(null);
+  for (let m = 1; m <= 12; m++) {
+    const vals = [];
+    for (const y of YEARS) {
+      if (m > CUTOFF[y]) continue;
+      const lbs = totals[`${variety}-${y}-${m}`];
+      if (lbs) vals.push(lbs / daysInMonth(y, m));
+    }
+    if (vals.length) out[m - 1] = vals.reduce((a, b) => a + b, 0) / vals.length;
+  }
+  return out;
+}
+
+// Cumulative multiplier at each target week (marginal: +10/+7/+5/+2 for 9/10/11/12).
+const RETIRE_MULT = { 8: 1.00, 9: 1.10, 10: 1.10 * 1.07, 11: 1.10 * 1.07 * 1.05, 12: 1.10 * 1.07 * 1.05 * 1.02 };
+
+let _growByVM = null;   // cached for re-renders on retire-week toggle
+let _constants = null;
+let _settings = null;
+let _targetWeek = 10;
+
+function capacityFactor(variety) {
+  const ex = _constants && _constants.existing_ops;
+  if (!ex || !_settings) return 1;
+  if (variety === 'K') return (ex.keiki_acres    + (_settings.newKAcres || 0)) / ex.keiki_acres;
+  if (variety === 'J') return (ex.japanese_acres + (_settings.newJAcres || 0)) / ex.japanese_acres;
+  if (variety === 'E') return (ex.english_acres  + (_settings.newEAcres || 0)) / ex.english_acres;
+  return 1;
+}
+
+function setTargetWeek(w) {
+  _targetWeek = w;
+  if (_growByVM) renderProjection();
+}
+window.setTargetWeek = setTargetWeek;
+
+function renderProjection() {
+  if (!_growByVM || !_constants || !_settings) return;
+  const retMult = RETIRE_MULT[_targetWeek] || 1;
+  const vars = ['K', 'J', 'E'];
+  const current = {}, projected = {};
+  for (const v of vars) {
+    current[v] = avgLbPerDayByMonth(_growByVM, v);
+    const cf = capacityFactor(v);
+    projected[v] = current[v].map(x => x == null ? null : x * cf * retMult);
+  }
+  const sumRow = obj => Array(12).fill(null).map((_, i) => {
+    let sum = 0, any = false;
+    for (const v of vars) if (obj[v][i] != null) { sum += obj[v][i]; any = true; }
+    return any ? sum : null;
+  });
+  const curTot = sumRow(current);
+  const projTot = sumRow(projected);
+  const delta = projTot.map((p, i) => {
+    const c = curTot[i];
+    if (p == null && c == null) return null;
+    return (p || 0) - (c || 0);
+  });
+
+  const btns = [8, 9, 10, 11, 12].map(w => {
+    const active = w === _targetWeek ? 'border-color:var(--accent);color:var(--accent)' : '';
+    return `<button class="btn" style="${active};margin-left:4px" onclick="setTargetWeek(${w})">W${w}</button>`;
+  }).join('');
+  const cf = vars.map(v => `${v}=${capacityFactor(v).toFixed(2)}×`).join('  ');
+  const controls = `<div style="margin-bottom:10px;font-size:10px;color:var(--text-muted)">
+    Target retire week: ${btns}
+    <span style="margin-left:16px">Capacity factor: ${cf}</span>
+    <span style="margin-left:16px">Retire uplift: ${retMult.toFixed(3)}×</span>
+  </div>`;
+
+  const row = (label, vals, cls) =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(fmt).join('')}</tr>`;
+
+  let html = controls;
+  html += '<div style="overflow-x:auto"><table class="fin-table"><thead><tr><th></th>' +
+    MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
+  html += row('Current K',  current.K);
+  html += row('Current J',  current.J);
+  html += row('Current E',  current.E);
+  html += row('Current Total', curTot, 'diff-row');
+  html += row('Post-Exp K', projected.K);
+  html += row('Post-Exp J', projected.J);
+  html += row('Post-Exp E', projected.E);
+  html += row('Post-Exp Total', projTot, 'diff-row');
+  html += row('Δ (Post − Current)', delta);
+  html += '</tbody></table></div>';
+
+  document.getElementById('projBody').innerHTML = html;
+  document.getElementById('projPanel').style.display = '';
+}
+
 async function load() {
   try {
-    const [invA, invB, growTbl] = await Promise.all([
+    const [invA, invB, growTbl, settingsResp, constantsResp] = await Promise.all([
       gvizFetch(SHEETS.invoices, { gid: INVOICE_GIDS[0] }),
       gvizFetch(SHEETS.invoices, { gid: INVOICE_GIDS[1] }),
       gvizFetch(SHEETS.grow,     { tab: GROW_TAB }),
+      fetch('/api/settings'),
+      fetch('/api/constants'),
     ]);
 
     const invoiceRows = [...parseGvizTable(invA), ...parseGvizTable(invB)];
     const growRows = parseGvizTable(growTbl);
+    _settings = await settingsResp.json();
+    _constants = await constantsResp.json();
 
     const grade1 = r => Math.round(r.Grade || 0) === 1;
 
@@ -237,6 +363,9 @@ async function load() {
     const retireWeeks = retireWeeksByMonth(growRows.filter(grade1));
 
     render(growTotals, saleTotals, retireWeeks);
+
+    _growByVM = growByVarietyMonth(growRows);
+    renderProjection();
   } catch (err) {
     console.error(err);
     document.getElementById('status').textContent = 'Load error: ' + (err && err.message || err);
