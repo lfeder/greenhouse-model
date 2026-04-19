@@ -438,7 +438,18 @@ function renderProjection() {
   box1 += row('Current Total', curTot, 'diff-row', fmt, fLbs(annualLbs(curTot)));
   box1 += row('Sales', salesAvg, null, fmt, fLbs(annualLbs(salesAvg)));
   box1 += row('Unsold (Current − Sales)', unsold, null, fmt, fLbs(annualLbs(unsold)));
-  box1 += row('Required Total (ac)', reqTotal, 'diff-row', fmtAcres, peakAnnual(reqTotal));
+  // Required acres based on ACTUAL sales (not targets): divide monthly sales
+  // by the month's actual lb/ac/day from the existing footprint. No retire
+  // uplift — pure historical ratio.
+  const existingTotal = exK + exJJJ + exE;
+  const actualReqTotal = salesAvg.map((s, i) => {
+    if (s == null) return null;
+    const produced = curTot[i];
+    if (produced == null || produced === 0) return null;
+    const lbAcDay = produced / existingTotal;
+    return ceil01(s / lbAcDay);
+  });
+  box1 += row('Required Total (ac, to meet sales)', actualReqTotal, 'diff-row', fmtAcres, peakAnnual(actualReqTotal));
   box1 += '</tbody></table></div>';
   document.getElementById('projBody').innerHTML = box1;
   document.getElementById('projPanel').style.display = '';
