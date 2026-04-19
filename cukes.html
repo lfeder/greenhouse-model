@@ -294,7 +294,7 @@ let _growByVM = null;   // cached for re-renders on retire-week toggle
 let _retireWeeks = null;
 let _constants = null;
 let _settings = null;
-let _targetWeek = 10;
+let _targetWeek = Number(localStorage.getItem('cukesTargetWeek')) || 11;
 
 function capacityFactor(variety) {
   const ex = _constants && _constants.existing_ops;
@@ -307,7 +307,8 @@ function capacityFactor(variety) {
 
 function setTargetWeek(w) {
   _targetWeek = w;
-  if (_summary) renderProjection();
+  localStorage.setItem('cukesTargetWeek', String(w));
+  if (_summary) renderAll();
 }
 window.setTargetWeek = setTargetWeek;
 
