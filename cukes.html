@@ -352,12 +352,37 @@ function renderProjection() {
     return (p || 0) - (c || 0);
   });
 
-  const row = (label, vals, cls, formatter) => {
+  // row() renders monthly cells + an Annual cell on the far right.
+  // annualCell is an already-rendered <td>…</td> string, or null for '—'.
+  const row = (label, vals, cls, formatter, annualCell) => {
     const f = formatter || fmt;
-    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(f).join('')}</tr>`;
+    const monthly = vals.map(f).join('');
+    const ann = annualCell == null ? '<td class="empty">—</td>' : annualCell;
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${monthly}${ann}</tr>`;
   };
   const tableHdr = '<table class="fin-table"><thead><tr><th></th>' +
-    MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
+    MONTHS.map(m => `<th>${m}</th>`).join('') + '<th>Annual</th></tr></thead><tbody>';
+
+  // Annual formatters.
+  const annualLbs = arr => {
+    let t = 0;
+    for (let i = 0; i < 12; i++) if (arr[i] != null) t += arr[i] * daysInMonth(2025, i + 1);
+    return t;
+  };
+  const fLbs = v => v >= 1e6
+    ? `<td>${(v / 1e6).toFixed(2)}M</td>`
+    : `<td>${Math.round(v / 1e3).toLocaleString()}K</td>`;
+  const fAvg = arr => {
+    const valid = arr.filter(v => v != null);
+    if (!valid.length) return null;
+    return `<td>${(valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(1)}</td>`;
+  };
+  const fPeak = arr => {
+    const valid = arr.filter(v => v != null);
+    if (!valid.length) return null;
+    return `<td>${Math.max(...valid).toFixed(1)}</td>`;
+  };
+  const fDollars = v => `<td>${(v / 1e6).toFixed(2)}M</td>`;
 
   // --- Controls between boxes ---
   const btns = [8, 9, 10, 11, 12].map(w => {
@@ -377,14 +402,14 @@ function renderProjection() {
     return (c || 0) - (s || 0);
   });
   let box1 = '<div style="overflow-x:auto">' + tableHdr;
-  box1 += row('Weeks used', effWeeks, null, fmtWeeks);
-  box1 += row('Seasonality (K+J)', seasonality, null, fmtIndex);
-  box1 += row('Current K',  current.K);
-  box1 += row('Current J',  current.J);
-  box1 += row('Current E',  current.E);
-  box1 += row('Current Total', curTot, 'diff-row');
-  box1 += row('Sales', salesAvg);
-  box1 += row('Unsold (Current − Sales)', unsold);
+  box1 += row('Weeks used', effWeeks, null, fmtWeeks, fAvg(effWeeks));
+  box1 += row('Seasonality (K+J)', seasonality, null, fmtIndex, null);
+  box1 += row('Current K',  current.K, null, fmt, fLbs(annualLbs(current.K)));
+  box1 += row('Current J',  current.J, null, fmt, fLbs(annualLbs(current.J)));
+  box1 += row('Current E',  current.E, null, fmt, fLbs(annualLbs(current.E)));
+  box1 += row('Current Total', curTot, 'diff-row', fmt, fLbs(annualLbs(curTot)));
+  box1 += row('Sales', salesAvg, null, fmt, fLbs(annualLbs(salesAvg)));
+  box1 += row('Unsold (Current − Sales)', unsold, null, fmt, fLbs(annualLbs(unsold)));
   box1 += '</tbody></table></div>';
   document.getElementById('projBody').innerHTML = box1;
   document.getElementById('projPanel').style.display = '';
@@ -404,7 +429,10 @@ function renderProjection() {
     const w = TARGETS[key].winter;
     const s = TARGETS[key].summer;
     let cells = '';
+    const monthlyArr = [];
     for (let i = 0; i < 12; i++) {
+      const val = i < 3 ? w : s;
+      monthlyArr.push(val);
       if (i === 0) {
         cells += `<td><input type="number" value="${w}" min="0" step="100"
           onchange="setTarget('${key}','winter',this.value)" style="${inputStyle}"></td>`;
@@ -412,22 +440,22 @@ function renderProjection() {
         cells += `<td><input type="number" value="${s}" min="0" step="100"
           onchange="setTarget('${key}','summer',this.value)" style="${inputStyle}"></td>`;
       } else {
-        const val = i < 3 ? w : s;
         cells += `<td>${val.toLocaleString()}</td>`;
       }
     }
-    return `<tr><td>${label}</td>${cells}</tr>`;
+    const annual = fLbs(annualLbs(monthlyArr));
+    return `<tr><td>${label}</td>${cells}${annual}</tr>`;
   };
   let box2 = '<div style="overflow-x:auto">' + tableHdr;
-  box2 += row('Post-Exp K', projected.K);
-  box2 += row('Post-Exp J', projected.J);
-  box2 += row('Post-Exp E', projected.E);
-  box2 += row('Post-Exp Total', projTot, 'diff-row');
+  box2 += row('Post-Exp K', projected.K, null, fmt, fLbs(annualLbs(projected.K)));
+  box2 += row('Post-Exp J', projected.J, null, fmt, fLbs(annualLbs(projected.J)));
+  box2 += row('Post-Exp E', projected.E, null, fmt, fLbs(annualLbs(projected.E)));
+  box2 += row('Post-Exp Total', projTot, 'diff-row', fmt, fLbs(annualLbs(projTot)));
   box2 += targetRow('Target sold K', 'K');
   box2 += targetRow('Target sold J', 'J');
   box2 += targetRow('Target sold E', 'E');
-  box2 += row('Target sold Total', targTot, 'diff-row');
-  box2 += row('Surplus (Post − Target)', surplus);
+  box2 += row('Target sold Total', targTot, 'diff-row', fmt, fLbs(annualLbs(targTot)));
+  box2 += row('Surplus (Post − Target)', surplus, null, fmt, fLbs(annualLbs(surplus)));
 
   // Required acres per month to hit target (K & J use own per-ac; E uses J's).
   const exK = _constants.existing_ops.keiki_acres;
@@ -445,8 +473,11 @@ function renderProjection() {
     return (k || 0) + (j || 0) + (e || 0);
   });
   const fmtAc = v => v == null ? '<td class="empty">—</td>' : `<td>${v.toFixed(1)}</td>`;
-  const rowAc = (label, vals, cls) =>
-    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(fmtAc).join('')}</tr>`;
+  const rowAc = (label, vals, cls) => {
+    const peak = fPeak(vals);
+    const ann = peak == null ? '<td class="empty">—</td>' : peak;
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(fmtAc).join('')}${ann}</tr>`;
+  };
   box2 += rowAc('Required K (ac)', reqK);
   box2 += rowAc('Required J (ac)', reqJ);
   box2 += rowAc('Required E (ac)', reqE);
@@ -465,7 +496,8 @@ function renderProjection() {
   });
   const fmtDol = v => v == null ? '<td class="empty">—</td>' :
     `<td>${(v / 1e3).toFixed(0)}K</td>`;
-  const revRow = `<tr class="diff-row"><td>Revenue ($, post-exp)</td>${revMonth.map(fmtDol).join('')}</tr>`;
+  const annualRevDol = revMonth.reduce((a, b) => a + b, 0);
+  const revRow = `<tr class="diff-row"><td>Revenue ($, post-exp)</td>${revMonth.map(fmtDol).join('')}${fDollars(annualRevDol)}</tr>`;
   box2 += revRow;
 
   box2 += '</tbody></table></div>';
