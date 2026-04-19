@@ -41,7 +41,7 @@
         <button class="btn" style="margin-left:8px;font-size:9px" onclick="refreshData()">Refresh</button>
       </span>
     </div>
-    <p class="note">Current K/J/E = avg lb/day grown (cuke_harvest, 2025–26 per month, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Unsold = Current Total − Sales. Weeks used = max(historical retire, target week override). Seasonality = (K+J monthly lb/day) / (annual avg). Sheet data cached locally forever — click Refresh to re-fetch.</p>
+    <p class="note">Current K/J/E = avg lb/day grown (cuke_harvest, 2025–26 per month, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Unsold = Current Total − Sales. Weeks at retire = actual historical cycle length per month (no override). Seasonality = (K+J monthly lb/day) / (annual avg). Sheet data cached locally forever — click Refresh to re-fetch.</p>
     <div id="status">Loading…</div>
     <div id="projBody"></div>
   </div>
@@ -402,7 +402,9 @@ function renderProjection() {
     return (c || 0) - (s || 0);
   });
   let box1 = '<div style="overflow-x:auto">' + tableHdr;
-  box1 += row('Weeks used', effWeeks, null, fmtWeeks, fAvg(effWeeks));
+  // Box 1 shows actual historical retire weeks (no override).
+  const histWeeks = _summary.retireWeeks || Array(12).fill(null);
+  box1 += row('Weeks at retire', histWeeks, null, fmtWeeks, fAvg(histWeeks));
   box1 += row('Seasonality (K+J)', seasonality, null, fmtIndex, null);
   box1 += row('Current K',  current.K, null, fmt, fLbs(annualLbs(current.K)));
   box1 += row('Current J',  current.J, null, fmt, fLbs(annualLbs(current.J)));
