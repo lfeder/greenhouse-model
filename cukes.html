@@ -35,7 +35,7 @@
 <div class="wrap">
   <div class="panel">
     <div class="panel-title">Average lb/day by month — Grade 1</div>
-    <p class="note">Grow = avg lb/day harvested (cuke_harvest, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Averaged across 2025–26 per month. Days at retire = avg max HarvestDay for GHs whose last harvest landed in that month. April 2026+ omitted.</p>
+    <p class="note">Grow = avg lb/day harvested (cuke_harvest, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Averaged across 2025–26 per month. Weeks at retire = avg cycle length (in weeks) at the end of each completed planting cycle, bucketed by the month the cycle finished. April 2026+ omitted from Grow/Sales.</p>
     <div id="status">Loading…</div>
     <div style="overflow-x:auto">
       <table class="fin-table" id="cukeTable" style="display:none"><thead id="thead"></thead><tbody id="tbody"></tbody></table>
@@ -137,33 +137,49 @@ function avgAcrossYears(totals) {
   return out;
 }
 
-// For each greenhouse, take max HarvestDay. Bucket by the month/year of the GH's
-// LAST harvest. Then average the max-days within each month across all years.
-function retireDaysByMonth(growRows) {
+// Per greenhouse, split rows into planting cycles (HarvestDay resets to a
+// lower value each time a new batch is seeded). For each FINISHED cycle,
+// bucket by the month of its final harvest and record the max HarvestDay.
+// The last cycle is skipped — it may still be producing.
+// Returns weeks (days / 7).
+function retireWeeksByMonth(growRows) {
   const byGh = {};
   for (const r of growRows) {
     if (!r.Greenhouse) continue;
     if (!r._y || !r._m) continue;
-    if (!YEARS.includes(r._y)) continue;
-    if (r._m > CUTOFF[r._y]) continue;
     const hd = Number(r.HarvestDay);
-    if (!isFinite(hd)) continue;
+    if (!isFinite(hd) || hd < 0) continue;
     const dateKey = r._y * 10000 + r._m * 100 + r._d;
     (byGh[r.Greenhouse] ||= []).push({ dateKey, m: r._m, day: hd });
   }
 
-  const retireByMonth = {};  // month (1..12) -> [maxDays across GHs retiring in any year at that month]
+  const retireByMonth = {};  // 1..12 -> [max days of each finished cycle ending in that month]
   for (const gh in byGh) {
-    const rows = byGh[gh];
-    const last = rows.reduce((a, b) => a.dateKey >= b.dateKey ? a : b);
-    const maxDay = rows.reduce((a, b) => a.day > b.day ? a : b).day;
-    (retireByMonth[last.m] ||= []).push(maxDay);
+    const rows = byGh[gh].sort((a, b) => a.dateKey - b.dateKey);
+    const cycles = [];
+    let cur = [];
+    for (const r of rows) {
+      if (cur.length && r.day < cur[cur.length - 1].day) {
+        cycles.push(cur);
+        cur = [];
+      }
+      cur.push(r);
+    }
+    if (cur.length) cycles.push(cur);
+    // Only count truly ended cycles (each cycle except the last).
+    for (const cyc of cycles.slice(0, -1)) {
+      const last = cyc[cyc.length - 1];
+      (retireByMonth[last.m] ||= []).push(last.day);
+    }
   }
 
   const out = Array(12).fill(null);
   for (let m = 1; m <= 12; m++) {
     const arr = retireByMonth[m];
-    if (arr && arr.length) out[m - 1] = arr.reduce((a, b) => a + b, 0) / arr.length;
+    if (arr && arr.length) {
+      const avgDays = arr.reduce((a, b) => a + b, 0) / arr.length;
+      out[m - 1] = avgDays / 7;
+    }
   }
   return out;
 }
@@ -174,13 +190,19 @@ function fmt(v) {
   return `<td${cls}>${Math.round(v).toLocaleString()}</td>`;
 }
 
-function render(growTotals, saleTotals, retireDays) {
+function fmtWeeks(v) {
+  if (v == null) return '<td class="empty">—</td>';
+  return `<td>${v.toFixed(1)}</td>`;
+}
+
+function render(growTotals, saleTotals, retireWeeks) {
   document.getElementById('thead').innerHTML =
     '<tr><th></th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr>';
 
-  const rowCells = vals => vals.map(fmt).join('');
-  const row = (label, vals, cls) =>
-    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${rowCells(vals)}</tr>`;
+  const row = (label, vals, cls, formatter) => {
+    const f = formatter || fmt;
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(f).join('')}</tr>`;
+  };
 
   const growAvg = avgAcrossYears(growTotals);
   const salesAvg = avgAcrossYears(saleTotals);
@@ -191,7 +213,7 @@ function render(growTotals, saleTotals, retireDays) {
   });
 
   let html = '';
-  html += row('Days at retire', retireDays);
+  html += row('Weeks at retire', retireWeeks, null, fmtWeeks);
   html += row('Grow', growAvg);
   html += row('Sales', salesAvg);
   html += row('Diff (Grow − Sales)', diff, 'diff-row');
@@ -223,9 +245,11 @@ async function load() {
 
     const growTotals = aggregate(growRows, grade1, r => r.GreenhouseNetWeight);
     const saleTotals = aggregate(invoiceRows, r => isCukeInvoice(r) && grade1(r), r => r.Pounds);
-    const retireDays = retireDaysByMonth(growRows.filter(grade1));
+    // No Grade filter here — a GH's full planting cycle matters, not just the
+    // Grade 1 sub-slice. Otherwise cycle detection gets confused by gaps.
+    const retireWeeks = retireWeeksByMonth(growRows);
 
-    render(growTotals, saleTotals, retireDays);
+    render(growTotals, saleTotals, retireWeeks);
   } catch (err) {
     console.error(err);
     document.getElementById('status').textContent = 'Load error: ' + (err && err.message || err);
