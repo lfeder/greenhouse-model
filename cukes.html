@@ -401,6 +401,27 @@ function renderProjection() {
     if (c == null && s == null) return null;
     return (c || 0) - (s || 0);
   });
+  // Required acres per month — used by both box 1 (summary footer) and box 2.
+  const exK = _constants.existing_ops.keiki_acres;
+  const exJJJ = _constants.existing_ops.japanese_acres;
+  const exE = _constants.existing_ops.english_acres;
+  const perAcOf = (arr, ex) => arr.map((v, i) => (v == null || !ex) ? null : (v / ex) * retMultByMonth[i]);
+  const perAcK = perAcOf(current.K, exK);
+  const perAcJ = perAcOf(current.J, exJJJ);
+  const reqK = perAcK.map((p, i) => p == null ? null : ceil01(targetForMonth('K', i) / p));
+  const reqJ = perAcJ.map((p, i) => p == null ? null : ceil01(targetForMonth('J', i) / p));
+  const reqE = perAcJ.map((p, i) => p == null ? null : ceil01(targetForMonth('E', i) / p));
+  const reqTotal = reqK.map((k, i) => {
+    const j = reqJ[i], e = reqE[i];
+    if (k == null && j == null && e == null) return null;
+    return (k || 0) + (j || 0) + (e || 0);
+  });
+  const peakK = Math.max(...reqK.filter(v => v != null));
+  const peakJ = Math.max(...reqJ.filter(v => v != null));
+  const peakE = Math.max(...reqE.filter(v => v != null));
+  const totalBuild = peakK + peakJ + peakE;
+  const existingTotal = exK + exJJJ + exE;
+
   let box1 = '<div style="overflow-x:auto">' + tableHdr;
   // Box 1 shows actual historical retire weeks (no override).
   const histWeeks = _summary.retireWeeks || Array(12).fill(null);
@@ -413,6 +434,12 @@ function renderProjection() {
   box1 += row('Sales', salesAvg, null, fmt, fLbs(annualLbs(salesAvg)));
   box1 += row('Unsold (Current − Sales)', unsold, null, fmt, fLbs(annualLbs(unsold)));
   box1 += '</tbody></table></div>';
+  box1 += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
+    <div>Existing acres: K=${exK} J=${exJJJ} E=${exE} (total ${existingTotal.toFixed(2)} ac)</div>
+    <div>Required to hit targets: K=${peakK.toFixed(1)} / J=${peakJ.toFixed(1)} / E=${peakE.toFixed(1)}
+      → total <b>${totalBuild.toFixed(1)} ac</b>
+      (add ${(totalBuild - existingTotal).toFixed(1)} to existing)</div>
+  </div>`;
   document.getElementById('projBody').innerHTML = box1;
   document.getElementById('projPanel').style.display = '';
 
@@ -459,21 +486,7 @@ function renderProjection() {
   box2 += row('Target sold Total', targTot, 'diff-row', fmt, fLbs(annualLbs(targTot)));
   box2 += row('Surplus (Post − Target)', surplus, null, fmt, fLbs(annualLbs(surplus)));
 
-  // Required acres per month to hit target (K & J use own per-ac; E uses J's).
-  const exK = _constants.existing_ops.keiki_acres;
-  const exJJJ = _constants.existing_ops.japanese_acres;
-  const exE = _constants.existing_ops.english_acres;
-  const perAcOf = (arr, ex) => arr.map((v, i) => (v == null || !ex) ? null : (v / ex) * retMultByMonth[i]);
-  const perAcK = perAcOf(current.K, exK);
-  const perAcJ = perAcOf(current.J, exJJJ);
-  const reqK = perAcK.map((p, i) => p == null ? null : ceil01(targetForMonth('K', i) / p));
-  const reqJ = perAcJ.map((p, i) => p == null ? null : ceil01(targetForMonth('J', i) / p));
-  const reqE = perAcJ.map((p, i) => p == null ? null : ceil01(targetForMonth('E', i) / p));
-  const reqTotal = reqK.map((k, i) => {
-    const j = reqJ[i], e = reqE[i];
-    if (k == null && j == null && e == null) return null;
-    return (k || 0) + (j || 0) + (e || 0);
-  });
+  // Required acres + peaks already computed above (shared with box 1 footer).
   const fmtAc = v => v == null ? '<td class="empty">—</td>' : `<td>${v.toFixed(1)}</td>`;
   const rowAc = (label, vals, cls) => {
     const peak = fPeak(vals);
@@ -504,17 +517,9 @@ function renderProjection() {
 
   box2 += '</tbody></table></div>';
 
-  // Annual build + revenue summary below box 2 table.
-  const peakK = Math.max(...reqK.filter(v => v != null));
-  const peakJ = Math.max(...reqJ.filter(v => v != null));
-  const peakE = Math.max(...reqE.filter(v => v != null));
-  const totalBuild = peakK + peakJ + peakE;
+  // Annual revenue summary below box 2 table (build summary lives on box 1).
   const annualRev = revMonth.reduce((a, b) => a + b, 0);
   box2 += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
-    <div>Existing acres: K=${exK} J=${exJJJ} E=${exE} (total ${(exK+exJJJ+exE).toFixed(2)} ac)</div>
-    <div>Peak per variety: K=${peakK.toFixed(1)} / J=${peakJ.toFixed(1)} / E=${peakE.toFixed(1)}
-      → total build <b>${totalBuild.toFixed(1)} ac</b>
-      (add ${(totalBuild - (exK+exJJJ+exE)).toFixed(1)} to existing)</div>
     <div>Annual post-exp revenue: <b>$${(annualRev/1e6).toFixed(2)}M</b></div>
   </div>`;
   document.getElementById('postExpBody').innerHTML = box2;
