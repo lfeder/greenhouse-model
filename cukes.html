@@ -46,6 +46,12 @@
     <div id="projBody"></div>
   </div>
 
+  <div class="panel" id="targetPanel" style="display:none">
+    <div class="panel-title">Sales target &amp; surplus</div>
+    <p class="note">Target lb/day sold per variety (K=6,000 / J=3,000 / E=2,400). Surplus = Post-Exp Total − Target Total. Negative values (yellow) = shortfall.</p>
+    <div id="targetBody"></div>
+  </div>
+
   <div class="panel" id="reqPanel" style="display:none">
     <div class="panel-title">Required acres to hit sales target</div>
     <p class="note">For each month, acres needed per variety to meet the sales target: <code>target / (current lb/ac/day × retire uplift)</code>. English uses J's per-ac productivity when E baseline is missing. Rounded up to 0.1 ac. Rotation total = sum across varieties per month (GHs run whichever variety that month). Build-if-dedicated = peak month per variety; build-if-rotational = peak of monthly totals.</p>
@@ -386,18 +392,12 @@ function renderProjection() {
   html += row('Post-Exp J', projected.J);
   html += row('Post-Exp E', projected.E);
   html += row('Post-Exp Total', projTot, 'diff-row');
-
-  const targets = { K: 6000, J: 3000, E: 2400 };
-  const targetTot = targets.K + targets.J + targets.E;
-  html += row('Target sold K', Array(12).fill(targets.K));
-  html += row('Target sold J', Array(12).fill(targets.J));
-  html += row('Target sold E', Array(12).fill(targets.E));
-  html += row('Target sold Total', Array(12).fill(targetTot), 'diff-row');
-  html += row('Surplus (Post − Target)', projTot.map(p => p == null ? null : p - targetTot));
   html += '</tbody></table></div>';
 
   document.getElementById('projBody').innerHTML = html;
   document.getElementById('projPanel').style.display = '';
+  // Stash projTot for the target panel to consume.
+  _projTot = projTot;
   const status = document.getElementById('status');
   if (status) status.style.display = 'none';
 }
@@ -466,6 +466,7 @@ async function fetchSheetSummary() {
 function renderAll() {
   if (!_summary) return;
   renderProjection();
+  renderTarget();
   renderRequired();
   renderEcon();
   const ageMin = Math.round((Date.now() - _summary.timestamp) / 60000);
@@ -475,6 +476,7 @@ function renderAll() {
 }
 
 let _summary = null;
+let _projTot = null;  // set by renderProjection, consumed by renderTarget
 let _inflation = Number(localStorage.getItem('cukesInflation')) || 0;  // percent
 let _rotation = localStorage.getItem('cukesRotation') !== 'false';  // default true
 
@@ -559,6 +561,26 @@ function renderRequired() {
 
   document.getElementById('reqBody').innerHTML = html;
   document.getElementById('reqPanel').style.display = '';
+}
+
+function renderTarget() {
+  if (!_projTot) return;
+  const targets = TARGETS;
+  const targetTot = targets.K + targets.J + targets.E;
+  const row = (label, vals, cls, formatter) => {
+    const f = formatter || fmt;
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(f).join('')}</tr>`;
+  };
+  let html = '<div style="overflow-x:auto"><table class="fin-table"><thead><tr><th></th>' +
+    MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
+  html += row('Target sold K', Array(12).fill(targets.K));
+  html += row('Target sold J', Array(12).fill(targets.J));
+  html += row('Target sold E', Array(12).fill(targets.E));
+  html += row('Target sold Total', Array(12).fill(targetTot), 'diff-row');
+  html += row('Surplus (Post − Target)', _projTot.map(p => p == null ? null : p - targetTot));
+  html += '</tbody></table></div>';
+  document.getElementById('targetBody').innerHTML = html;
+  document.getElementById('targetPanel').style.display = '';
 }
 
 function renderEcon() {
