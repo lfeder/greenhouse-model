@@ -12,14 +12,14 @@
   <div class="header-inner">
     <div class="header-title">Depreciation & Tax Brackets</div>
     <div style="display:flex;align-items:baseline;gap:14px">
-      <div style="display:flex;gap:12px;font-size:10px">
-        <a href="index.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Expansion</a>
-        <a href="debt.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Debt</a>
-        <a href="depreciation.html" style="color:var(--accent);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em;font-weight:700">Depreciation</a>
-      </div>
+      <div style="display:flex;gap:12px;font-size:10px" id="nav"></div>
+      <div style="font-size:10px">v {{VERSION}}</div>
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
     </div>
   </div>
 </div>
+<script src="utils.js"></script>
+<script>document.getElementById('nav').innerHTML = buildNav('depreciation.html'); initTheme();</script>
 <div style="max-width:1200px;margin:0 auto;padding:20px 32px">
   <div class="panel">
     <div class="panel-title">Depreciation Schedule ($M)</div>
@@ -39,10 +39,13 @@
     <div class="panel-title">Effective Tax Rates by Income</div>
     <div id="effectiveRates"></div>
   </div>
+  <div class="panel">
+    <div class="panel-title">EBITDA Multiples by Revenue Band</div>
+    <div id="revMultiples"></div>
+  </div>
 </div>
 <script>
-function fCM(n) { if (Math.abs(n) < 500) return '\u2014'; return (n < 0 ? '\u2212' : '') + (Math.abs(n) / 1e6).toFixed(1); }
-function fK(n) { const abs = Math.abs(n); if (abs >= 1e6) return (n<0?'\u2212':'')+(abs/1e6).toFixed(1)+'M'; if (abs >= 1e3) return (n<0?'\u2212':'')+Math.round(abs/1e3).toLocaleString()+'K'; return Math.round(n).toLocaleString(); }
+// Table helpers loaded from utils.js
 
 async function load() {
   const [compR, constR] = await Promise.all([
@@ -54,19 +57,17 @@ async function load() {
   const Y = d.years;
 
   // Depreciation table
-  const yh = Y.map(y => `<th>'${String(y).slice(2)}</th>`).join('');
-  const tr = (l, data, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${l}</td>${data.map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`;
   const detail = d.dep.detail || [];
-  let dt = `<thead><tr><th></th>${yh}</tr></thead><tbody>`;
+  let dt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   // Federal section
-  dt += `<tr class="section-header"><td colspan="${Y.length+1}">Federal</td></tr>`;
+  dt += sr('Federal', Y);
   const lbl = row => row.capex ? row.label + ' (' + fCM(row.capex) + ')' : row.label;
   for (const row of detail) dt += tr(lbl(row), row.fed);
-  dt += tr('Total Federal', d.dep.fed, 'subtotal-row');
+  dt += tr('Total Federal', d.dep.fed, fCM, 'subtotal-row');
   // State section
-  dt += `<tr class="section-header"><td colspan="${Y.length+1}">State (HI)</td></tr>`;
+  dt += sr('State (HI)', Y);
   for (const row of detail) dt += tr(lbl(row), row.state);
-  dt += tr('Total State', d.dep.state, 'subtotal-row');
+  dt += tr('Total State', d.dep.state, fCM, 'subtotal-row');
   dt += '</tbody>';
   document.getElementById('depTable').innerHTML = dt;
 
@@ -107,8 +108,22 @@ async function load() {
   }
   et += '</table>';
   document.getElementById('effectiveRates').innerHTML = et;
+
+  // Revenue-band EBITDA multiples
+  const mults = c.rev_multiples || [];
+  let mt = '<table style="width:100%;font-size:10px;font-family:inherit;border-collapse:collapse">';
+  mt += '<tr><th style="text-align:left;padding:3px 6px;color:var(--accent);font-size:9px">Revenue Band</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">Multiple</th></tr>';
+  for (let i = 0; i < mults.length; i++) {
+    const [cap, mult] = mults[i];
+    const prevCap = i > 0 ? mults[i-1][0] : 0;
+    const label = cap === null ? fK(prevCap) + '+' : (prevCap ? fK(prevCap) + ' \u2013 ' + fK(cap) : '\u2264 ' + fK(cap));
+    mt += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:3px 6px;color:var(--text-sub)">${label}</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${mult}x</td></tr>`;
+  }
+  mt += '</table>';
+  document.getElementById('revMultiples').innerHTML = mt;
 }
 load();
+window.addEventListener('focus', load);
 </script>
 </body>
 </html>

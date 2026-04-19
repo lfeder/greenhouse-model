@@ -13,18 +13,14 @@
   <div class="header-inner">
     <div class="header-title">Partner & Financing</div>
     <div style="display:flex;align-items:baseline;gap:14px">
-      <div style="display:flex;gap:12px;font-size:10px">
-        <a href="index.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Expansion</a>
-        <a href="partners.html" style="color:var(--accent);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em;font-weight:700">Partners</a>
-        <a href="debt.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Debt</a>
-        <a href="depreciation.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Depreciation</a>
-        <a href="employees.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Employees</a>
-      </div>
-      <span style="font-size:10px;color:var(--text-sub)">04-04 05:31</span>
+      <div style="display:flex;gap:12px;font-size:10px" id="nav"></div>
+      <div style="font-size:10px">v {{VERSION}}</div>
       <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
     </div>
   </div>
 </div>
+<script src="utils.js"></script>
+<script>document.getElementById('nav').innerHTML = buildNav('partners.html'); initTheme();</script>
 
 <div class="layout">
   <!-- SIDEBAR -->
@@ -67,27 +63,18 @@
 
 let settings = {};
 let lastData = null;
-const _sliderOpts = {};
 
 // --- SCENARIO PARAM OVERRIDES ---
-const SC_OVERRIDES_KEY = 'scenario_overrides';
-function loadScOverrides() {
-  try { return JSON.parse(localStorage.getItem(SC_OVERRIDES_KEY)) || {}; } catch { return {}; }
-}
-function saveScOverrides(ov) {
-  localStorage.setItem(SC_OVERRIDES_KEY, JSON.stringify(ov));
-}
-function updateScenarioParam(sc, key, rawValue) {
-  const ov = loadScOverrides();
-  if (!ov[sc]) ov[sc] = {};
+function updateFinancingOverride(sc, key, rawValue) {
   let val = parseFloat(String(rawValue).replace(/[^0-9.\-]/g, ''));
   if (/M/i.test(rawValue)) val *= 1e6;
   else if (/K/i.test(rawValue)) val *= 1e3;
   else val *= 1e6;  // default to $M since all display is in $M
   if (isNaN(val)) return;
-  ov[sc][key] = val;
-  saveScOverrides(ov);
-  compute();
+  if (!settings.financing_overrides) settings.financing_overrides = {};
+  if (!settings.financing_overrides[sc]) settings.financing_overrides[sc] = {};
+  settings.financing_overrides[sc][key] = val;
+  compute({financing_overrides: settings.financing_overrides});
 }
 
 async function loadSettings() {
@@ -97,7 +84,6 @@ async function loadSettings() {
 
 async function compute(partial) {
   if (partial) Object.assign(settings, partial);
-  settings._scenario_overrides = loadScOverrides();
   const r = await fetch('/api/compute', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(settings),
@@ -107,65 +93,27 @@ async function compute(partial) {
 }
 
 function updateSetting(key, value) {
-  activeScenario = null;
   settings[key] = value;
   compute({[key]: value});
 }
 
-const SCENARIOS = {
-  A:      {newKAcres:0, newJAcres:0, newEAcres:4.5, newTAcres:0, newLAcres:0, packhouseAcres:0.4, housingPods:2, landAcres:0, debug:false, financingMode:'jjb_only', jjbEquityCap:10000000, sbicKicker:0, sbicEquityPct:0, sbicCap:0, thirdPartyBuysJS:false},
-  B_SBIC: {newKAcres:4, newJAcres:6, newEAcres:6, newTAcres:0, newLAcres:0, packhouseAcres:0.6, housingPods:6, landAcres:30, debug:false, financingMode:'sbic', jjbEquityCap:10000000, sbicKicker:5, sbicEquityPct:5, sbicCap:25000000, thirdPartyBuysJS:false},
-  B_3P:   {newKAcres:4, newJAcres:6, newEAcres:6, newTAcres:0, newLAcres:0, packhouseAcres:0.6, housingPods:6, landAcres:30, debug:false, financingMode:'3p', jjbEquityCap:10000000, sbicKicker:0, sbicEquityPct:0, sbicCap:0, thirdPartyBuysJS:false},
-  C_SBIC: {newKAcres:4, newJAcres:6, newEAcres:6, newTAcres:8, newLAcres:2.5, packhouseAcres:1, housingPods:10, landAcres:50, debug:false, financingMode:'sbic_3p', jjbEquityCap:10000000, sbicKicker:10, sbicEquityPct:10, sbicCap:25000000, thirdPartyBuysJS:false},
-  C_3P:   {newKAcres:4, newJAcres:6, newEAcres:6, newTAcres:8, newLAcres:2.5, packhouseAcres:1, housingPods:10, landAcres:50, debug:false, financingMode:'3p', jjbEquityCap:10000000, sbicKicker:0, sbicEquityPct:0, sbicCap:0, thirdPartyBuysJS:false},
-  D:      {debug:true, sbicKicker:0},
-};
+// Financing mode per scenario column (structural, not data)
+const SC_FIN_MODE = {A:'jjb_only', B_SBIC:'sbic', B_3P:'3p', C_SBIC:'sbic_3p', C_3P:'3p', D:null};
+
+// Scenario buttons load expansion params from saved expansion_scenarios
 let activeScenario = null;
-function applyScenario(id) { activeScenario = id; compute(SCENARIOS[id]); }
-
-// --- FORMATTERS ---
-function fK(n) {
-  if (n == null || isNaN(n)) return '\u2014';
-  const abs = Math.abs(n), sign = n < 0 ? '\u2212' : '';
-  if (abs >= 1e6) return sign + (abs / 1e6).toFixed(1) + 'M';
-  if (abs >= 1e3) return sign + Math.round(abs / 1e3).toLocaleString() + 'K';
-  return sign + Math.round(abs).toLocaleString();
-}
-function fCM(n) { if (Math.abs(n) < 500) return '\u2014'; return (n < 0 ? '\u2212' : '') + (Math.abs(n) / 1e6).toFixed(1); }
-
-function sliderBg(pct) { return `linear-gradient(90deg,var(--accent) ${pct}%,var(--panel-dark) ${pct}%)`; }
-
-function makeSlider(key, opts) {
-  _sliderOpts[key] = opts;
-  const val = settings[key] ?? opts.def;
-  const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
-  const sub = opts.sub ? `<div class="slider-sublabel">${opts.sub(val)}</div>` : '';
-  return `<div class="slider-group">
-    <div class="slider-header">
-      <div style="flex:1;padding-right:10px"><div class="slider-label">${opts.label}</div>${sub}</div>
-      <span class="slider-value" id="sv-${key}">${opts.fmt(val)}</span>
-    </div>
-    <input type="range" id="sl-${key}" min="${opts.min}" max="${opts.max}" step="${opts.step}" value="${val}"
-      style="background:${sliderBg(pct)}"
-      oninput="onSlider('${key}',this)">
-  </div>`;
+function applyScenario(id) {
+  activeScenario = id;
+  if (id === 'D') {
+    compute({debug: true});
+  } else {
+    const es = settings.expansion_scenarios || {};
+    const exp = es[id] || {};
+    compute({...exp, debug: false});
+  }
 }
 
-function onSlider(key, el) {
-  const opts = _sliderOpts[key];
-  const val = Number(el.value);
-  const pct = ((val - opts.min) / (opts.max - opts.min)) * 100;
-  el.style.background = sliderBg(pct);
-  document.getElementById('sv-' + key).textContent = opts.fmt(val);
-  updateSetting(key, val);
-}
-
-// --- TABLE HELPERS ---
-let _DN = 2;
-function sl(arr) { return _DN ? arr.slice(0,-_DN) : arr; }
-function yh(Y) { return sl(Y).map(y => `<th>'${String(y).slice(2)}</th>`).join(''); }
-function sr(l, Y) { return `<tr class="section-header"><td colspan="${sl(Y).length+1}">${l}</td></tr>`; }
-function tr(l, d, fn, cls) { fn = fn || fCM; const s = _DN ? d.slice(0,-_DN) : d; return `<tr${cls ? ` class="${cls}"` : ''}><td>${l}</td>${s.map(v => `<td>${fn(v)}</td>`).join('')}</tr>`; }
+// Formatters, sliders, table helpers loaded from utils.js
 
 function pName(p) { return p === 'TP' ? '3P' : p; }
 
@@ -192,6 +140,16 @@ function buildSidebar() {
     ${S('bankTerm', {label:'Bank Term',min:5,max:15,step:1,def:10,fmt:v=>v+' yr'})}
   </div>`;
 
+
+  h += `<div class="panel"><div class="panel-title">Equity Valuations</div>
+    ${S('buyinValuation', {label:'JJB Buy-in Valuation',min:10000000,max:20000000,step:2500000,def:15000000,fmt:FM})}
+    ${S('thirdPartyValuation', {label:'3P Valuation',min:20000000,max:40000000,step:5000000,def:30000000,fmt:FM})}
+    <div class="toggle-row">
+      <input type="checkbox" id="chk-tpBuysJS" ${settings.thirdPartyBuysJS ? 'checked' : ''}
+        onchange="updateSetting('thirdPartyBuysJS', this.checked)">
+      <label for="chk-tpBuysJS">3P buys out JS</label>
+    </div>
+  </div>`;
 
   h += `<div class="panel"><div class="panel-title">EB Promote (from JS & JJB)</div>
     ${S('ebExpansionGrantPct', {label:'Annual %',min:0,max:1,step:0.25,def:0.5,fmt:v=>v.toFixed(2)+'%'})}
@@ -233,27 +191,27 @@ function render(d) {
 
     // $ Sources
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Sources</td></tr>`;
-    const ov = loadScOverrides();
+    const ov = settings.financing_overrides || {};
     st += scRow('Bank', s => fCM(s.bank_total));
     // SBIC Loan — editable in sbic/sbic_3p modes
     const sbicModes = ['sbic', 'sbic_3p'];
     st += `<tr><td>SBIC Loan</td>${scKeys.map(k => {
-      const mode = SCENARIOS[k] && SCENARIOS[k].financingMode;
+      const mode = SC_FIN_MODE[k];
       if (!mode || !sbicModes.includes(mode)) return `<td>${fCM(sc[k].sbic_loan)}</td>`;
       const capVal = (ov[k] && ov[k].sbicCap) || sc[k].sbic_loan;
       return `<td><input type="text" class="sc-edit" value="${fCM(capVal)}"
-        onchange="updateScenarioParam('${k}','sbicCap',this.value)"
+        onchange="updateFinancingOverride('${k}','sbicCap',this.value)"
         style="width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right"></td>`;
     }).join('')}</tr>`;
     st += scRow('3P Equity', s => fCM(s.tp_equity));
     // JJB Equity — editable only in modes that use jjbEquityCap (3p, sbic_3p)
     const editableModes = ['3p', 'sbic_3p'];
     st += `<tr><td>JJB Equity</td>${scKeys.map(k => {
-      const mode = SCENARIOS[k] && SCENARIOS[k].financingMode;
+      const mode = SC_FIN_MODE[k];
       if (!mode || !editableModes.includes(mode)) return `<td>${fCM(sc[k].jjb_equity)}</td>`;
       const capVal = (ov[k] && ov[k].jjbEquityCap) || sc[k].jjb_equity;
       return `<td><input type="text" class="sc-edit" value="${fCM(capVal)}"
-        onchange="updateScenarioParam('${k}','jjbEquityCap',this.value)"
+        onchange="updateFinancingOverride('${k}','jjbEquityCap',this.value)"
         style="width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right"></td>`;
     }).join('')}</tr>`;
     st += scRow('Total Sources', s => fCM(s.bank_total + s.sbic_loan + s.tp_equity + s.jjb_equity), 'subtotal-row');
@@ -264,13 +222,15 @@ function render(d) {
     for (const p of ['EB','JS','JJB','SBIC','TP']) {
       st += scRow(pName(p) + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
     }
-
     // Valuation
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Valuation</td></tr>`;
     st += scRow('Revenue', s => fCM(s.rev));
     st += scRow('EBITDA', s => fCM(s.op_inc));
     st += scRow('Multiple', s => s.multiple + 'x');
-    st += scRowX('Biz Value', s => s.biz_val, D.biz_val, 'subtotal-row');
+    st += scRowX('Biz Value (\'33)', s => s.biz_val, D.biz_val, 'subtotal-row');
+    for (const p of ['EB','JS','JJB','SBIC','TP']) {
+      st += scRowX(pName(p), s => s[p+'_val'], D[p+'_val']);
+    }
 
     // Per-partner
     for (const p of ['EB','JS','JJB','SBIC','TP']) {
@@ -340,7 +300,9 @@ function render(d) {
   dt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
   dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Existing DS</a></td>${sl(d.loan_total_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
   dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Expansion DS</a></td>${sl(d.expansion_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
-  dt += tr('Capex Reserve', d.capex_res.map(v => -v), fCM);
+  dt += `<tr><td>DSCR</td>${sl(d.op_inc.map((oi, i) => { const ds = d.loan_total_ds[i] + d.expansion_ds[i]; return ds > 0 ? (oi / ds).toFixed(1) + 'x' : '\u2014'; })).map(v => `<td>${v}</td>`).join('')}</tr>`;
+  const crPct = settings.capexReservePct ?? 2;
+  dt += `<tr><td>Capex Reserve <input type="number" value="${crPct}" min="0" max="10" step="0.5" style="width:36px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right" onchange="updateSetting('capexReservePct',Number(this.value))">%</td>${sl(d.capex_res).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
   dt += tr('Distributable Cash', d.distrib_cash, fCM, 'total-row-table');
 
   dt += sr('Waterfall', Y);
@@ -476,19 +438,8 @@ function render(d) {
   document.getElementById('taxTable').innerHTML = tx;
 }
 
-// --- THEME ---
-function toggleTheme() {
-  document.body.classList.toggle('light');
-  const isLight = document.body.classList.contains('light');
-  document.getElementById('themeToggle').textContent = isLight ? 'dark' : 'light';
-  localStorage.setItem('gh-expansion-theme', isLight ? 'light' : 'dark');
-}
-
 // --- INIT ---
 (async function() {
-  const theme = localStorage.getItem('gh-expansion-theme');
-  if (theme === 'light') { document.body.classList.add('light'); document.getElementById('themeToggle').textContent = 'dark'; }
-
   await loadSettings();
   buildSidebar();
   await compute();

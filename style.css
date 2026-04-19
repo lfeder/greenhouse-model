@@ -7,9 +7,9 @@
   --slider-track: #243624; --slider-fill: #5a9e55; --slider-thumb: #5a9e55; --slider-thumb-border: #0d1a0d;
 }
 body.light {
-  --text: #1a2a1a; --text-sub: #2a4a2a; --text-muted: #2a5a2a; --text-dim: #5a8a5a;
+  --text: #3a4a3a; --text-sub: #4a5a4a; --text-muted: #3a6a3a; --text-dim: #6a9a6a;
   --green: #2a7a28; --yellow: #8a7018;
-  --border: #a0b0a0; --bg: #e8eae8; --panel: #f0f2f0; --panel-dark: #dce0dc; --accent: #2a6a28;
+  --border: #b0c0b0; --bg: #e8eae8; --panel: #f0f2f0; --panel-dark: #dce0dc; --accent: #2a6a28;
   --header-bg: linear-gradient(135deg, #d8dcd8, #e4e8e4, #d8dcd8);
   --slider-track: #a0c8a0; --slider-fill: #2a6a28; --slider-thumb: #2a6a28; --slider-thumb-border: #e0e8e0;
 }
@@ -65,11 +65,14 @@ input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 
 .roi-label { font-size: 10px; color: var(--text-muted); }
 .roi-value { font-size: 14px; font-weight: 700; }
 
+/* Gantt full-width wrapper */
+.gantt-wrapper { max-width: 1100px; margin: 0 auto; padding: 12px 32px 0; }
+
 /* Gantt Chart */
 .gantt-container { font-size: 10px; }
 .gantt-header, .gantt-row {
   display: grid;
-  grid-template-columns: 90px 44px 32px 1fr;
+  grid-template-columns: 88px 38px 46px 40px 50px 44px 52px 40px 36px 36px 60px 42px 16px 1fr;
   align-items: center;
   gap: 0;
 }
@@ -77,19 +80,26 @@ input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 
 .gantt-row { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
 .gantt-label { padding: 0 4px; white-space: nowrap; overflow: hidden; }
 .gantt-crop-name { font-size: 10px; color: var(--text-sub); line-height: 1.2; }
-.gantt-existing { font-size: 9px; color: var(--text-muted); }
-.gantt-acres-cell { text-align: center; padding: 0 2px; }
-.gantt-land-cell { text-align: center; padding: 0 2px; }
-.gantt-acres {
-  width: 38px; background: var(--panel-dark); color: var(--text-sub);
+.gantt-cell { text-align: center; padding: 0 2px; font-size: 10px; color: var(--text-sub); }
+.gantt-cell-muted { text-align: center; padding: 0 2px; font-size: 9px; color: var(--text-muted); }
+.gantt-left { text-align: left; }
+.gantt-right { text-align: right; }
+.gantt-input {
+  width: 44px; background: var(--panel-dark); color: var(--text-sub);
   border: 1px solid var(--border); border-radius: 3px;
-  font-family: inherit; font-size: 10px; padding: 2px; text-align: center;
+  font-family: inherit; font-size: 10px; padding: 2px 4px 2px 2px; text-align: right;
 }
-.gantt-acres::-webkit-inner-spin-button { opacity: 0.5; }
-.gantt-land-cb { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; }
+.gantt-input::-webkit-inner-spin-button, .gantt-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.gantt-input[type=number] { -moz-appearance: textfield; }
+.gantt-select {
+  background: var(--panel-dark); color: var(--text-sub);
+  border: 1px solid var(--border); border-radius: 3px;
+  font-family: inherit; font-size: 9px; padding: 1px 2px;
+  cursor: pointer; max-width: 100%;
+}
 .gantt-timeline-header {
   display: grid;
-  grid-template-columns: repeat(40, 1fr);
+  grid-template-columns: repeat(28, 1fr);
 }
 .gantt-year {
   text-align: center; font-size: 9px; color: var(--text-muted);
@@ -97,7 +107,7 @@ input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 
 }
 .gantt-timeline {
   display: grid;
-  grid-template-columns: repeat(40, 1fr);
+  grid-template-columns: repeat(28, 1fr);
   position: relative;
   min-height: 20px;
   align-items: center;
@@ -118,4 +128,5 @@ input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 
   background: var(--accent); opacity: 0.85;
 }
 
+.exp-detail { display: none; }
 @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .kpi-grid { grid-template-columns: repeat(2, 1fr); } }

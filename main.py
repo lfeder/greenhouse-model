@@ -7,6 +7,7 @@ from load import (
     EXISTING_K_ACRES, EXISTING_J_ACRES, EXISTING_E_ACRES, EXISTING_L_ACRES,
     EXISTING_K_REV_PER_AC, EXISTING_J_REV_PER_AC,
     NEW_E_REV_PER_AC, EXISTING_E_BASE_PRICE,
+    REV_MULTIPLES,
     build_rev_exp, allocate_capital_stack, compute_kpis,
     ramp_crop_rev_exp, get_end_quarter,
 )
@@ -33,7 +34,8 @@ def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None):
     expansion_int = expansion_int or [0] * N_YEARS
 
     op_inc = [r - e for r, e in zip(rev, exp)]
-    capex_res = [r * 0.02 for r in rev]
+    capex_res_pct = s["capexReservePct"] / 100
+    capex_res = [r * capex_res_pct for r in rev]
     # Total interest = existing loans + expansion loans
     total_interest = [loans["total_int"][i] + expansion_int[i] for i in range(N_YEARS)]
     taxable_inc = [o - ti for o, ti in zip(op_inc, total_interest)]
@@ -82,58 +84,51 @@ def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None):
 # Scenarios
 # ============================================================
 
-SCENARIOS = {
-    "A":      {"newKAcres":0, "newJAcres":0, "newEAcres":4.5, "newTAcres":0, "newLAcres":0, "packhouseAcres":0.4, "housingPods":2, "landAcres":0, "debug":False,
-               "financingMode":"jjb_only", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
-    "B_SBIC": {"newKAcres":4, "newJAcres":6, "newEAcres":6, "newTAcres":0, "newLAcres":0, "packhouseAcres":0.6, "housingPods":6, "landAcres":30, "debug":False,
-               "financingMode":"sbic", "jjbEquityCap":10000000, "sbicKicker":5, "sbicEquityPct":5, "sbicCap":25000000, "thirdPartyBuysJS":False},
-    "B_3P":   {"newKAcres":4, "newJAcres":6, "newEAcres":6, "newTAcres":0, "newLAcres":0, "packhouseAcres":0.6, "housingPods":6, "landAcres":30, "debug":False,
-               "financingMode":"3p", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
-    "C_SBIC": {"newKAcres":4, "newJAcres":6, "newEAcres":6, "newTAcres":8, "newLAcres":2.5, "packhouseAcres":1, "housingPods":10, "landAcres":50, "debug":False,
-               "financingMode":"sbic_3p", "jjbEquityCap":10000000, "sbicKicker":10, "sbicEquityPct":10, "sbicCap":25000000, "thirdPartyBuysJS":False},
-    "C_3P":   {"newKAcres":4, "newJAcres":6, "newEAcres":6, "newTAcres":8, "newLAcres":2.5, "packhouseAcres":1, "housingPods":10, "landAcres":50, "debug":False,
-               "financingMode":"3p", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
+# Financing-only params per scenario column (expansion params come from settings.json)
+FINANCING_SCENARIOS = {
+    "A":      {"financingMode":"jjb_only", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
+    "B_SBIC": {"financingMode":"sbic", "jjbEquityCap":10000000, "sbicKicker":5, "sbicEquityPct":5, "sbicCap":25000000, "thirdPartyBuysJS":False},
+    "B_3P":   {"financingMode":"3p", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
+    "C_SBIC": {"financingMode":"sbic_3p", "jjbEquityCap":10000000, "sbicKicker":10, "sbicEquityPct":10, "sbicCap":25000000, "thirdPartyBuysJS":False},
+    "C_3P":   {"financingMode":"3p", "jjbEquityCap":10000000, "sbicKicker":0, "sbicEquityPct":0, "sbicCap":0, "thirdPartyBuysJS":False},
     "D":      {"debug": True, "sbicKicker":0},
 }
 
-# Revenue-band EBITDA multiples for valuation
-REV_MULTIPLES = [
-    (5_000_000, 3),
-    (10_000_000, 4),
-    (15_000_000, 5),
-    (20_000_000, 6),
-    (25_000_000, 7),
-    (35_000_000, 8),
-    (45_000_000, 9),
-    (55_000_000, 10),
-    (65_000_000, 11),
-]
+# Map each financing column to its expansion scenario
+_EXPANSION_MAP = {"A": "A", "B_SBIC": "B", "B_3P": "B", "C_SBIC": "C", "C_3P": "C", "D": None}
 
 def rev_band_multiple(revenue):
     """Return EBITDA multiple based on revenue band."""
     for cap, mult in REV_MULTIPLES:
         if revenue <= cap:
             return mult
-    return 12  # >$60M
+    return REV_MULTIPLES[-1][1]
 
 
 def compute_scenario_summary(base_settings):
-    """Run all 4 scenarios, return summary for comparison card."""
+    """Run all 6 scenario columns, return summary for comparison card."""
     # Use last display year (index -3 = 2033 with 10yr model)
     display_idx = N_YEARS - 3  # 2033
     summaries = {}
-    sc_overrides = base_settings.get("_scenario_overrides", {})
-    for name, overrides in SCENARIOS.items():
+    exp_scenarios = base_settings.get("expansion_scenarios", {})
+    fin_overrides = base_settings.get("financing_overrides", {})
+    for name, fin_params in FINANCING_SCENARIOS.items():
         s = dict(base_settings)
-        s.update(overrides)
-        if name in sc_overrides:
-            s.update(sc_overrides[name])
+        # Apply expansion scenario params
+        exp_key = _EXPANSION_MAP.get(name)
+        if exp_key and exp_key in exp_scenarios:
+            s.update(exp_scenarios[exp_key])
+        # Apply financing params
+        s.update(fin_params)
+        # Apply per-column financing overrides (e.g. B_SBIC jjbEquityCap)
+        if name in fin_overrides:
+            s.update(fin_overrides[name])
         d = _run_scenario(s)
         steady_rev = d["rev"][display_idx]
         steady_op = d["op_inc"][display_idx]
         mult = rev_band_multiple(steady_rev)
         biz_val = steady_op * mult
-        own = d["ownership"][display_idx] if d.get("ownership") else {"JJB": 50, "EB": 27.5, "JS": 22.5, "SBIC": 0, "TP": 0}
+        own = d["ownership"][display_idx]
         partners = d.get("partners", {})
         summary = {"multiple": mult, "rev": steady_rev, "op_inc": steady_op, "biz_val": biz_val}
         for p in ["EB", "JS", "JJB", "SBIC", "TP"]:
@@ -177,7 +172,7 @@ def compute_scenario_summary(base_settings):
         summary["own_TP"] = own.get("TP", 0)
 
         # SBIC implied valuation (reverse solve from equity %)
-        sbic_eq_pct = s.get("sbicEquityPct", 0)
+        sbic_eq_pct = s["sbicEquityPct"]
         if sbic_eq_pct > 0 and kpi["sbic_total"] > 0:
             implied_val = kpi["sbic_total"] * (100 - sbic_eq_pct) / sbic_eq_pct
         else:
@@ -218,7 +213,8 @@ def _run_scenario(s):
     s["_has_sbic"] = any(c.get("sbic_loan", 0) > 0 for c in crop_data if not c.get("is_buy"))
     s["_3p_equity_total"] = sum(c.get("third_party_equity", 0) for c in crop_data if not c.get("is_buy"))
     ownership, _ = compute_ownership(s, result["cum_pedd_by_year"], equity_draws, biz_values)
-    partners = compute_partner_cash({**result, "tax_cash_dist": result["tax_cash"]}, ownership)
+    tp_buys = s.get("thirdPartyBuysJS", False) and not s["debug"]
+    partners = compute_partner_cash({**result, "tax_cash_dist": result["tax_cash"]}, ownership, tp_buys)
     result["ownership"] = ownership
     result["partners"] = partners
     result["_expansion_loan_detail"] = expansion_loan_detail
@@ -256,7 +252,8 @@ def run_everything(s):
     ownership, ownership_detail = compute_ownership(s, result["cum_pedd_by_year"], equity_draws, biz_values)
 
     # Partner cash (needs ownership)
-    partners = compute_partner_cash({**result, "tax_cash_dist": result["tax_cash"]}, ownership)
+    tp_buys = s.get("thirdPartyBuysJS", False) and not s["debug"]
+    partners = compute_partner_cash({**result, "tax_cash_dist": result["tax_cash"]}, ownership, tp_buys)
     result["ownership"] = ownership
     result["ownership_detail"] = ownership_detail
     result["partners"] = partners
@@ -323,8 +320,8 @@ def run_everything(s):
         idx = YEARS.index(sy) if sy in YEARS else -1
         if idx >= 0:
             sbic_cfs[idx] -= crop["sbic_loan"]
-    # Add exit value in 2033 (SBIC sells kicker stake at biz value)
-    exit_idx = YEARS.index(2033) if 2033 in YEARS else N_YEARS - 3
+    # Add exit value at display year (SBIC sells kicker stake at biz value)
+    exit_idx = N_YEARS - 3
     exit_rev = result["rev"][exit_idx]
     exit_op = result["op_inc"][exit_idx]
     exit_mult = rev_band_multiple(exit_rev)

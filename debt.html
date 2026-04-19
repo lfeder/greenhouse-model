@@ -12,14 +12,14 @@
   <div class="header-inner">
     <div class="header-title">Debt & PE/DD Schedule</div>
     <div style="display:flex;align-items:baseline;gap:14px">
-      <div style="display:flex;gap:12px;font-size:10px">
-        <a href="index.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Expansion</a>
-        <a href="debt.html" style="color:var(--accent);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em;font-weight:700">Debt</a>
-        <a href="depreciation.html" style="color:var(--text-muted);text-decoration:none;text-transform:uppercase;letter-spacing:0.1em">Depreciation</a>
-      </div>
+      <div style="display:flex;gap:12px;font-size:10px" id="nav"></div>
+      <div style="font-size:10px">v {{VERSION}}</div>
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
     </div>
   </div>
 </div>
+<script src="utils.js"></script>
+<script>document.getElementById('nav').innerHTML = buildNav('debt.html'); initTheme();</script>
 <div style="max-width:1200px;margin:0 auto;padding:20px 32px">
   <div class="panel">
     <div class="panel-title">Existing Loans ($M)</div>
@@ -35,10 +35,7 @@
   </div>
 </div>
 <script>
-function fCM(n) { if (Math.abs(n) < 500) return '\u2014'; return (n < 0 ? '\u2212' : '') + (Math.abs(n) / 1e6).toFixed(1); }
-function yh(Y) { return Y.map(y => `<th>'${String(y).slice(2)}</th>`).join(''); }
-function sr(l, Y) { return `<tr class="section-header"><td colspan="${Y.length+1}">${l}</td></tr>`; }
-function tr(l, d, cls) { return `<tr${cls ? ` class="${cls}"` : ''}><td>${l}</td>${d.map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`; }
+// Table helpers loaded from utils.js
 
 async function load() {
   const r = await fetch('/api/compute', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
@@ -58,15 +55,17 @@ async function load() {
   el += sr('Totals', Y);
   el += tr('Total Interest', d.loan_total_int.map(v => -v));
   el += tr('Total Principal', d.loan_total_prin.map(v => -v));
-  el += tr('Total DS', d.loan_total_ds.map(v => -v), 'subtotal-row');
+  el += tr('Total DS', d.loan_total_ds.map(v => -v), fCM, 'subtotal-row');
   el += '</tbody>';
   document.getElementById('existLoansTable').innerHTML = el;
 
   // Expansion loans — per crop detail
   let xl = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   if (d.expansion_loan_detail) {
-    for (const [name, det] of Object.entries(d.expansion_loan_detail)) {
-      if (det.loan_amt > 0) {
+    const order = d.expansion_loan_order || Object.keys(d.expansion_loan_detail);
+    for (const name of order) {
+      const det = d.expansion_loan_detail[name];
+      if (det && det.loan_amt > 0) {
         xl += sr(name + ' (' + fCM(det.loan_amt) + 'M @ ' + (det.rate*100).toFixed(0) + '%, ' + det.term + 'yr)', Y);
         xl += tr('Interest', det.interest.map(v => -v));
         xl += tr('Principal', det.principal.map(v => -v));
@@ -77,14 +76,14 @@ async function load() {
   xl += sr('Expansion Totals', Y);
   xl += tr('Total Interest', d.expansion_int.map(v => -v));
   xl += tr('Total Principal', d.expansion_prin.map(v => -v));
-  xl += tr('Total DS', d.expansion_ds.map(v => -v), 'subtotal-row');
+  xl += tr('Total DS', d.expansion_ds.map(v => -v), fCM, 'subtotal-row');
   xl += '</tbody>';
   document.getElementById('expansionLoansTable').innerHTML = xl;
 
   // PE/DD
   let pd = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-  if (d.pedd_detail) {
-    for (const [name, det] of Object.entries(d.pedd_detail)) {
+  if (d.detail) {
+    for (const [name, det] of Object.entries(d.detail)) {
       if (det.end_bal.some(v => v > 50) || det.prin_paid.some(v => v > 50)) {
         pd += sr(name, Y);
         pd += tr('Prin Paid', det.prin_paid.map(v => -v));
@@ -98,6 +97,7 @@ async function load() {
   document.getElementById('peddTable').innerHTML = pd;
 }
 load();
+window.addEventListener('focus', load);
 </script>
 </body>
 </html>

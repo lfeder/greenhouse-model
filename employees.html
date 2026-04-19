@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Staffing Plan</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .eff-slider { width: 100px; vertical-align: middle; margin: 0 4px; }
+  .eff-val { font-size: 10px; color: var(--text-muted); min-width: 28px; display: inline-block; text-align: right; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">Employee Staffing Plan</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="display:flex;gap:12px;font-size:10px" id="nav"></div>
+      <div style="font-size:10px">v {{VERSION}}</div>
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
+    </div>
+  </div>
+</div>
+<script src="utils.js"></script>
+<script>document.getElementById('nav').innerHTML = buildNav('employees.html'); initTheme();</script>
+
+<div style="max-width:1100px;margin:0 auto;padding:20px 32px">
+
+  <!-- Current Staffing -->
+  <div class="panel">
+    <div class="panel-title">Current Staffing</div>
+    <div style="overflow-x:auto"><table class="fin-table" id="currentTable"></table></div>
+  </div>
+
+  <!-- Projected Staffing by Scenario -->
+  <div class="panel">
+    <div class="panel-title">Projected Staffing by Expansion Scenario</div>
+    <div style="overflow-x:auto"><table class="fin-table" id="projTable"></table></div>
+  </div>
+
+
+</div>
+
+<script>
+// ============================================================
+// STAFFING MODEL
+// ============================================================
+
+// Current staffing
+const CURRENT = {
+  CukeGH:  { total: 30, n60: 15, n40: 15, sharedDays: 1 },
+  TomGH:   { total: 0,  n60: 0,  n40: 0,  sharedDays: 0 },
+  PH:      { total: 15, n60: 8,  n40: 7,  sharedDays: 1 },
+  Lettuce: { total: 10, n60: 10, n40: 0,  sharedDays: -2 },
+  Maint:   { total: 3,  n60: 0,  n40: 3,  sharedDays: 0 },
+  Mgmt:    { total: 10, n60: 0,  n40: 10, sharedDays: 0 },
+};
+
+// Department display config: key, label, has efficiency slider
+const DEPTS = [
+  { key: 'CukeGH',  label: 'Cuke GH' },
+  { key: 'TomGH',   label: 'Tomato GH' },
+  { key: 'PH',      label: 'PH' },
+  { key: 'Lettuce', label: 'Lettuce' },
+  { key: 'Maint',   label: 'Maint' },
+  { key: 'Mgmt',    label: 'Mgmt/Team Lead' },
+];
+
+// Current acreage — loaded from constants on init
+let EXISTING_CUKE_ACRES, EXISTING_TOM_ACRES = 0, EXISTING_L_ACRES, EXISTING_TOTAL;
+
+// Lettuce crew shared hours: 10 people x 10hr/wk each to GH and PH
+const LETTUCE_SHARED_HR_PER_DEPT = 10 * 10;  // 100 hr/wk
+
+// Current direct hours per week
+function directHrs(dept) { return dept.n60 * 60 + dept.n40 * 40; }
+
+let CUKE_DIRECT_HRS, CUKE_TOTAL_HRS, PH_DIRECT_HRS, PH_TOTAL_HRS;
+let L_DIRECT_HRS, MAINT_HRS, MGMT_HRS;
+let CUKE_HRS_PER_AC, TOM_HRS_PER_AC, PH_HRS_PER_AC, L_HRS_PER_AC, MAINT_HRS_PER_AC;
+
+function initAcreage(c) {
+  const ops = c.existing_ops;
+  EXISTING_CUKE_ACRES = ops.keiki_acres + ops.japanese_acres + ops.english_acres;
+  EXISTING_L_ACRES = ops.lettuce_acres;
+  EXISTING_TOTAL = EXISTING_CUKE_ACRES + EXISTING_TOM_ACRES + EXISTING_L_ACRES;
+
+  CUKE_DIRECT_HRS = directHrs(CURRENT.CukeGH);
+  CUKE_TOTAL_HRS = CUKE_DIRECT_HRS + LETTUCE_SHARED_HR_PER_DEPT;
+  PH_DIRECT_HRS = directHrs(CURRENT.PH);
+  PH_TOTAL_HRS = PH_DIRECT_HRS + LETTUCE_SHARED_HR_PER_DEPT;
+  L_DIRECT_HRS = CURRENT.Lettuce.n60 * 40;
+  MAINT_HRS = directHrs(CURRENT.Maint);
+  MGMT_HRS = directHrs(CURRENT.Mgmt);
+
+  CUKE_HRS_PER_AC = CUKE_TOTAL_HRS / EXISTING_CUKE_ACRES;
+  TOM_HRS_PER_AC = CUKE_HRS_PER_AC;
+  PH_HRS_PER_AC = PH_TOTAL_HRS / EXISTING_TOTAL;
+  L_HRS_PER_AC = L_DIRECT_HRS / EXISTING_L_ACRES;
+  MAINT_HRS_PER_AC = MAINT_HRS / EXISTING_TOTAL;
+}
+
+// Expansion scenarios — loaded from settings on init
+let SCENARIOS = {};
+
+async function initData() {
+  const [constR, settingsR] = await Promise.all([
+    fetch('/api/constants'), fetch('/api/settings')
+  ]);
+  const c = await constR.json();
+  const s = await settingsR.json();
+  initAcreage(c);
+  const es = s.expansion_scenarios || {};
+  for (const [id, exp] of Object.entries(es)) {
+    SCENARIOS[id] = {
+      newK: exp.newKAcres || 0, newJ: exp.newJAcres || 0, newE: exp.newEAcres || 0,
+      newT: exp.newTAcres || 0, newL: exp.newLAcres || 0, pods: exp.housingPods || 0,
+    };
+  }
+  recalc();
+}
+initData();
+
+
+// Avg hrs/wk per headcount for hiring estimate
+const AVG_HRS_PER_HC = 50;  // blend of 60hr and 40hr workers
+
+const EFF_STORAGE_KEY = 'employee_eff_sliders';
+
+function loadEffValues() {
+  try { return JSON.parse(localStorage.getItem(EFF_STORAGE_KEY)) || {}; } catch { return {}; }
+}
+
+function saveEffValues() {
+  const vals = {};
+  for (const {key} of DEPTS) {
+    const el = document.getElementById('eff_' + key);
+    if (el) vals[key] = parseInt(el.value);
+  }
+  localStorage.setItem(EFF_STORAGE_KEY, JSON.stringify(vals));
+}
+
+function getEff(key) {
+  const el = document.getElementById('eff_' + key);
+  return el ? parseInt(el.value) : (loadEffValues()[key] || 0);
+}
+
+function computeStaffing(scenario) {
+  const newCuke = scenario.newK + scenario.newJ + scenario.newE;
+  const newTom  = scenario.newT;
+  const newL    = scenario.newL;
+
+  const totalCukeAcres = EXISTING_CUKE_ACRES + newCuke;
+  const totalTomAcres  = EXISTING_TOM_ACRES + newTom;
+  const totalLAcres    = EXISTING_L_ACRES + newL;
+  const totalGHAcres   = totalCukeAcres + totalTomAcres;
+  const totalAcres     = totalGHAcres + totalLAcres;
+
+  // Raw projected HC (before efficiency)
+  const rawCukeHC = Math.ceil(CUKE_TOTAL_HRS * (totalCukeAcres / EXISTING_CUKE_ACRES) / AVG_HRS_PER_HC);
+  const rawTomHC  = totalTomAcres > 0 ? Math.ceil(TOM_HRS_PER_AC * totalTomAcres / AVG_HRS_PER_HC) : 0;
+  const rawPHHC   = Math.ceil(PH_TOTAL_HRS * (totalAcres / EXISTING_TOTAL) / AVG_HRS_PER_HC);
+  const rawLHC    = Math.ceil(L_DIRECT_HRS * (totalLAcres / EXISTING_L_ACRES) / 40);
+  const rawMaintHC = Math.ceil(MAINT_HRS * (totalAcres / EXISTING_TOTAL) / 40);
+
+  // Apply efficiency sliders to growth portion only
+  function applyEff(raw, current, key) {
+    const eff = getEff(key) / 100;
+    const growth = Math.max(0, raw - current);
+    return current + Math.ceil(growth * (1 - eff));
+  }
+
+  const cukeHC  = applyEff(rawCukeHC, CURRENT.CukeGH.total, 'CukeGH');
+  const tomHC   = applyEff(rawTomHC, CURRENT.TomGH.total, 'TomGH');
+  const phHC    = applyEff(rawPHHC, CURRENT.PH.total, 'PH');
+  const lHC     = applyEff(rawLHC, CURRENT.Lettuce.total, 'Lettuce');
+  const maintHC = applyEff(rawMaintHC, CURRENT.Maint.total, 'Maint');
+
+  // Mgmt scales with general labor, reduced by its own efficiency slider
+  const currentLabor = CURRENT.CukeGH.total + CURRENT.TomGH.total + CURRENT.PH.total + CURRENT.Lettuce.total + CURRENT.Maint.total;
+  const projLabor = cukeHC + tomHC + phHC + lHC + maintHC;
+  const laborGrowth = projLabor / currentLabor;
+  const rawMgmtHC = Math.ceil(CURRENT.Mgmt.total * laborGrowth);
+  const mgmtEff = getEff('Mgmt') / 100;
+  const mgmtGrowth = Math.max(0, rawMgmtHC - CURRENT.Mgmt.total);
+  const mgmtHC = CURRENT.Mgmt.total + Math.ceil(mgmtGrowth * (1 - mgmtEff));
+
+  // Hours breakdown
+  const cukeHrs  = CUKE_HRS_PER_AC * totalCukeAcres;
+  const tomHrs   = TOM_HRS_PER_AC * totalTomAcres;
+  const phHrs    = PH_HRS_PER_AC * totalAcres;
+  const lHrs     = L_HRS_PER_AC * totalLAcres;
+  const maintHrs = MAINT_HRS_PER_AC * totalAcres;
+
+  return {
+    totalCukeAcres, totalTomAcres, totalLAcres, totalGHAcres, totalAcres,
+    CukeGH: cukeHC, TomGH: tomHC, PH: phHC, Lettuce: lHC, Maint: maintHC, Mgmt: mgmtHC,
+    total: cukeHC + tomHC + phHC + lHC + maintHC + mgmtHC,
+    rawCukeHC, rawTomHC, rawPHHC, rawLHC, rawMaintHC, rawMgmtHC,
+    hrs: { CukeGH: cukeHrs, TomGH: tomHrs, PH: phHrs, Lettuce: lHrs, Maint: maintHrs, Mgmt: mgmtHC * 40 },
+  };
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+
+function fN(n) { return n.toLocaleString('en-US', {maximumFractionDigits: 0}); }
+
+function recalc() {
+  // --- Current staffing table ---
+  const curDepts = [
+    { label: 'Cuke GH',  d: CURRENT.CukeGH },
+    { label: 'Tomato GH', d: CURRENT.TomGH },
+    { label: 'PH',       d: CURRENT.PH },
+    { label: 'Lettuce',  d: CURRENT.Lettuce },
+    { label: 'Maint',    d: CURRENT.Maint },
+    { label: 'Mgmt',     d: CURRENT.Mgmt },
+  ];
+  let h = '<thead><tr><th style="text-align:left">Dept</th><th>Total</th><th>#60hr</th><th>#40hr</th><th>Shared Days</th><th>Direct Hrs/Wk</th><th>Eff Hrs/Wk</th></tr></thead><tbody>';
+  let totHC = 0, totDirect = 0, totEff = 0;
+  for (const {label, d} of curDepts) {
+    const dir = directHrs(d);
+    let eff = dir;
+    if (label === 'Cuke GH') eff += LETTUCE_SHARED_HR_PER_DEPT;
+    if (label === 'PH') eff += LETTUCE_SHARED_HR_PER_DEPT;
+    if (label === 'Lettuce') eff = d.n60 * 40;
+    const sd = d.sharedDays > 0 ? '+' + d.sharedDays : d.sharedDays === 0 ? '0' : String(d.sharedDays);
+    h += `<tr><td>${label}</td><td>${d.total}</td><td>${d.n60}</td><td>${d.n40}</td><td>${sd}</td><td>${fN(dir)}</td><td>${fN(eff)}</td></tr>`;
+    totHC += d.total; totDirect += dir; totEff += eff;
+  }
+  h += `<tr class="total-row-table"><td>Total</td><td>${totHC}</td><td></td><td></td><td></td><td>${fN(totDirect)}</td><td>${fN(totEff)}</td></tr>`;
+  h += '</tbody>';
+  document.getElementById('currentTable').innerHTML = h;
+
+  // --- Projected staffing table ---
+  const results = {};
+  for (const [name, sc] of Object.entries(SCENARIOS)) {
+    results[name] = computeStaffing(sc);
+  }
+
+  h = '<thead><tr><th style="text-align:left">Dept</th>';
+  h += '<th>Current</th>';
+  for (const name of ['A','B','C']) h += `<th>Scenario ${name}</th>`;
+  h += '<th style="text-align:center">Efficiency</th>';
+  h += '</tr></thead><tbody>';
+
+  // Acres section
+  h += '<tr class="section-header"><td colspan="6">Acreage</td></tr>';
+  h += `<tr><td>Cuke GH Acres</td><td>${EXISTING_CUKE_ACRES.toFixed(1)}</td>`;
+  for (const name of ['A','B','C']) h += `<td>${results[name].totalCukeAcres.toFixed(1)}</td>`;
+  h += '<td></td></tr>';
+  h += `<tr><td>Tomato GH Acres</td><td>${EXISTING_TOM_ACRES.toFixed(1)}</td>`;
+  for (const name of ['A','B','C']) h += `<td>${results[name].totalTomAcres.toFixed(1)}</td>`;
+  h += '<td></td></tr>';
+  h += `<tr><td>Lettuce Acres</td><td>${EXISTING_L_ACRES.toFixed(1)}</td>`;
+  for (const name of ['A','B','C']) h += `<td>${results[name].totalLAcres.toFixed(1)}</td>`;
+  h += '<td></td></tr>';
+  h += `<tr class="subtotal-row"><td>Total Acres</td><td>${EXISTING_TOTAL.toFixed(1)}</td>`;
+  for (const name of ['A','B','C']) h += `<td>${results[name].totalAcres.toFixed(1)}</td>`;
+  h += '<td></td></tr>';
+
+  // Headcount section
+  h += '<tr class="section-header"><td colspan="6">Headcount</td></tr>';
+  for (const {key, label} of DEPTS) {
+    const cur = CURRENT[key].total;
+    h += `<tr><td>${label}</td><td>${cur}</td>`;
+    for (const name of ['A','B','C']) {
+      const proj = results[name][key];
+      const delta = proj - cur;
+      const deltaStr = delta > 0 ? ` <span style="color:var(--accent);font-size:9px">(+${delta})</span>` : '';
+      h += `<td>${proj}${deltaStr}</td>`;
+    }
+    // Efficiency slider
+    const saved = loadEffValues();
+    const curVal = saved[key] || 0;
+    h += `<td style="text-align:center;white-space:nowrap"><input type="range" class="eff-slider" id="eff_${key}" min="0" max="100" step="5" value="${curVal}" oninput="saveEffValues();recalc()"><span class="eff-val">${curVal}%</span></td>`;
+    h += '</tr>';
+  }
+
+  // Total row
+  const curTotal = Object.values(CURRENT).reduce((s, d) => s + d.total, 0);
+  h += '<tr class="total-row-table"><td>Total</td><td>' + curTotal + '</td>';
+  for (const name of ['A','B','C']) {
+    const t = results[name].total;
+    const d = t - curTotal;
+    const ds = d > 0 ? ` <span style="color:var(--accent);font-size:9px">(+${d})</span>` : '';
+    h += `<td>${t}${ds}</td>`;
+  }
+  h += '<td></td></tr>';
+
+  h += '</tbody>';
+  document.getElementById('projTable').innerHTML = h;
+
+}
+
+// recalc() called by initData() after loading constants + settings
+</script>
+</body>
+</html>

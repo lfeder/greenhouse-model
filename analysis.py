@@ -105,7 +105,13 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
 
         # 1. Vesting: JJB buys from JS
         buy = 0
-        if year in buyout_years and js > buyout_pct:
+        if tp_buys_js and year == 2027 and not tp_js_bought:
+            # Accelerated: JJB buys all remaining JS in one shot (2026 vesting already happened)
+            buy = js
+            jjb += js
+            js = 0
+        elif year in buyout_years and js > buyout_pct and (not tp_buys_js or year <= 2026):
+            # Normal vesting: 2026 always happens; 2027+ only if no 3P buyout
             js -= buyout_pct
             jjb += buyout_pct
             buy = buyout_pct
@@ -131,14 +137,12 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
         tp_amount = draws.get("3p", 0)
         tp_new_pct = 0
         if tp_amount > 0 and tp_valuation > 0:
-            # If 3P buys JS: on first 3P draw, accelerate JJB buyout then 3P buys JS stake
-            if tp_buys_js and not tp_js_bought and js > 0:
-                js_to_jjb = js - 22.5
-                if js_to_jjb > 0:
-                    js -= js_to_jjb
-                    jjb += js_to_jjb
-                tp += js
-                js = 0
+            # 3P buys JS stake (JS already bought out by JJB in step 1)
+            if tp_buys_js and not tp_js_bought:
+                # Transfer JS stake from JJB to 3P at thirdPartyValuation
+                js_stake = DIST_BASE["JS"]  # original JS stake that JJB now holds
+                tp += js_stake
+                jjb -= js_stake
                 tp_js_bought = True
 
             post_money = tp_valuation + tp_amount
@@ -325,7 +329,7 @@ def run_waterfall(distrib_cash, tax_dist, t_bill_rate=0.065):
     }
 
 
-def compute_partner_cash(model, ownership):
+def compute_partner_cash(model, ownership, tp_buys_js=False):
     """Per-partner annual distributions."""
     partners = {}
     for p in ["EB", "JS", "JJB", "SBIC", "TP"]:
@@ -342,13 +346,29 @@ def compute_partner_cash(model, ownership):
         # JS buyout payments
         if p in ("JS", "JJB"):
             eq = []
-            for y in YEARS:
-                sy = str(y)
-                if y in JS_BUYOUT["years"] and sy in JS_BUYOUT["valuations"]:
-                    pmt = JS_BUYOUT["valuations"][sy] * JS_BUYOUT["pct_per_year"] / 100
-                    eq.append(pmt if p == "JS" else -pmt)
-                else:
-                    eq.append(0)
+            if tp_buys_js:
+                # 2026 vesting paid normally; 2027–2029 tranches accelerated to 2027
+                accel_pmt = sum(
+                    JS_BUYOUT["valuations"][str(y)] * JS_BUYOUT["pct_per_year"] / 100
+                    for y in JS_BUYOUT["years"] if y >= 2027 and str(y) in JS_BUYOUT["valuations"]
+                )
+                for y in YEARS:
+                    sy = str(y)
+                    if y == 2026 and y in JS_BUYOUT["years"] and sy in JS_BUYOUT["valuations"]:
+                        pmt = JS_BUYOUT["valuations"][sy] * JS_BUYOUT["pct_per_year"] / 100
+                        eq.append(pmt if p == "JS" else -pmt)
+                    elif y == 2027:
+                        eq.append(accel_pmt if p == "JS" else -accel_pmt)
+                    else:
+                        eq.append(0)
+            else:
+                for y in YEARS:
+                    sy = str(y)
+                    if y in JS_BUYOUT["years"] and sy in JS_BUYOUT["valuations"]:
+                        pmt = JS_BUYOUT["valuations"][sy] * JS_BUYOUT["pct_per_year"] / 100
+                        eq.append(pmt if p == "JS" else -pmt)
+                    else:
+                        eq.append(0)
             rows["equity_buy_sell"] = eq
 
         # Total (ex-tax: excludes tax distributions)

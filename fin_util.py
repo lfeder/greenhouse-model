@@ -4,7 +4,7 @@ Financial utilities: loan schedules, tax calculations, depreciation.
 from load import (
     YEARS, N_YEARS, LOAN_DEFS, PAIDOFF_2026,
     FED_BRACKETS, HI_BRACKETS, FED_NOL,
-    DIST_BASE, DEP_DEFAULTS,
+    DIST_BASE,
 )
 
 

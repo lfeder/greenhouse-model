@@ -61,8 +61,8 @@ LOAN_DEFS = C["loans"]
 # Default growth for existing ops
 DEFAULT_GROWTH = C["existing_ops"]["default_growth"]
 
-# Depreciation defaults
-DEP_DEFAULTS = C["depreciation_defaults"]
+# Revenue-band EBITDA multiples for valuation
+REV_MULTIPLES = [(r[0] if r[0] is not None else float("inf"), r[1]) for r in C["rev_multiples"]]
 
 # Per-crop rev/ac for new expansion crops (matches existing ops)
 CROP_REV_PER_AC = {
@@ -339,7 +339,7 @@ def allocate_capital_stack(crop_data, s):
     target_ltv = s["targetLtv"] / 100
     jjb_cap = s["jjbEquityCap"]
     mode = s["financingMode"]
-    sbic_cap = s.get("sbicCap", 25000000)
+    sbic_cap = s["sbicCap"]
 
     build_crops = [c for c in crop_data if not c.get("is_buy")]
     total_capex = sum(c["capex"] for c in build_crops)

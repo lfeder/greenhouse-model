@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Greenhouse Expansion Planner v2</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">Greenhouse Expansion Planner</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="display:flex;gap:12px;font-size:10px" id="nav"></div>
+      <div style="font-size:10px">v {{VERSION}}</div>
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
+    </div>
+  </div>
+</div>
+<script src="utils.js"></script>
+<script>document.getElementById('nav').innerHTML = buildNav('index.html'); initTheme();</script>
+
+<div class="gantt-wrapper">
+  <div class="panel" id="ganttPanel"></div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div id="sidebar"></div>
+
+  <!-- MAIN -->
+  <div style="min-width:0">
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div class="panel chart-panel">
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('chartBody').style.display=document.getElementById('chartBody').style.display==='none'?'':'none'">Revenue Chart <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div id="chartBody"><div style="position:relative;height:255px"><canvas id="chart"></canvas></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('revExpBody').style.display=document.getElementById('revExpBody').style.display==='none'?'':'none'">Revenue & Expense ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div id="revExpBody"><div style="overflow-x:auto"><table class="fin-table" id="revExpTable"></table></div></div>
+    </div>
+
+
+
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ZERO MATH — display only. All computation via /api/compute.
+// ============================================================
+
+let settings = {};
+let lastData = null;
+let chart = null;
+
+// --- API ---
+async function loadSettings() {
+  const r = await fetch('/api/settings');
+  settings = await r.json();
+}
+
+async function compute(partial) {
+  if (partial) Object.assign(settings, partial);
+  const r = await fetch('/api/compute', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(settings),
+  });
+  lastData = await r.json();
+  render(lastData);
+}
+
+function updateSetting(key, value) {
+  settings[key] = value;
+  compute({[key]: value});
+}
+
+let activeScenario = null;
+function applyScenario(id) {
+  activeScenario = id;
+  if (id === 'D') {
+    compute({debug: true});
+  } else {
+    const es = settings.expansion_scenarios || {};
+    const exp = es[id] || {};
+    compute({...exp, debug: false});
+  }
+}
+
+// Expansion keys to save per scenario (excludes financing params)
+const SAVE_KEYS = [
+  'newKAcres','newJAcres','newEAcres','newTAcres','newLAcres',
+  'englishPricePerLb','tomatoBuildRevPerAc','tomatoBuyRevPerAc',
+  'lettuceLbs','lettucePrice',
+  'cucumberCostPerAc','tomatoCostPerAc','lettuceCostPerAc',
+  'landCostPerAc','packhouseAcres','packhouseCostPerAc',
+  'housingPods','housingCostPerPod','landAcres',
+  'tomatoPurchasePrice','tomatoHardAssets',
+  'keikiMrgnPct','japaneseMrgnPct','englishMrgnPct','tomatoMrgnPct','tomatoBuyMrgnPct','lettuceMrgnPct',
+  'kStartQ','kBuildMonths','kRampYears',
+  'jStartQ','jBuildMonths','jRampYears',
+  'eStartQ','eBuildMonths','eRampYears',
+  'tStartQ','tBuildMonths','tRampYears',
+  'tbStartQ','tbBuildMonths','tbRampYears',
+  'lStartQ','lBuildMonths','lRampYears',
+  'packStartQ','packBuildMonths','landStartQ',
+  'housingStartQ','housingBuildMonths',
+];
+
+async function saveScenario() {
+  let id = activeScenario;
+  if (!id || id === 'D') {
+    id = prompt('Save to which scenario? (A, B, or C)');
+    if (!id || !['A','B','C'].includes(id.toUpperCase())) return;
+    id = id.toUpperCase();
+  }
+  const overrides = {};
+  for (const k of SAVE_KEYS) {
+    if (settings[k] !== undefined) overrides[k] = settings[k];
+  }
+  await fetch('/api/save_scenario', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({scenario: id, overrides}),
+  });
+  compute();
+}
+
+// Formatters, sliders, table helpers loaded from utils.js
+
+// --- BUILD SIDEBAR ---
+function buildSidebar() {
+  const S = (k, o) => makeSlider(k, o);
+  let h = '';
+  h += `<div class="panel"><div class="panel-title">Scenario</div>
+    <div style="display:flex;gap:6px">
+      <button class="btn" style="${activeScenario==='A'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('A')">A</button>
+      <button class="btn" style="${activeScenario==='B'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('B')">B</button>
+      <button class="btn" style="${activeScenario==='C'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('C')">C</button>
+      <button class="btn" style="${activeScenario==='D'?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyScenario('D')">D</button>
+    </div>
+    <div style="margin-top:8px">
+      <button class="btn" onclick="saveScenario()">Save</button>
+    </div>
+  </div>`;
+  h += `<div class="panel"><div class="panel-title">Revenue Adjustments</div>
+    ${S('englishPricePerLb', {label:"English '27 $/lb",min:3,max:3.5,step:0.125,def:3,fmt:v=>'$'+v.toFixed(2)})}
+    ${S('lettuceLbs', {label:'Lettuce lb/yr (2028)',min:500000,max:1300000,step:100000,def:700000,fmt:v=>(v/1e3).toFixed(0)+'K'})}
+    ${S('lettucePrice', {label:'Lettuce Price / lb',min:6,max:8,step:0.5,def:7,fmt:v=>'$'+v.toFixed(2)})}
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Inflation</div>
+    ${S('revInflation', {label:'Revenue Escalation',min:3,max:5,step:0.5,def:4,fmt:v=>v.toFixed(1)+'%/yr'})}
+    ${S('costInflation', {label:'Cost Escalation',min:3,max:5,step:0.5,def:3,fmt:v=>v.toFixed(1)+'%/yr'})}
+  </div>`;
+
+  h += `<div class="panel"><div class="panel-title">Tomato (Buy)</div>
+    ${S('tomatoHardAssets', {label:'Hard Asset Value',min:2000000,max:10000000,step:1000000,def:5000000,fmt:v=>(v/1e6).toFixed(2)+'M'})}
+  </div>`;
+
+  document.getElementById('sidebar').innerHTML = h;
+}
+
+// --- CHART ---
+const CROP_COLORS = {
+  'Existing Keiki': '#4a8acc', 'Existing Japanese': '#4a8acc', 'Existing English': '#4a8acc', 'Existing Lettuce': '#4a8acc',
+  'Keiki': '#5a9e55', 'Japanese': '#66bb6a', 'English': '#4ac6c6',
+  'Tomato (Build)': '#e07050', 'Lettuce': '#cc8a4a',
+};
+function renderChart(d) {
+  const ctx = document.getElementById('chart').getContext('2d');
+  const chartYears = _DN ? d.years.slice(0, -_DN) : d.years;
+  const labels = chartYears.map(y => "'" + String(y).slice(2));
+  const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+  const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+
+  // Merge existing ops into one bar, keep new crops separate
+  const existRows = d.rev_rows.filter(([k]) => k.startsWith('Existing'));
+  const newRows = d.rev_rows.filter(([k]) => !k.startsWith('Existing'));
+  const existData = chartYears.map((_, i) => existRows.reduce((s, [, data]) => s + data[i], 0));
+
+  const datasets = [
+    { label: 'Existing Ops', data: existData, backgroundColor: '#4a8acc', borderRadius: 2 },
+    ...newRows.map(([k, data]) => ({
+      label: k, data: _DN ? data.slice(0, -_DN) : data, backgroundColor: CROP_COLORS[k] || '#888', borderRadius: 2,
+    })),
+  ];
+
+  if (chart) {
+    chart.data.labels = labels;
+    chart.data.datasets = datasets;
+    chart.update();
+    return;
+  }
+
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { usePointStyle: true, pointStyle: 'circle', font: { family: 'DM Mono, monospace', size: 10 }, color: tickColor,
+            generateLabels: ch => { const orig = Chart.defaults.plugins.legend.labels.generateLabels(ch); orig.forEach(l => { if (l.hidden) l.fontColor = 'rgba(122,170,122,0.3)'; }); return orig; }
+          }
+        },
+        tooltip: {
+          backgroundColor: '#0a150a', borderColor: '#3a5a3a', borderWidth: 1,
+          bodyFont: { family: 'monospace', size: 11 }, titleFont: { family: 'monospace', size: 10 }, titleColor: '#5a9e55',
+          callbacks: { label: ctx => ctx.dataset.label + ': ' + fK(ctx.parsed.y) }
+        }
+      },
+      scales: {
+        x: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor }, grid: { display: false } },
+        y: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor, callback: v => { const abs = Math.abs(v); if (abs >= 1e6) return Math.round(abs/1e6)+'M'; if (abs >= 1e3) return Math.round(abs/1e3)+'K'; return v; } }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+
+// --- GANTT CHART ---
+const GANTT_COLS = 28;        // 7 years × 4 quarters (2027–2033)
+
+// +New dropdown options per crop/infra
+const NEW_OPTIONS = {
+  K:  {key:'newKAcres', opts:[0,1,2,3,4,5,6,7,8,9,10], fmt:v=>v.toFixed(1)},
+  J:  {key:'newJAcres', opts:[0,1,2,3,4,5,6,7,8,9,10], fmt:v=>v.toFixed(1)},
+  E:  {key:'newEAcres', opts:[0,1,2,3,4,5,6,7,8,9,10], fmt:v=>v.toFixed(1)},
+  T:  {key:'newTAcres', opts:[0,1,2,3,4,5,6,7,8,9,10], fmt:v=>v.toFixed(1)},
+  L:  {key:'newLAcres', opts:[0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5], fmt:v=>v.toFixed(1)},
+  LAND:  {key:'landAcres', opts:[0,2,4,6,8,10,12,14,16,18,20,25,30,35,40,45,50,60], fmt:v=>String(v)},
+  PACK:  {key:'packhouseAcres', opts:[0.2,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0,2.5,3.0,4.0,5.0], fmt:v=>v.toFixed(1)},
+  HOUSE: {key:'housingPods', opts:[1,2,3,4,5,6,7,8,9,10,12,14,16], fmt:v=>String(v)},
+};
+
+// Margin% config per crop (margin = 100 - exp%)
+const MARGIN_OPTIONS = {
+  K:  {key:'keikiMrgnPct'},
+  J:  {key:'japaneseMrgnPct'},
+  E:  {key:'englishMrgnPct'},
+  T:  {key:'tomatoMrgnPct'},
+  L:  {key:'lettuceMrgnPct'},
+  T_BUY: {key:'tomatoBuyMrgnPct'},
+};
+
+// Cost dropdown options per row
+const COST_OPTIONS = {
+  K:  {key:'cucumberCostPerAc', opts:[600000,800000,1000000,1200000,1400000], fmt:v=>(v/1e6).toFixed(1)},
+  J:  {key:'cucumberCostPerAc', opts:[600000,800000,1000000,1200000,1400000], fmt:v=>(v/1e6).toFixed(1)},
+  E:  {key:'cucumberCostPerAc', opts:[600000,800000,1000000,1200000,1400000], fmt:v=>(v/1e6).toFixed(1)},
+  T:  {key:'tomatoCostPerAc', opts:[1000000,1200000,1400000,1600000,1800000,2000000], fmt:v=>(v/1e6).toFixed(1)},
+  L:  {key:'lettuceCostPerAc', opts:[3000000,3500000,4000000,4500000,5000000], fmt:v=>(v/1e6).toFixed(1)},
+  LAND:  {key:'landCostPerAc', opts:[100000,110000,120000,130000,140000,150000], fmt:v=>(v/1e6).toFixed(2)},
+  PACK:  {key:'packhouseCostPerAc', opts:[2000000,3000000,4000000,5000000,6000000], fmt:v=>(v/1e6).toFixed(1)},
+  HOUSE: {key:'housingCostPerPod', opts:[300000,350000,400000,450000,500000,550000,600000], fmt:v=>(v/1e6).toFixed(2)},
+  T_BUY: {key:'tomatoPurchasePrice', opts:[1500000,1750000,2000000,2250000,2500000], fmt:v=>(v/1e6).toFixed(2)},
+};
+
+// Tomato rev/ac dropdowns
+const TOMATO_BUILD_REV_OPTIONS = [1000000,1100000,1200000,1300000,1400000];
+const TOMATO_BUY_REV_OPTIONS = [1000000,1100000,1200000,1300000,1400000];
+
+// Start quarter options
+const Q_OPTIONS = [];
+for (let y = 2026; y <= 2033; y++) for (let q = 1; q <= 4; q++) Q_OPTIONS.push({val: y*10+q, label: `Q${q}'${String(y).slice(2)}`});
+
+function qToCol(q) { return (Math.floor(q / 10) - 2027) * 4 + (q % 10) - 1; }
+
+function fRevAc(v) { return (v/1e6).toFixed(2); }
+
+function renderGantt(d) {
+  const gd = d.gantt_data || [];
+  if (!gd.length) { document.getElementById('ganttPanel').innerHTML = ''; return; }
+
+  // Year headers
+  const years = [];
+  for (let y = 2027; y <= 2033; y++) years.push(y);
+  let yearHdr = years.map(y => `<div class="gantt-year" style="grid-column:span 4">'${String(y).slice(2)}</div>`).join('');
+
+  // Quarter gridlines
+  let qLines = '';
+  for (let i = 0; i < GANTT_COLS; i++) {
+    const isYearBound = i % 4 === 0;
+    qLines += `<div class="gantt-q-line" style="grid-column:${i+1};border-left:1px solid ${isYearBound ? 'var(--border)' : 'rgba(255,255,255,0.04)'}"></div>`;
+  }
+
+  // Build IRR lookup from crop_irrs
+  const irrMap = {};
+  for (const ci of (d.crop_irrs || [])) {
+    irrMap[ci.key] = ci;
+  }
+
+  const totals = {old: 0, new: 0, cost: 0};
+  let rows = '';
+  let tbuyRow = '';
+  for (const item of gd) {
+    const isInfra = item.is_infra;
+    const isBuy = item.is_buy || false;
+    const key = item.key;
+    const lk = key.toLowerCase();
+
+    // 1. Label
+    const labelHtml = `<div class="gantt-crop-name">${item.label}</div>`;
+
+    // 2. Old units
+    let oldHtml;
+    if (isInfra) {
+      oldHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
+    } else {
+      const oldVal = item.acres_existing;
+      oldHtml = `<div class="gantt-cell gantt-right">${oldVal > 0 ? oldVal.toFixed(1) : '–'}</div>`;
+    }
+
+    // 3. +New input
+    let newHtml = '';
+    if (isBuy) {
+      newHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
+    } else {
+      const no = NEW_OPTIONS[key];
+      if (no) {
+        const curVal = isInfra ? (item.units_new || 0) : (item.acres_new || 0);
+        newHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${curVal}" min="0" step="any" data-key="${no.key}"></div>`;
+      }
+    }
+
+    // 4. Total
+    let totalHtml;
+    const newVal = isBuy ? 0 : (isInfra ? (item.units_new || 0) : (item.acres_new || 0));
+    if (isBuy) {
+      totalHtml = `<div class="gantt-cell gantt-right">${(item.acres_existing || 0).toFixed(1)}</div>`;
+    } else if (isInfra) {
+      const fmtVal = (key === 'PACK') ? newVal.toFixed(1) : newVal;
+      totalHtml = `<div class="gantt-cell gantt-right">${newVal > 0 ? fmtVal : '–'}</div>`;
+    } else {
+      const total = (item.acres_existing || 0) + (item.acres_new || 0);
+      totalHtml = `<div class="gantt-cell gantt-right">${total > 0 ? total.toFixed(1) : '–'}</div>`;
+    }
+
+    // 5. Rev/Ac
+    let revHtml;
+    if (isInfra) {
+      revHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
+    } else if (key === 'T') {
+      const cur = settings.tomatoBuildRevPerAc / 1e6;
+      revHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${cur.toFixed(2)}" min="0" step="any" data-key="tomatoBuildRevPerAc" data-scale="1e6"></div>`;
+    } else if (key === 'T_BUY') {
+      const cur = settings.tomatoBuyRevPerAc / 1e6;
+      revHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${cur.toFixed(2)}" min="0" step="any" data-key="tomatoBuyRevPerAc" data-scale="1e6"></div>`;
+    } else {
+      revHtml = `<div class="gantt-cell gantt-right">${fRevAc(item.rev_per_ac || 0)}</div>`;
+    }
+
+    // 6. Margin% input (crops only; stored as exp% = 100 - margin)
+    let marginHtml;
+    const mo = MARGIN_OPTIONS[key];
+    if (mo) {
+      const curMargin = 100 - settings[mo.key];
+      marginHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${curMargin}" min="0" max="100" step="any" data-key="${mo.key}" data-invert="1"></div>`;
+    } else {
+      marginHtml = `<div class="gantt-cell-muted">–</div>`;
+    }
+
+    // 7. Cost/Ac input
+    let costHtml = '';
+    const co = COST_OPTIONS[key];
+    if (co) {
+      const cur = settings[co.key] || 0;
+      costHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${co.fmt(cur)}" min="0" step="any" data-key="${co.key}" data-scale="1e6"></div>`;
+    }
+
+    // 8. Cost = New × Cost/Ac (for TB: 6ac × $/ac)
+    let costTotalHtml;
+    if (isBuy) {
+      const pp = (item.acres_existing || 6) * (settings[co.key] || 0);
+      costTotalHtml = `<div class="gantt-cell gantt-right">${(pp/1e6).toFixed(1)}</div>`;
+    } else {
+      const costPerUnit = co ? (settings[co.key] || 0) : 0;
+      const totalCost = newVal * costPerUnit;
+      if (totalCost > 0) {
+        costTotalHtml = `<div class="gantt-cell gantt-right">${(totalCost/1e6).toFixed(1)}</div>`;
+      } else {
+        costTotalHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
+      }
+    }
+
+    // Accumulate totals (exclude T_BUY)
+    if (!isBuy) {
+      if (!isInfra) {
+        totals.old += item.acres_existing || 0;
+        totals.new += item.acres_new || 0;
+      }
+      const co_ = COST_OPTIONS[key];
+      const cpu = co_ ? (settings[co_.key] || 0) : 0;
+      totals.cost += (isInfra ? (item.units_new || 0) : (item.acres_new || 0)) * cpu;
+    }
+
+    // 9. IRR and Unlev with cashflow tooltip
+    let irrHtml, unlevHtml;
+    const ci = irrMap[key];
+    if (ci) {
+      const irrColor = isBuy ? 'var(--text-dim)' : 'var(--green)';
+      const ud = ci.unlev_detail;
+      let tip = ci.label + '\n';
+      tip += '\n— LEVERED IRR: ' + ci.irr.toFixed(1) + '%\n';
+      tip += 'After debt service, equity outlay, startup capital.\n';
+      tip += 'Equity: ' + fK(ci.equity) + '  (incl startup + infra share)\n';
+      tip += 'Yearly cashflows (rev - exp - DS - equity):\n';
+      for (let yi = 0; yi < d.years.length; yi++) {
+        const cf = ci.cashflows[yi];
+        if (Math.abs(cf) > 50) tip += '  ' + d.years[yi] + ': ' + fK(cf) + '\n';
+      }
+      tip += '\n— UNLEVERED YIELD: ' + ci.unlev.toFixed(1) + '%\n';
+      tip += 'Steady-state op income / total capex (no debt, no startup).\n';
+      tip += 'Rev: ' + fK(ud.base_rev) + '  Exp: ' + fK(ud.base_exp) + '\n';
+      tip += 'Op Inc: ' + fK(ud.op_inc) + '  CapEx: ' + fK(ud.capex);
+      const esc = tip.replace(/"/g, '&quot;');
+      irrHtml = `<div class="gantt-cell gantt-right" style="color:${irrColor};cursor:help" title="${esc}">${Math.round(ci.irr)}%</div>`;
+      unlevHtml = `<div class="gantt-cell gantt-right" style="color:${irrColor};cursor:help" title="${esc}">${Math.round(ci.unlev)}%</div>`;
+    } else {
+      irrHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
+      unlevHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
+    }
+
+    // 10. Start Q dropdown
+    let startHtml;
+    if (isBuy) {
+      startHtml = `<div class="gantt-cell-muted">–</div>`;
+    } else {
+      const startQKey = lk === 'pack' ? 'packStartQ' : lk === 'house' ? 'housingStartQ' : lk === 'land' ? 'landStartQ' : lk + 'StartQ';
+      const curStartQ = settings[startQKey];
+      let startOpts = Q_OPTIONS.map(o => `<option value="${o.val}" ${o.val===curStartQ?'selected':''}>${o.label}</option>`).join('');
+      startHtml = `<div class="gantt-cell"><select class="gantt-select gantt-ctrl" data-key="${startQKey}">${startOpts}</select></div>`;
+    }
+
+    // 11. Ramp dropdown (crops only)
+    let rampHtml;
+    if (isBuy) {
+      rampHtml = `<div class="gantt-cell-muted">–</div>`;
+    } else if (!isInfra) {
+      const rampKey = lk + 'RampYears';
+      const curRamp = settings[rampKey];
+      let rOpts = [0,1,2,3].map(v => `<option value="${v}" ${v===curRamp?'selected':''}>${v}yr</option>`).join('');
+      rampHtml = `<div class="gantt-cell"><select class="gantt-select gantt-ctrl" data-key="${rampKey}">${rOpts}</select></div>`;
+    } else {
+      rampHtml = `<div class="gantt-cell-muted">–</div>`;
+    }
+
+    // 12. Timeline bars (skip for T_BUY)
+    let barsHtml;
+    if (isBuy) {
+      barsHtml = `<div></div>`;
+    } else {
+      const startCol = qToCol(item.start_q);
+      const endCol = qToCol(item.end_q);
+      const buildW = endCol - startCol;
+      const rampW = (item.ramp_years || 0) * 4;
+      const prodStart = endCol + rampW;
+      const prodW = GANTT_COLS - prodStart;
+
+      barsHtml = `<div class="gantt-timeline">`;
+      barsHtml += qLines;
+      if (buildW > 0) {
+        barsHtml += `<div class="gantt-bar gantt-bar-build" style="grid-column:${startCol+1}/span ${Math.max(1, buildW)}" title="Build: ${Q_OPTIONS.find(o=>o.val===item.start_q)?.label||''} → ${Q_OPTIONS.find(o=>o.val===item.end_q)?.label||''}"></div>`;
+      }
+      if (rampW > 0 && !isInfra) {
+        barsHtml += `<div class="gantt-bar gantt-bar-ramp" style="grid-column:${endCol+1}/span ${rampW}"></div>`;
+      }
+      if (prodW > 0 && !isInfra) {
+        barsHtml += `<div class="gantt-bar gantt-bar-prod" style="grid-column:${prodStart+1}/span ${Math.max(1, prodW)}"></div>`;
+      }
+      barsHtml += '</div>';
+    }
+
+    const rowHtml = `<div class="gantt-row" data-key="${key}">
+      <div class="gantt-label">${labelHtml}</div>
+      ${oldHtml}${newHtml}${totalHtml}
+      ${revHtml}${marginHtml}${costHtml}${costTotalHtml}
+      ${irrHtml}${unlevHtml}
+      ${startHtml}${rampHtml}
+      <div></div>${barsHtml}
+    </div>`;
+    // Hide rows with zero acres/units (except T_BUY)
+    if (isBuy) {
+      tbuyRow = rowHtml;
+    } else if (isInfra) {
+      if (newVal > 0 || key === 'LAND') rows += rowHtml;
+    } else {
+      if ((item.acres_existing || 0) + (item.acres_new || 0) > 0) rows += rowHtml;
+    }
+  }
+
+  const hL = 'font-size:9px;color:var(--text-muted);text-align:left;padding:0 2px';
+  const hR = 'font-size:9px;color:var(--text-muted);text-align:right;padding:0 2px';
+  const hC = 'font-size:9px;color:var(--text-muted);text-align:center;padding:0 2px';
+  const hSpan = 'font-size:8px;color:var(--text-dim);text-align:center;border-bottom:1px solid var(--border);padding:0 0 2px;margin:0 4px';
+  document.getElementById('ganttPanel').innerHTML = `
+    <div class="panel-title">Expansion Phasing</div>
+    <div class="gantt-container">
+      <div class="gantt-header" style="border-bottom:none;padding-bottom:0;margin-bottom:0">
+        <div></div>
+        <div style="${hSpan};grid-column:2/5">(acres)</div>
+        <div style="${hSpan};grid-column:5/9">($M)</div>
+        <div style="grid-column:9/11"></div>
+        <div style="grid-column:11/13"></div>
+        <div></div><div></div>
+      </div>
+      <div class="gantt-header">
+        <div class="gantt-label" style="${hL}">Item</div>
+        <div style="${hR}">Old</div>
+        <div style="${hC}">New</div>
+        <div style="${hR}">Total</div>
+        <div style="${hR}">Rev/Ac</div>
+        <div style="${hC}">Mrgn</div>
+        <div style="${hC}">Cost/Ac</div>
+        <div style="${hR}">Cost</div>
+        <div style="${hR}">IRR</div>
+        <div style="${hR}">Unlev</div>
+        <div style="${hC}">Start</div>
+        <div style="${hC}" title="Production ramp after build completes.&#10;0yr: 100% from day one&#10;1yr: 70% → 100%&#10;2yr: 50% → 85% → 100%&#10;3yr: 40% → 65% → 85% → 100%">Ramp</div>
+        <div></div><div class="gantt-timeline-header">${yearHdr}</div>
+      </div>
+      ${rows}
+      <div class="gantt-row" style="border-top:1px solid var(--border);font-weight:700">
+        <div class="gantt-label"><div class="gantt-crop-name" style="font-weight:700;color:var(--text)">Total</div></div>
+        <div class="gantt-cell gantt-right" style="color:var(--text)">${totals.old.toFixed(1)}</div>
+        <div class="gantt-cell gantt-right" style="color:var(--text)">${totals.new.toFixed(1)}</div>
+        <div class="gantt-cell gantt-right" style="color:var(--text)">${(totals.old + totals.new).toFixed(1)}</div>
+        <div class="gantt-cell">–</div>
+        <div class="gantt-cell">–</div>
+        <div class="gantt-cell">–</div>
+        <div class="gantt-cell gantt-right" style="color:var(--text)">${(totals.cost/1e6).toFixed(1)}</div>
+        <div class="gantt-cell gantt-right" style="color:var(--green)">${Math.round(d.total_irr)}%</div>
+        <div class="gantt-cell gantt-right" style="color:var(--green)">${Math.round(d.total_unlev)}%</div>
+        <div class="gantt-cell"></div><div class="gantt-cell"></div><div></div><div></div>
+      </div>
+      ${tbuyRow}
+    </div>
+    <div style="padding:6px 12px;font-size:11px;color:var(--muted);opacity:0.8">
+      * Each crop includes 3 months of startup capital prefunded as equity one quarter before production (1.5 months for Tomato Buy).
+    </div>`;
+
+  // Bind all controls (inputs and selects)
+  document.querySelectorAll('.gantt-ctrl').forEach(el => {
+    el.onchange = () => {
+      let val = Number(el.value);
+      if (el.dataset.invert) val = 100 - val;
+      if (el.dataset.scale) val *= Number(el.dataset.scale);
+      updateSetting(el.dataset.key, val);
+    };
+  });
+}
+
+// --- RENDER ALL ---
+
+function render(d) {
+  const sb = document.getElementById('sidebar');
+  const sbScroll = sb ? sb.scrollTop : 0;
+  buildSidebar();
+  if (sb) sb.scrollTop = sbScroll;
+  renderGantt(d);
+  const Y = d.years;
+  _DN = 2;  // hide last N years from tables/chart
+
+  // KPIs — 6 cards matching v1
+  const lastIdx = Y.length - 1 - _DN;
+  const steadyRev = d.rev[lastIdx], steadyExp = d.exp[lastIdx];
+  const steadyOpInc = steadyRev - steadyExp;
+  const capex = d.total_capex + d.shared_capex;
+  const startupCap = d.startup_capital || 0;
+  const bridgeLoan = d.partners_no_exp ? (d.partners_no_exp.guarantee_total || 0) : 0;
+  const totalUses = capex + startupCap;
+  const bankTotal = d.bank_total || 0;
+  const sbicTotal = d.sbic_total || 0;
+  const tpEquity = d.tp_equity || 0;
+  const jjbEquity = d.jjb_equity || 0;
+  const totalSources = bankTotal + sbicTotal + tpEquity + jjbEquity;
+  const combinedDS = d.loan_total_ds.map((v, i) => v + d.expansion_ds[i]);
+  const peakDebt = Math.max(...combinedDS);
+  const lastDebt = combinedDS[lastIdx];
+  document.getElementById('kpiGrid').innerHTML = [
+    ['$ Uses', fK(totalUses), `crop: ${fK(d.total_capex)}<br>infra: ${fK(d.shared_capex)}${startupCap > 0 ? '<br>startup: ' + fK(startupCap) : ''}`],
+    ['$ Sources', fK(totalSources), `bank: ${fK(bankTotal)}${sbicTotal > 0 ? '<br>SBIC ln: ' + fK(sbicTotal) : ''}${tpEquity > 0 ? '<br>3P eq: ' + fK(tpEquity) : ''}<br>JJB eq: ${fK(jjbEquity)}${bridgeLoan > 0 ? '<br>bridge: ' + fK(bridgeLoan) : ''}`],
+    ['Steady Rev', fK(steadyRev), `year ${Y[lastIdx]}`],
+    ['Steady Op Inc', fK(steadyOpInc), `${((steadyOpInc / steadyRev * 100) || 0).toFixed(1)}% margin`],
+    ['Debt Svc', fK(peakDebt), `peak yr<br>${fK(lastDebt)} in '${String(Y[lastIdx]).slice(2)}`],
+    ['Total IRR', d.total_irr + '%', 'all new crops'],
+  ].map(([l, v, s]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div><div class="kpi-sub">${s}</div></div>`).join('');
+
+  // Chart — stacked revenue bars by crop
+  renderChart(d);
+
+  // Revenue table — per-crop rows, no expense detail
+  let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  if (d.total_acres) {
+    rt += `<tr><td style="color:var(--text-muted)">Total GH Acres</td>${sl(d.total_acres).map(v => `<td>${Math.round(v)}</td>`).join('')}</tr>`;
+  }
+  rt += sr('Revenue', Y);
+  if (d.rev_rows) {
+    for (const [name, data] of d.rev_rows) {
+      rt += tr(name, data, fCM);
+    }
+  }
+  rt += tr('Total Revenue', d.rev, fCM, 'subtotal-row');
+  rt += `<tr class="section-header" style="cursor:pointer" onclick="document.querySelectorAll('.exp-detail').forEach(r=>r.style.display=r.style.display==='none'?'':'none')"><td colspan="${Y.length - _DN + 1}">Expenses <span style="font-size:8px;color:var(--text-dim)">▼</span></td></tr>`;
+  if (d.exp_rows) {
+    for (const [name, data] of d.exp_rows) {
+      rt += tr(name, data.map(v => -v), fCM, 'exp-detail');
+    }
+  }
+  rt += tr('Total Expenses', d.exp.map(v => -v), fCM, 'subtotal-row');
+  rt += tr('Operating Income', d.op_inc, fCM, 'total-row-table');
+  // Op margin row
+  const opMargin = d.op_inc.map((v, i) => d.rev[i] > 0 ? (v / d.rev[i] * 100) : 0);
+  rt += `<tr><td>Op Margin</td>${sl(opMargin).map(v => `<td>${Math.round(v)}%</td>`).join('')}</tr>`;
+  // Total debt outstanding
+  if (d.loan_data && d.expansion_loan_detail) {
+    const totalDebt = Y.map((_, i) => {
+      let bal = 0;
+      for (const sched of Object.values(d.loan_data)) bal += sched[i].end_bal;
+      for (const det of Object.values(d.expansion_loan_detail)) bal += (det.balance[i] || 0);
+      return bal;
+    });
+    rt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Total Debt</a></td>${sl(totalDebt).map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`;
+  }
+  rt += '</tbody>';
+  document.getElementById('revExpTable').innerHTML = rt;
+
+
+}
+
+
+// --- INIT ---
+(async function() {
+  await loadSettings();
+  buildSidebar();
+  await compute();
+})();
+</script>
+</body>
+</html>
