@@ -45,6 +45,20 @@
     <div id="status">Loading…</div>
     <div id="projBody"></div>
   </div>
+
+  <div class="panel" id="reqPanel" style="display:none">
+    <div class="panel-title">Required acres to hit sales target</div>
+    <p class="note">For each month, acres needed per variety to meet the sales target: <code>target / (current lb/ac/day × retire uplift)</code>. English uses J's per-ac productivity when E baseline is missing. Rounded up to 0.1 ac. Rotation total = sum across varieties per month (GHs run whichever variety that month). Build-if-dedicated = peak month per variety; build-if-rotational = peak of monthly totals.</p>
+    <div id="reqControls" style="margin-bottom:10px"></div>
+    <div id="reqBody"></div>
+  </div>
+
+  <div class="panel" id="econPanel" style="display:none">
+    <div class="panel-title">Revenue & investment</div>
+    <p class="note">Base price/lb per variety computed once from invoices (<code>sum $ / sum lb</code>, Grade 1). Inflation slider scales prices up. Current revenue = current lb/day × days × price. Post-Exp = projected lb/day × days × price. Capex = new K/J/E acres × cost/ac (from expansion page sliders). Payback = capex / ΔRevenue.</p>
+    <div id="econControls" style="margin-bottom:10px"></div>
+    <div id="econBody"></div>
+  </div>
 </div>
 
 <script>
@@ -392,7 +406,7 @@ function renderProjection() {
 // The sheet fetches are the slow part of the page. Once aggregated into
 // monthly arrays, nothing depends on the raw rows — projection re-renders
 // only need the summary + current settings/constants + target week.
-const CACHE_KEY = 'cukeSummary_v1';
+const CACHE_KEY = 'cukeSummary_v2';  // bumped when summary schema changes
 
 function loadCache() {
   try {
@@ -419,6 +433,23 @@ async function fetchSheetSummary() {
   const saleTotals = aggregate(invoiceRows, r => isCukeInvoice(r) && grade1(r), r => r.Pounds);
   const retireWeeks = retireWeeksByMonth(growRows.filter(grade1));
   const growByVM = growByVarietyMonth(growRows);
+
+  // Base $/lb per variety from Grade 1 cuke invoices (ProductCode prefix K/J/E).
+  const priceNum = { K: 0, J: 0, E: 0 };
+  const priceDen = { K: 0, J: 0, E: 0 };
+  for (const r of invoiceRows) {
+    if (!isCukeInvoice(r) || !grade1(r)) continue;
+    const v = classifyKJE(r.ProductCode);
+    if (!v) continue;
+    const lbs = Number(r.Pounds) || 0;
+    const dlrs = Number(r.Dollars) || 0;
+    if (lbs <= 0) continue;
+    priceNum[v] += dlrs;
+    priceDen[v] += lbs;
+  }
+  const prices = {};
+  for (const v of ['K', 'J', 'E']) prices[v] = priceDen[v] > 0 ? priceNum[v] / priceDen[v] : 0;
+
   return {
     timestamp: Date.now(),
     growAvg: avgAcrossYears(growTotals),
@@ -428,12 +459,15 @@ async function fetchSheetSummary() {
     currentK: avgLbPerDayByMonth(growByVM, 'K'),
     currentJ: avgLbPerDayByMonth(growByVM, 'J'),
     currentE: avgLbPerDayByMonth(growByVM, 'E'),
+    prices,  // { K, J, E } $/lb
   };
 }
 
 function renderAll() {
   if (!_summary) return;
   renderProjection();
+  renderRequired();
+  renderEcon();
   const ageMin = Math.round((Date.now() - _summary.timestamp) / 60000);
   const ageEl = document.getElementById('dataAge');
   if (ageEl) ageEl.textContent =
@@ -441,6 +475,187 @@ function renderAll() {
 }
 
 let _summary = null;
+let _inflation = Number(localStorage.getItem('cukesInflation')) || 0;  // percent
+let _rotation = localStorage.getItem('cukesRotation') !== 'false';  // default true
+
+function setInflation(v) {
+  _inflation = Number(v) || 0;
+  localStorage.setItem('cukesInflation', String(_inflation));
+  renderAll();
+}
+function setRotation(on) {
+  _rotation = !!on;
+  localStorage.setItem('cukesRotation', String(_rotation));
+  renderAll();
+}
+window.setInflation = setInflation;
+window.setRotation = setRotation;
+
+const TARGETS = { K: 6000, J: 3000, E: 2400 };  // lb/day sold targets
+
+// Round UP to nearest 0.1.
+function ceil01(x) { return Math.ceil(x * 10) / 10; }
+
+function renderRequired() {
+  if (!_summary || !_constants) return;
+  const { currentK, currentJ, currentE, retireWeeks } = _summary;
+  const effWeeks = retireWeeks.map(w => Math.max(w == null ? 0 : w, _targetWeek));
+  const retMult = effWeeks.map(retireMultFor);
+  const exK = _constants.existing_ops.keiki_acres;
+  const exJ = _constants.existing_ops.japanese_acres;
+  const exE = _constants.existing_ops.english_acres;
+
+  // per-ac productivity (lb/ac/day) with retire uplift applied
+  const perAc = (curArr, ex) => curArr.map((v, i) =>
+    (v == null || !ex) ? null : (v / ex) * retMult[i]);
+  const perAcK = perAc(currentK, exK);
+  const perAcJ = perAc(currentJ, exJ);
+  const perAcEraw = perAc(currentE, exE);
+  // For E zero-baseline months, fall back to J's per-ac productivity
+  const perAcE = perAcEraw.map((v, i) => (v == null || v === 0) ? perAcJ[i] : v);
+
+  const reqK = perAcK.map(p => p == null ? null : ceil01(TARGETS.K / p));
+  const reqJ = perAcJ.map(p => p == null ? null : ceil01(TARGETS.J / p));
+  const reqE = perAcE.map(p => p == null ? null : ceil01(TARGETS.E / p));
+  const reqTotal = reqK.map((k, i) => {
+    const j = reqJ[i], e = reqE[i];
+    if (k == null && j == null && e == null) return null;
+    return (k || 0) + (j || 0) + (e || 0);
+  });
+
+  const peakK = Math.max(...reqK.filter(v => v != null));
+  const peakJ = Math.max(...reqJ.filter(v => v != null));
+  const peakE = Math.max(...reqE.filter(v => v != null));
+  const peakRot = Math.max(...reqTotal.filter(v => v != null));
+  const dedicatedTotal = peakK + peakJ + peakE;
+
+  const controls = `<label style="font-size:10px;color:var(--text-muted)">
+    <input type="checkbox" ${_rotation ? 'checked' : ''} onchange="setRotation(this.checked)"
+      style="margin-right:4px;accent-color:var(--accent)">
+    Rotation (GHs swap varieties month-to-month)
+  </label>`;
+  document.getElementById('reqControls').innerHTML = controls;
+
+  const fmtAc = v => v == null ? '<td class="empty">—</td>' : `<td>${v.toFixed(1)}</td>`;
+  const rowAc = (label, vals, cls) =>
+    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(fmtAc).join('')}</tr>`;
+
+  let html = '<div style="overflow-x:auto"><table class="fin-table"><thead><tr><th></th>' +
+    MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
+  html += rowAc('Required K (ac)', reqK);
+  html += rowAc('Required J (ac)', reqJ);
+  html += rowAc('Required E (ac)', reqE);
+  if (_rotation) html += rowAc('Required Total (ac, rotated)', reqTotal, 'diff-row');
+  html += '</tbody></table></div>';
+
+  const existing = `K=${exK} J=${exJ} E=${exE} (total ${(exK+exJ+exE).toFixed(2)} ac)`;
+  html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
+    <div>Existing acres: ${existing}</div>
+    <div>Build-if-dedicated: K peak ${peakK.toFixed(1)} / J peak ${peakJ.toFixed(1)} / E peak ${peakE.toFixed(1)} →
+      total <b>${dedicatedTotal.toFixed(1)} ac</b> (add ${(dedicatedTotal - (exK+exJ+exE)).toFixed(1)} to existing)</div>
+    <div>Build-if-rotational: peak monthly total <b>${peakRot.toFixed(1)} ac</b>
+      (add ${(peakRot - (exK+exJ+exE)).toFixed(1)} to existing)</div>
+  </div>`;
+
+  document.getElementById('reqBody').innerHTML = html;
+  document.getElementById('reqPanel').style.display = '';
+}
+
+function renderEcon() {
+  if (!_summary || !_constants || !_settings) return;
+  const { currentK, currentJ, currentE, retireWeeks, prices } = _summary;
+  const effWeeks = retireWeeks.map(w => Math.max(w == null ? 0 : w, _targetWeek));
+  const retMult = effWeeks.map(retireMultFor);
+  const infMult = 1 + (_inflation / 100);
+  const adjPrice = { K: prices.K * infMult, J: prices.J * infMult, E: prices.E * infMult };
+
+  // Current and Post-Exp lb/day per variety per month (reuse projection logic)
+  const jExAc = _constants.existing_ops.japanese_acres;
+  const newEAc = _settings.newEAcres || 0;
+  const newKAc = _settings.newKAcres || 0;
+  const newJAc = _settings.newJAcres || 0;
+  const cfK = (_constants.existing_ops.keiki_acres + newKAc) / _constants.existing_ops.keiki_acres;
+  const cfJ = (_constants.existing_ops.japanese_acres + newJAc) / _constants.existing_ops.japanese_acres;
+
+  const current = { K: currentK, J: currentJ, E: currentE };
+  const projected = { K: [], J: [], E: [] };
+  for (let i = 0; i < 12; i++) {
+    projected.K[i] = current.K[i] == null ? null : current.K[i] * cfK * retMult[i];
+    projected.J[i] = current.J[i] == null ? null : current.J[i] * cfJ * retMult[i];
+    const curE = current.E[i], jLb = current.J[i];
+    const baseE = curE != null ? curE : 0;
+    const newELb = (jLb != null && newEAc > 0) ? (jLb / jExAc) * newEAc : 0;
+    const pre = baseE + newELb;
+    projected.E[i] = pre > 0 ? pre * retMult[i] : (curE != null ? 0 : null);
+  }
+
+  // Annual revenue (sum over months of lb/day × days × price)
+  const annualRev = (arr, price) => {
+    let total = 0;
+    for (let i = 0; i < 12; i++) {
+      if (arr[i] == null) continue;
+      total += arr[i] * daysInMonth(2025, i + 1) * price;
+    }
+    return total;
+  };
+
+  const curRev = {
+    K: annualRev(current.K, adjPrice.K),
+    J: annualRev(current.J, adjPrice.J),
+    E: annualRev(current.E, adjPrice.E),
+  };
+  const projRev = {
+    K: annualRev(projected.K, adjPrice.K),
+    J: annualRev(projected.J, adjPrice.J),
+    E: annualRev(projected.E, adjPrice.E),
+  };
+  const curTot = curRev.K + curRev.J + curRev.E;
+  const projTot = projRev.K + projRev.J + projRev.E;
+  const delta = projTot - curTot;
+
+  // Capex — new cuke acres × cucumberCostPerAc
+  const cukesCostPerAc = _settings.cucumberCostPerAc || 1000000;
+  const newCukesAc = newKAc + newJAc + newEAc;
+  const capex = newCukesAc * cukesCostPerAc;
+  const payback = delta > 0 ? capex / delta : null;
+
+  const fM = v => (v / 1e6).toFixed(2) + 'M';
+  const fK_ = v => Math.round(v / 1e3).toLocaleString() + 'K';
+  const fP = v => '$' + v.toFixed(2);
+
+  const controls = `<label style="font-size:10px;color:var(--text-muted);margin-right:12px">
+    Inflation: <input type="range" min="0" max="50" step="1" value="${_inflation}"
+      oninput="setInflation(this.value)" style="vertical-align:middle;width:140px">
+    <span style="margin-left:6px">${_inflation}%</span>
+  </label>
+  <span style="font-size:10px;color:var(--text-muted)">
+    Base price: K=${fP(prices.K)} J=${fP(prices.J)} E=${fP(prices.E)} /lb
+    → adj: K=${fP(adjPrice.K)} J=${fP(adjPrice.J)} E=${fP(adjPrice.E)}
+  </span>`;
+  document.getElementById('econControls').innerHTML = controls;
+
+  const row = (label, cells, cls) => {
+    const tds = cells.map(c => `<td>${c}</td>`).join('');
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${tds}</tr>`;
+  };
+
+  let html = '<div style="overflow-x:auto"><table class="fin-table">' +
+    '<thead><tr><th></th><th>K</th><th>J</th><th>E</th><th>Total</th></tr></thead><tbody>';
+  html += row('Current annual revenue',  [fM(curRev.K), fM(curRev.J), fM(curRev.E), fM(curTot)]);
+  html += row('Post-Exp annual revenue', [fM(projRev.K), fM(projRev.J), fM(projRev.E), fM(projTot)]);
+  html += row('Δ Revenue',               [fM(projRev.K - curRev.K), fM(projRev.J - curRev.J),
+                                          fM(projRev.E - curRev.E), fM(delta)], 'diff-row');
+  html += '</tbody></table></div>';
+
+  html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
+    <div>New cuke acres (from sliders): K=${newKAc} J=${newJAc} E=${newEAc} → total ${newCukesAc.toFixed(1)} ac</div>
+    <div>Capex: ${newCukesAc.toFixed(1)} ac × $${(cukesCostPerAc/1e6).toFixed(1)}M/ac = <b>${fM(capex)}</b></div>
+    <div>Payback: ${payback == null ? '—' : payback.toFixed(1) + ' yr'}</div>
+  </div>`;
+
+  document.getElementById('econBody').innerHTML = html;
+  document.getElementById('econPanel').style.display = '';
+}
 
 async function loadSettingsConstants() {
   const [s, c] = await Promise.all([
