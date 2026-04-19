@@ -44,7 +44,7 @@
 
   <div class="panel" id="projPanel" style="display:none">
     <div class="panel-title">Expansion projection — grown lb/day</div>
-    <p class="note">Baseline = historical grown lb/day per variety (Grade 1, avg of 2025 and 2026 where both exist). Capacity factor = (existing + new acres) / existing acres per variety. Retire uplift uses max(historical weeks, target week) per month — so a W10 target doesn't reduce Jan–Mar if those months already ran longer historically. Linearly interpolated between integer weeks; cumulative bumps of +10/+7/+5/+2% at 9/10/11/12.</p>
+    <p class="note">Baseline = historical grown lb/day per variety (Grade 1, avg of 2025 and 2026 where both exist). Capacity factor = (existing + new acres) / existing acres. Retire uplift uses max(historical weeks, target week) per month, linearly interpolated; cumulative bumps +10/+7/+5/+2% at 9/10/11/12. For months with no English baseline (we didn't grow E then), Post-Exp E is imputed using J's lb/ac × total E acres × retire uplift. Seasonality index = (K+J monthly lb/day) / (annual avg), reference only.</p>
     <div id="projBody"></div>
   </div>
 </div>
@@ -190,7 +190,31 @@ function fmtWeeks(v) {
   return `<td>${v.toFixed(1)}</td>`;
 }
 
-function render(growTotals, saleTotals, retireWeeks) {
+function fmtIndex(v) {
+  if (v == null) return '<td class="empty">—</td>';
+  return `<td>${v.toFixed(1)}</td>`;
+}
+
+// Cross-variety (K+J) seasonality index per month = monthly lb/day avg / annual avg.
+function seasonalityKJ(growByVM) {
+  const perMonth = Array(12).fill(null);
+  for (let m = 1; m <= 12; m++) {
+    const vals = [];
+    for (const y of YEARS) {
+      if (m > CUTOFF[y]) continue;
+      const k = growByVM[`K-${y}-${m}`] || 0;
+      const j = growByVM[`J-${y}-${m}`] || 0;
+      if (k + j > 0) vals.push((k + j) / daysInMonth(y, m));
+    }
+    if (vals.length) perMonth[m - 1] = vals.reduce((a, b) => a + b, 0) / vals.length;
+  }
+  const validVals = perMonth.filter(v => v != null);
+  if (!validVals.length) return Array(12).fill(null);
+  const annualAvg = validVals.reduce((a, b) => a + b, 0) / validVals.length;
+  return perMonth.map(v => v == null ? null : v / annualAvg);
+}
+
+function render(growTotals, saleTotals, retireWeeks, seasonality) {
   document.getElementById('thead').innerHTML =
     '<tr><th></th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr>';
 
@@ -209,6 +233,7 @@ function render(growTotals, saleTotals, retireWeeks) {
 
   let html = '';
   html += row('Weeks at retire', retireWeeks, null, fmtWeeks);
+  html += row('Seasonality (K+J)', seasonality, null, fmtIndex);
   html += row('Grow', growAvg);
   html += row('Sales', salesAvg);
   html += row('Diff (Grow − Sales)', diff, 'diff-row');
@@ -304,6 +329,7 @@ function renderProjection() {
     return Math.max(hist == null ? 0 : hist, _targetWeek);
   });
   const retMultByMonth = effWeeks.map(retireMultFor);
+  const seasonality = seasonalityKJ(_growByVM);
 
   const vars = ['K', 'J', 'E'];
   const current = {}, projected = {};
@@ -312,6 +338,18 @@ function renderProjection() {
     const cf = capacityFactor(v);
     projected[v] = current[v].map((x, i) => x == null ? null : x * cf * retMultByMonth[i]);
   }
+
+  // Impute English for months with no E baseline: use J's lb/ac/day × total E acres.
+  const jExistingAc = (_constants.existing_ops && _constants.existing_ops.japanese_acres) || 3.5;
+  const eExistingAc = (_constants.existing_ops && _constants.existing_ops.english_acres) || 0.8;
+  const eTotalAc = eExistingAc + (_settings.newEAcres || 0);
+  for (let i = 0; i < 12; i++) {
+    if (current.E[i] != null && current.E[i] > 0) continue;  // have E actuals, leave as-is
+    const jLb = current.J[i];
+    if (jLb == null) continue;
+    projected.E[i] = (jLb / jExistingAc) * eTotalAc * retMultByMonth[i];
+  }
+
   const sumRow = obj => Array(12).fill(null).map((_, i) => {
     let sum = 0, any = false;
     for (const v of vars) if (obj[v][i] != null) { sum += obj[v][i]; any = true; }
@@ -344,6 +382,7 @@ function renderProjection() {
   html += '<div style="overflow-x:auto"><table class="fin-table"><thead><tr><th></th>' +
     MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
   html += row('Weeks used', effWeeks, null, fmtWeeks);
+  html += row('Seasonality (K+J)', seasonality, null, fmtIndex);
   html += row('Current K',  current.K);
   html += row('Current J',  current.J);
   html += row('Current E',  current.E);
@@ -380,10 +419,11 @@ async function load() {
     const saleTotals = aggregate(invoiceRows, r => isCukeInvoice(r) && grade1(r), r => r.Pounds);
     const retireWeeks = retireWeeksByMonth(growRows.filter(grade1));
 
-    render(growTotals, saleTotals, retireWeeks);
-
     _growByVM = growByVarietyMonth(growRows);
     _retireWeeks = retireWeeks;
+
+    const seasonality = seasonalityKJ(_growByVM);
+    render(growTotals, saleTotals, retireWeeks, seasonality);
     renderProjection();
   } catch (err) {
     console.error(err);
