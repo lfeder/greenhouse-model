@@ -35,7 +35,7 @@
 <div class="wrap">
   <div class="panel">
     <div class="panel-title">Average lb/day by month — Grade 1</div>
-    <p class="note">Grow = avg lb/day harvested (cuke_harvest, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Averaged across 2025–26 per month. Weeks at retire = avg cycle length (max HarvestDay ÷ 7) across SeedingCycles ending in that month. Each GH's most-recent cycle is skipped (may still be producing); cycles ending on the last day of a month are also skipped. April 2026+ omitted from Grow/Sales.</p>
+    <p class="note">Grow = avg lb/day harvested (cuke_harvest, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Averaged across 2025–26 per month. Weeks at retire = avg cycle length (max HarvestDay ÷ 7) across Grade-1 SeedingCycles ending in that month; the current HST month is excluded. April 2026+ omitted from Grow/Sales.</p>
     <div id="status">Loading…</div>
     <div style="overflow-x:auto">
       <table class="fin-table" id="cukeTable" style="display:none"><thead id="thead"></thead><tbody id="tbody"></tbody></table>
@@ -137,41 +137,31 @@ function avgAcrossYears(totals) {
   return out;
 }
 
-// Group rows by SeedingCycle (globally unique, e.g. "2403K1"). For each cycle,
-// find the last harvest date and the max HarvestDay. Skip each GH's most-recent
-// cycle (might still be producing). Skip cycles whose last harvest is on the
-// last day of a month (ambiguous — could have continued into next month).
-// Bucket the rest by end-month; average max HarvestDay per bucket; / 7.
+// Group Grade-1 rows by SeedingCycle (globally unique). For each cycle: last
+// harvest date + max HarvestDay. Exclude cycles ending in the current HST
+// month (always look backwards). Bucket by end-month, average max HarvestDay
+// per bucket, convert to weeks.
 function retireWeeksByMonth(growRows) {
+  const nowHst = new Date(Date.now() - 10 * 3600e3);
+  const curY = nowHst.getUTCFullYear();
+  const curM = nowHst.getUTCMonth() + 1;
+
   const byCycle = {};
   for (const r of growRows) {
     const sc = r.SeedingCycle;
-    if (!sc || !r._y || !r._m || !r._d) continue;
+    if (!sc || !r._y || !r._m) continue;
     const hd = Number(r.HarvestDay);
     if (!isFinite(hd) || hd < 0) continue;
     const dateKey = r._y * 10000 + r._m * 100 + r._d;
-    const c = byCycle[sc] ||= { gh: r.Greenhouse || '', lastDateKey: 0, lastM: 0, lastD: 0, maxDay: 0 };
-    if (dateKey > c.lastDateKey) { c.lastDateKey = dateKey; c.lastM = r._m; c.lastD = r._d; }
+    const c = byCycle[sc] ||= { lastDateKey: 0, lastY: 0, lastM: 0, maxDay: 0 };
+    if (dateKey > c.lastDateKey) { c.lastDateKey = dateKey; c.lastY = r._y; c.lastM = r._m; }
     if (hd > c.maxDay) c.maxDay = hd;
   }
 
-  // Identify each GH's most-recent cycle — that's the one we skip.
-  const byGh = {};
-  for (const sc in byCycle) (byGh[byCycle[sc].gh] ||= []).push({ sc, ...byCycle[sc] });
-  const skipCycles = new Set();
-  for (const gh in byGh) {
-    const arr = byGh[gh].sort((a, b) => b.lastDateKey - a.lastDateKey);
-    if (arr.length) skipCycles.add(arr[0].sc);
-  }
-
-  // Bucket by end-month; skip last-day-of-month edge case.
   const buckets = {};
   for (const sc in byCycle) {
-    if (skipCycles.has(sc)) continue;
     const c = byCycle[sc];
-    const y = Math.floor(c.lastDateKey / 10000);
-    const dim = new Date(y, c.lastM, 0).getDate();
-    if (c.lastD === dim) continue;
+    if (c.lastY === curY && c.lastM === curM) continue;  // current month excluded
     (buckets[c.lastM] ||= []).push(c.maxDay);
   }
 
