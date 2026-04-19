@@ -398,14 +398,26 @@ function renderProjection() {
   const targets = TARGETS;
   const targetTot = targets.K + targets.J + targets.E;
   const surplus = projTot.map(p => p == null ? null : p - targetTot);
+  // Editable Jan cell for a target row; rest of month cells display the same value.
+  const inputStyle = 'width:60px;background:var(--panel-dark);color:var(--text);' +
+    'border:1px solid var(--border);border-radius:3px;font-family:inherit;' +
+    'font-size:11px;padding:2px 4px;text-align:right';
+  const targetRow = (label, key) => {
+    const val = targets[key];
+    const firstCell = `<td><input type="number" value="${val}" min="0" step="100"
+      onchange="setTarget('${key}', this.value)" style="${inputStyle}"></td>`;
+    const restCells = Array(11).fill(null).map(() =>
+      `<td>${val.toLocaleString()}</td>`).join('');
+    return `<tr><td>${label}</td>${firstCell}${restCells}</tr>`;
+  };
   let box2 = '<div style="overflow-x:auto">' + tableHdr;
   box2 += row('Post-Exp K', projected.K);
   box2 += row('Post-Exp J', projected.J);
   box2 += row('Post-Exp E', projected.E);
   box2 += row('Post-Exp Total', projTot, 'diff-row');
-  box2 += row('Target sold K', Array(12).fill(targets.K));
-  box2 += row('Target sold J', Array(12).fill(targets.J));
-  box2 += row('Target sold E', Array(12).fill(targets.E));
+  box2 += targetRow('Target sold K', 'K');
+  box2 += targetRow('Target sold J', 'J');
+  box2 += targetRow('Target sold E', 'E');
   box2 += row('Target sold Total', Array(12).fill(targetTot), 'diff-row');
   box2 += row('Surplus (Post − Target)', surplus);
   box2 += '</tbody></table></div>';
@@ -507,7 +519,23 @@ function setRotation(on) {
 window.setInflation = setInflation;
 window.setRotation = setRotation;
 
-const TARGETS = { K: 6000, J: 3000, E: 2400 };  // lb/day sold targets
+// Default sales targets. User can override via editable Jan cell in the
+// target rows; values persist to localStorage.
+const TARGET_DEFAULTS = { K: 6000, J: 3000, E: 2400 };
+const TARGETS = {
+  K: Number(localStorage.getItem('cukesTargetK')) || TARGET_DEFAULTS.K,
+  J: Number(localStorage.getItem('cukesTargetJ')) || TARGET_DEFAULTS.J,
+  E: Number(localStorage.getItem('cukesTargetE')) || TARGET_DEFAULTS.E,
+};
+
+function setTarget(v, val) {
+  const n = Number(val);
+  if (!isFinite(n) || n < 0) return;
+  TARGETS[v] = n;
+  localStorage.setItem('cukesTarget' + v, String(n));
+  renderAll();
+}
+window.setTarget = setTarget;
 
 // Round UP to nearest 0.1.
 function ceil01(x) { return Math.ceil(x * 10) / 10; }
