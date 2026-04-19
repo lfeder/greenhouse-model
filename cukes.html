@@ -419,8 +419,13 @@ function renderProjection() {
   const peakK = Math.max(...reqK.filter(v => v != null));
   const peakJ = Math.max(...reqJ.filter(v => v != null));
   const peakE = Math.max(...reqE.filter(v => v != null));
-  const totalBuild = peakK + peakJ + peakE;
-  const existingTotal = exK + exJJJ + exE;
+
+  const fmtAcres = v => v == null ? '<td class="empty">—</td>' : `<td>${v.toFixed(1)}</td>`;
+  const peakAnnual = arr => {
+    const valid = arr.filter(v => v != null);
+    if (!valid.length) return null;
+    return `<td>${Math.max(...valid).toFixed(1)}</td>`;
+  };
 
   let box1 = '<div style="overflow-x:auto">' + tableHdr;
   // Box 1 shows actual historical retire weeks (no override).
@@ -433,13 +438,8 @@ function renderProjection() {
   box1 += row('Current Total', curTot, 'diff-row', fmt, fLbs(annualLbs(curTot)));
   box1 += row('Sales', salesAvg, null, fmt, fLbs(annualLbs(salesAvg)));
   box1 += row('Unsold (Current − Sales)', unsold, null, fmt, fLbs(annualLbs(unsold)));
+  box1 += row('Required Total (ac)', reqTotal, 'diff-row', fmtAcres, peakAnnual(reqTotal));
   box1 += '</tbody></table></div>';
-  box1 += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
-    <div>Existing acres: K=${exK} J=${exJJJ} E=${exE} (total ${existingTotal.toFixed(2)} ac)</div>
-    <div>Required to hit targets: K=${peakK.toFixed(1)} / J=${peakJ.toFixed(1)} / E=${peakE.toFixed(1)}
-      → total <b>${totalBuild.toFixed(1)} ac</b>
-      (add ${(totalBuild - existingTotal).toFixed(1)} to existing)</div>
-  </div>`;
   document.getElementById('projBody').innerHTML = box1;
   document.getElementById('projPanel').style.display = '';
 
