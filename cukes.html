@@ -33,18 +33,16 @@
 <script>document.getElementById('nav').innerHTML = buildNav('cukes.html'); initTheme();</script>
 
 <div class="wrap">
-  <div class="panel">
-    <div class="panel-title">Average lb/day by month — Grade 1</div>
-    <p class="note">Grow = avg lb/day harvested (cuke_harvest, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Averaged across 2025–26 per month. Weeks at retire = avg cycle length (max HarvestDay ÷ 7) across Grade-1 SeedingCycles ending in that month; the current HST month is excluded. April 2026+ omitted from Grow/Sales.</p>
-    <div id="status">Loading…</div>
-    <div style="overflow-x:auto">
-      <table class="fin-table" id="cukeTable" style="display:none"><thead id="thead"></thead><tbody id="tbody"></tbody></table>
-    </div>
-  </div>
-
   <div class="panel" id="projPanel" style="display:none">
-    <div class="panel-title">Expansion projection — grown lb/day</div>
-    <p class="note">K/J baseline = historical grown lb/day × capacity factor × retire uplift. E uses: (actual current E + new E acres × J lb/ac) × retire uplift — same formula every month, so zero-E months fill in from new E acres only. Retire uplift uses max(historical weeks, target week), linearly interpolated; cumulative bumps +10/+7/+5/+2% at weeks 9/10/11/12. Seasonality index = (K+J monthly lb/day) / (annual avg), reference only.</p>
+    <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Expansion projection — grown lb/day (Grade 1)</span>
+      <span style="font-size:9px;color:var(--text-dim);text-transform:none;letter-spacing:0">
+        <span id="dataAge"></span>
+        <button class="btn" style="margin-left:8px;font-size:9px" onclick="refreshData()">Refresh</button>
+      </span>
+    </div>
+    <p class="note">Current K/J/E = avg lb/day grown (cuke_harvest, 2025–26 per month). Sales = avg lb/day shipped (invoices, Farm=Cuke). Unsold = Current Total − Sales. K/J Post-Exp = current × capacity factor × retire uplift. E Post-Exp = (actual current E + new E acres × J lb/ac) × retire uplift. Retire uplift uses max(historical weeks, target week), linearly interpolated; cumulative bumps +10/+7/+5/+2% at weeks 9/10/11/12. Sheet data cached 24h — click Refresh to re-fetch.</p>
+    <div id="status">Loading…</div>
     <div id="projBody"></div>
   </div>
 </div>
@@ -214,35 +212,6 @@ function seasonalityKJ(growByVM) {
   return perMonth.map(v => v == null ? null : v / annualAvg);
 }
 
-function render(growTotals, saleTotals, retireWeeks, seasonality) {
-  document.getElementById('thead').innerHTML =
-    '<tr><th></th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr>';
-
-  const row = (label, vals, cls, formatter) => {
-    const f = formatter || fmt;
-    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(f).join('')}</tr>`;
-  };
-
-  const growAvg = avgAcrossYears(growTotals);
-  const salesAvg = avgAcrossYears(saleTotals);
-  const diff = growAvg.map((g, i) => {
-    const s = salesAvg[i];
-    if (g == null && s == null) return null;
-    return (g || 0) - (s || 0);
-  });
-
-  let html = '';
-  html += row('Weeks at retire', retireWeeks, null, fmtWeeks);
-  html += row('Seasonality (K+J)', seasonality, null, fmtIndex);
-  html += row('Grow', growAvg);
-  html += row('Sales', salesAvg);
-  html += row('Diff (Grow − Sales)', diff, 'diff-row');
-
-  document.getElementById('tbody').innerHTML = html;
-  document.getElementById('cukeTable').style.display = '';
-  document.getElementById('status').style.display = 'none';
-}
-
 // Loose match: invoice sheet Farm/Variety fields vary in casing across tabs.
 function isCukeInvoice(r) {
   const farm = String(r.Farm || '').toLowerCase();
@@ -316,26 +285,24 @@ function capacityFactor(variety) {
 
 function setTargetWeek(w) {
   _targetWeek = w;
-  if (_growByVM) renderProjection();
+  if (_summary) renderProjection();
 }
 window.setTargetWeek = setTargetWeek;
 
 function renderProjection() {
-  if (!_growByVM || !_constants || !_settings) return;
+  if (!_summary || !_constants || !_settings) return;
 
   // Effective weeks per month = max(historical retire weeks, override target).
   const effWeeks = Array(12).fill(null).map((_, i) => {
-    const hist = _retireWeeks && _retireWeeks[i];
+    const hist = _summary.retireWeeks && _summary.retireWeeks[i];
     return Math.max(hist == null ? 0 : hist, _targetWeek);
   });
   const retMultByMonth = effWeeks.map(retireMultFor);
-  const seasonality = seasonalityKJ(_growByVM);
+  const seasonality = _summary.seasonality;
 
   const vars = ['K', 'J', 'E'];
-  const current = {}, projected = {};
-  for (const v of vars) {
-    current[v] = avgLbPerDayByMonth(_growByVM, v);
-  }
+  const current = { K: _summary.currentK, J: _summary.currentJ, E: _summary.currentE };
+  const projected = {};
   // K and J: capacity factor × retire uplift.
   for (const v of ['K', 'J']) {
     const cf = capacityFactor(v);
@@ -393,11 +360,18 @@ function renderProjection() {
   html += row('Current J',  current.J);
   html += row('Current E',  current.E);
   html += row('Current Total', curTot, 'diff-row');
+  const salesAvg = _summary.salesAvg;
+  const unsold = curTot.map((c, i) => {
+    const s = salesAvg[i];
+    if (c == null && s == null) return null;
+    return (c || 0) - (s || 0);
+  });
+  html += row('Sales', salesAvg);
+  html += row('Unsold (Current − Sales)', unsold);
   html += row('Post-Exp K', projected.K);
   html += row('Post-Exp J', projected.J);
   html += row('Post-Exp E', projected.E);
   html += row('Post-Exp Total', projTot, 'diff-row');
-  html += row('Δ (Post − Current)', delta);
 
   const targets = { K: 6000, J: 3000, E: 2400 };
   const targetTot = targets.K + targets.J + targets.E;
@@ -410,43 +384,117 @@ function renderProjection() {
 
   document.getElementById('projBody').innerHTML = html;
   document.getElementById('projPanel').style.display = '';
+  const status = document.getElementById('status');
+  if (status) status.style.display = 'none';
+}
+
+// ── Cache the sheet-derived summary in localStorage ───────────────────────
+// The sheet fetches are the slow part of the page. Once aggregated into
+// monthly arrays, nothing depends on the raw rows — projection re-renders
+// only need the summary + current settings/constants + target week.
+const CACHE_KEY = 'cukeSummary_v1';
+const CACHE_TTL_MS = 24 * 3600 * 1000;
+
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj.timestamp || Date.now() - obj.timestamp > CACHE_TTL_MS) return null;
+    return obj;
+  } catch { return null; }
+}
+
+function saveCache(summary) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(summary)); } catch {}
+}
+
+async function fetchSheetSummary() {
+  const [invA, invB, growTbl] = await Promise.all([
+    gvizFetch(SHEETS.invoices, { gid: INVOICE_GIDS[0] }),
+    gvizFetch(SHEETS.invoices, { gid: INVOICE_GIDS[1] }),
+    gvizFetch(SHEETS.grow,     { tab: GROW_TAB }),
+  ]);
+  const invoiceRows = [...parseGvizTable(invA), ...parseGvizTable(invB)];
+  const growRows = parseGvizTable(growTbl);
+  const grade1 = r => Math.round(r.Grade || 0) === 1;
+  const growTotals = aggregate(growRows, grade1, r => r.GreenhouseNetWeight);
+  const saleTotals = aggregate(invoiceRows, r => isCukeInvoice(r) && grade1(r), r => r.Pounds);
+  const retireWeeks = retireWeeksByMonth(growRows.filter(grade1));
+  const growByVM = growByVarietyMonth(growRows);
+  return {
+    timestamp: Date.now(),
+    growAvg: avgAcrossYears(growTotals),
+    salesAvg: avgAcrossYears(saleTotals),
+    retireWeeks,
+    seasonality: seasonalityKJ(growByVM),
+    currentK: avgLbPerDayByMonth(growByVM, 'K'),
+    currentJ: avgLbPerDayByMonth(growByVM, 'J'),
+    currentE: avgLbPerDayByMonth(growByVM, 'E'),
+  };
+}
+
+function renderAll() {
+  if (!_summary) return;
+  renderProjection();
+  const ageMin = Math.round((Date.now() - _summary.timestamp) / 60000);
+  const ageEl = document.getElementById('dataAge');
+  if (ageEl) ageEl.textContent =
+    `Data age: ${ageMin < 60 ? ageMin + 'm' : Math.round(ageMin / 60) + 'h'}`;
+}
+
+let _summary = null;
+
+async function loadSettingsConstants() {
+  const [s, c] = await Promise.all([
+    fetch('/api/settings').then(r => r.json()),
+    fetch('/api/constants').then(r => r.json()),
+  ]);
+  _settings = s;
+  _constants = c;
 }
 
 async function load() {
   try {
-    const [invA, invB, growTbl, settingsResp, constantsResp] = await Promise.all([
-      gvizFetch(SHEETS.invoices, { gid: INVOICE_GIDS[0] }),
-      gvizFetch(SHEETS.invoices, { gid: INVOICE_GIDS[1] }),
-      gvizFetch(SHEETS.grow,     { tab: GROW_TAB }),
-      fetch('/api/settings'),
-      fetch('/api/constants'),
-    ]);
-
-    const invoiceRows = [...parseGvizTable(invA), ...parseGvizTable(invB)];
-    const growRows = parseGvizTable(growTbl);
-    _settings = await settingsResp.json();
-    _constants = await constantsResp.json();
-
-    const grade1 = r => Math.round(r.Grade || 0) === 1;
-
-    const growTotals = aggregate(growRows, grade1, r => r.GreenhouseNetWeight);
-    const saleTotals = aggregate(invoiceRows, r => isCukeInvoice(r) && grade1(r), r => r.Pounds);
-    const retireWeeks = retireWeeksByMonth(growRows.filter(grade1));
-
-    _growByVM = growByVarietyMonth(growRows);
-    _retireWeeks = retireWeeks;
-
-    const seasonality = seasonalityKJ(_growByVM);
-    render(growTotals, saleTotals, retireWeeks, seasonality);
-    renderProjection();
+    await loadSettingsConstants();
+    const cached = loadCache();
+    if (cached) {
+      _summary = cached;
+      renderAll();
+      return;
+    }
+    document.getElementById('status').textContent = 'Fetching from Sheets…';
+    _summary = await fetchSheetSummary();
+    saveCache(_summary);
+    renderAll();
   } catch (err) {
     console.error(err);
     document.getElementById('status').textContent = 'Load error: ' + (err && err.message || err);
   }
 }
 
+async function refreshData() {
+  const ageEl = document.getElementById('dataAge');
+  if (ageEl) ageEl.textContent = 'Refreshing…';
+  try {
+    await loadSettingsConstants();
+    _summary = await fetchSheetSummary();
+    saveCache(_summary);
+    renderAll();
+  } catch (err) {
+    if (ageEl) ageEl.textContent = 'Refresh failed';
+    console.error(err);
+  }
+}
+window.refreshData = refreshData;
+
 load();
-window.addEventListener('focus', load);
+// On tab focus, re-fetch settings+constants and re-render from cached sheet data.
+// Cached sheet data only refreshes on explicit user click or on TTL expiry.
+window.addEventListener('focus', async () => {
+  await loadSettingsConstants();
+  renderAll();
+});
 </script>
 </body>
 </html>
