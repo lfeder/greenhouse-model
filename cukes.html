@@ -44,7 +44,7 @@
 
   <div class="panel" id="projPanel" style="display:none">
     <div class="panel-title">Expansion projection — grown lb/day</div>
-    <p class="note">Baseline = historical grown lb/day per variety (Grade 1, avg of 2025 and 2026 where both exist). Capacity factor = (existing + new acres) / existing acres per variety. Retire uplift = cumulative product of +10%/+7%/+5%/+2% for target weeks 9/10/11/12. Applied to all capacity (existing + new).</p>
+    <p class="note">Baseline = historical grown lb/day per variety (Grade 1, avg of 2025 and 2026 where both exist). Capacity factor = (existing + new acres) / existing acres per variety. Retire uplift uses max(historical weeks, target week) per month — so a W10 target doesn't reduce Jan–Mar if those months already ran longer historically. Linearly interpolated between integer weeks; cumulative bumps of +10/+7/+5/+2% at 9/10/11/12.</p>
     <div id="projBody"></div>
   </div>
 </div>
@@ -266,7 +266,16 @@ function avgLbPerDayByMonth(totals, variety) {
 // Cumulative multiplier at each target week (marginal: +10/+7/+5/+2 for 9/10/11/12).
 const RETIRE_MULT = { 8: 1.00, 9: 1.10, 10: 1.10 * 1.07, 11: 1.10 * 1.07 * 1.05, 12: 1.10 * 1.07 * 1.05 * 1.02 };
 
+// Linear interpolation of the retire multiplier for fractional weeks.
+function retireMultFor(weeks) {
+  if (weeks == null || weeks <= 8) return 1.0;
+  if (weeks >= 12) return RETIRE_MULT[12];
+  const lo = Math.floor(weeks);
+  return RETIRE_MULT[lo] + (weeks - lo) * (RETIRE_MULT[lo + 1] - RETIRE_MULT[lo]);
+}
+
 let _growByVM = null;   // cached for re-renders on retire-week toggle
+let _retireWeeks = null;
 let _constants = null;
 let _settings = null;
 let _targetWeek = 10;
@@ -288,13 +297,20 @@ window.setTargetWeek = setTargetWeek;
 
 function renderProjection() {
   if (!_growByVM || !_constants || !_settings) return;
-  const retMult = RETIRE_MULT[_targetWeek] || 1;
+
+  // Effective weeks per month = max(historical retire weeks, override target).
+  const effWeeks = Array(12).fill(null).map((_, i) => {
+    const hist = _retireWeeks && _retireWeeks[i];
+    return Math.max(hist == null ? 0 : hist, _targetWeek);
+  });
+  const retMultByMonth = effWeeks.map(retireMultFor);
+
   const vars = ['K', 'J', 'E'];
   const current = {}, projected = {};
   for (const v of vars) {
     current[v] = avgLbPerDayByMonth(_growByVM, v);
     const cf = capacityFactor(v);
-    projected[v] = current[v].map(x => x == null ? null : x * cf * retMult);
+    projected[v] = current[v].map((x, i) => x == null ? null : x * cf * retMultByMonth[i]);
   }
   const sumRow = obj => Array(12).fill(null).map((_, i) => {
     let sum = 0, any = false;
@@ -317,15 +333,17 @@ function renderProjection() {
   const controls = `<div style="margin-bottom:10px;font-size:10px;color:var(--text-muted)">
     Target retire week: ${btns}
     <span style="margin-left:16px">Capacity factor: ${cf}</span>
-    <span style="margin-left:16px">Retire uplift: ${retMult.toFixed(3)}×</span>
   </div>`;
 
-  const row = (label, vals, cls) =>
-    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(fmt).join('')}</tr>`;
+  const row = (label, vals, cls, formatter) => {
+    const f = formatter || fmt;
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(f).join('')}</tr>`;
+  };
 
   let html = controls;
   html += '<div style="overflow-x:auto"><table class="fin-table"><thead><tr><th></th>' +
     MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
+  html += row('Weeks used', effWeeks, null, fmtWeeks);
   html += row('Current K',  current.K);
   html += row('Current J',  current.J);
   html += row('Current E',  current.E);
@@ -365,6 +383,7 @@ async function load() {
     render(growTotals, saleTotals, retireWeeks);
 
     _growByVM = growByVarietyMonth(growRows);
+    _retireWeeks = retireWeeks;
     renderProjection();
   } catch (err) {
     console.error(err);
