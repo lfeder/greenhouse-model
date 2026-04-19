@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cukes lb/day — Expansion Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  /* per-page tweaks */
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 32px 0; }
+  .note { font-size: 10px; color: var(--text-muted); margin: 0 0 12px; }
+  .fin-table td.empty { color: var(--text-dim); }
+  .fin-table td.neg { color: var(--yellow); }
+  .fin-table tr.year-break td { border-top: 1px solid var(--border); }
+  .fin-table tr.diff-row td { border-top: 2px solid var(--border); color: var(--text); font-weight: 700; }
+  #status { color: var(--text-muted); font-size: 11px; padding: 12px 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">Cukes lb/day</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="display:flex;gap:12px;font-size:10px" id="nav"></div>
+      <div style="font-size:10px">v {{VERSION}}</div>
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
+    </div>
+  </div>
+</div>
+<script src="utils.js"></script>
+<script>document.getElementById('nav').innerHTML = buildNav('cukes.html'); initTheme();</script>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="panel-title">Average lb/day by month — Grade 1</div>
+    <p class="note">Grow = cuke_harvest.GreenhouseNetWeight. Sales = invoices (Variety=Cuke). Grade 1 only. April 2026+ omitted.</p>
+    <div id="status">Loading…</div>
+    <div style="overflow-x:auto">
+      <table class="fin-table" id="cukeTable" style="display:none"><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const YEARS = [2025, 2026];
+const CUTOFF = { 2025: 12, 2026: 3 };  // last included month per year
+
+// Google Sheet sources (same as dash/lib/data-source.js, sheets mode)
+const SHEETS = {
+  invoices: '124y8JdWXmbf_hb1vfimHmGaKLVXrRHybw02w_ozCExE',
+  grow:     '1VtEecYn-W1pbnIU1hRHfxIpkH2DtK7hj0CpcpiLoziM',
+};
+const INVOICE_GIDS = ['1254110782', '544460225'];  // invoices_23-25, invoices_2025 (holds 2026)
+const GROW_TAB = 'grow_C_harvest';
+
+function daysInMonth(year, m) { return new Date(year, m, 0).getDate(); }
+
+function gvizFetch(sheetId, src) {
+  return new Promise((resolve, reject) => {
+    const tag = src.gid || src.tab || '0';
+    const cbName = '_cb_' + String(tag).replace(/[^a-z0-9_]/gi,'') + '_' + Math.floor(Math.random()*1e9);
+    let url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json;responseHandler:${cbName}`;
+    if (src.gid) url += `&gid=${src.gid}`;
+    if (src.tab) url += `&sheet=${encodeURIComponent(src.tab)}`;
+    window[cbName] = (resp) => {
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      if (!resp || resp.status === 'error') { reject(resp ? resp.errors : 'no response'); return; }
+      resolve(resp.table);
+    };
+    const script = document.createElement('script');
+    script.src = url;
+    script.onerror = () => { delete window[cbName]; reject('Network error loading ' + tag); };
+    document.head.appendChild(script);
+  });
+}
+
+function parseGvizTable(table) {
+  const cols = table.cols.map(c => c.label);
+  return table.rows.map(r => {
+    const obj = {};
+    r.c.forEach((cell, i) => {
+      const col = cols[i];
+      if (!col) return;
+      if (!cell || cell.v === null || cell.v === undefined) { obj[col] = ''; return; }
+      if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
+        const dm = cell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
+        if (dm) {
+          obj[col] = cell.f || cell.v;
+          obj._y = +dm[1];
+          obj._m = +dm[2] + 1;
+          obj._d = +dm[3];
+        }
+      } else {
+        obj[col] = cell.v;
+      }
+    });
+    return obj;
+  });
+}
+
+function aggregate(rows, filterFn, poundsFn) {
+  const totals = {};
+  for (const r of rows) {
+    if (!filterFn(r)) continue;
+    const y = r._y, m = r._m;
+    if (!y || !m) continue;
+    if (!YEARS.includes(y)) continue;
+    if (m > CUTOFF[y]) continue;
+    const key = y + '-' + m;
+    totals[key] = (totals[key] || 0) + (poundsFn(r) || 0);
+  }
+  return totals;
+}
+
+function perDay(totals, y, m) {
+  const lbs = totals[y + '-' + m];
+  if (!lbs) return null;
+  return lbs / daysInMonth(y, m);
+}
+
+function fmt(v) {
+  if (v == null) return '<td class="empty">—</td>';
+  const cls = v < 0 ? ' class="neg"' : '';
+  return `<td${cls}>${Math.round(v).toLocaleString()}</td>`;
+}
+
+function render(growTotals, saleTotals) {
+  document.getElementById('thead').innerHTML =
+    '<tr><th></th>' + MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr>';
+
+  let html = '';
+  const rowFor = (label, y, picker) => {
+    const cells = MONTHS.map((_, i) => {
+      const m = i + 1;
+      if (m > CUTOFF[y]) return '<td class="empty">—</td>';
+      return fmt(picker(m));
+    }).join('');
+    return `<tr><td>${label}</td>${cells}</tr>`;
+  };
+
+  for (const y of YEARS) html += rowFor(`Grow ${y}`, y, m => perDay(growTotals, y, m));
+  for (const y of YEARS) {
+    const cls = y === 2025 ? ' class="year-break"' : '';
+    const cells = MONTHS.map((_, i) => {
+      const m = i + 1;
+      if (m > CUTOFF[y]) return '<td class="empty">—</td>';
+      return fmt(perDay(saleTotals, y, m));
+    }).join('');
+    html += `<tr${cls}><td>Sales ${y}</td>${cells}</tr>`;
+  }
+  for (const y of YEARS) {
+    const cls = y === 2025 ? ' class="diff-row"' : '';
+    const cells = MONTHS.map((_, i) => {
+      const m = i + 1;
+      if (m > CUTOFF[y]) return '<td class="empty">—</td>';
+      const g = perDay(growTotals, y, m);
+      const s = perDay(saleTotals, y, m);
+      if (g == null && s == null) return '<td class="empty">—</td>';
+      return fmt((g || 0) - (s || 0));
+    }).join('');
+    html += `<tr${cls}><td>Diff ${y}</td>${cells}</tr>`;
+  }
+
+  document.getElementById('tbody').innerHTML = html;
+  document.getElementById('cukeTable').style.display = '';
+  document.getElementById('status').style.display = 'none';
+}
+
+async function load() {
+  try {
+    const [invA, invB, growTbl] = await Promise.all([
+      gvizFetch(SHEETS.invoices, { gid: INVOICE_GIDS[0] }),
+      gvizFetch(SHEETS.invoices, { gid: INVOICE_GIDS[1] }),
+      gvizFetch(SHEETS.grow,     { tab: GROW_TAB }),
+    ]);
+
+    const invoiceRows = [...parseGvizTable(invA), ...parseGvizTable(invB)];
+    const growRows = parseGvizTable(growTbl);
+
+    const growTotals = aggregate(
+      growRows,
+      r => Math.round(r.Grade || 0) === 1,
+      r => r.GreenhouseNetWeight
+    );
+    const saleTotals = aggregate(
+      invoiceRows,
+      r => r.Variety === 'Cuke' && Math.round(r.Grade || 0) === 1,
+      r => r.Pounds
+    );
+
+    render(growTotals, saleTotals);
+  } catch (err) {
+    console.error(err);
+    document.getElementById('status').textContent = 'Load error: ' + (err && err.message || err);
+  }
+}
+
+load();
+</script>
+</body>
+</html>

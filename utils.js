@@ -88,6 +88,7 @@ function buildNav(activePage) {
     {href: 'debt.html', label: 'Debt'},
     {href: 'depreciation.html', label: 'Depreciation'},
     {href: 'employees.html', label: 'Employees'},
+    {href: 'cukes.html', label: 'Cukes'},
   ];
   const links = pages.map(p => {
     const active = p.href === activePage;
