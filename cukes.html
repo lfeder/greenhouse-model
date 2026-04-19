@@ -54,7 +54,7 @@
 
   <div class="panel" id="reqPanel" style="display:none">
     <div class="panel-title">Required acres to hit sales target</div>
-    <p class="note">For each month, acres needed per variety to meet the sales target: <code>target / (current lb/ac/day × retire uplift)</code>. English uses J's per-ac productivity when E baseline is missing. Rounded up to 0.1 ac. Rotation total = sum across varieties per month (GHs run whichever variety that month). Build-if-dedicated = peak month per variety; build-if-rotational = peak of monthly totals.</p>
+    <p class="note">For each month, acres needed per variety to meet the sales target: <code>target / (lb/ac/day × retire uplift)</code>. K and J use their own per-ac productivity; E uses J's per-ac across all months (existing 0.8 ac of E isn't representative). Rounded up to 0.1 ac. Rotation total = sum across varieties per month. Build-if-dedicated = peak month per variety; build-if-rotational = peak of monthly totals.</p>
     <div id="reqControls" style="margin-bottom:10px"></div>
     <div id="reqBody"></div>
   </div>
@@ -512,9 +512,9 @@ function renderRequired() {
     (v == null || !ex) ? null : (v / ex) * retMult[i]);
   const perAcK = perAc(currentK, exK);
   const perAcJ = perAc(currentJ, exJ);
-  const perAcEraw = perAc(currentE, exE);
-  // For E zero-baseline months, fall back to J's per-ac productivity
-  const perAcE = perAcEraw.map((v, i) => (v == null || v === 0) ? perAcJ[i] : v);
+  // E: always use J's per-ac productivity — our 0.8 ac of existing E isn't
+  // representative of what new E GHs will yield.
+  const perAcE = perAcJ;
 
   const reqK = perAcK.map(p => p == null ? null : ceil01(TARGETS.K / p));
   const reqJ = perAcJ.map(p => p == null ? null : ceil01(TARGETS.J / p));
