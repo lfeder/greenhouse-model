@@ -35,21 +35,22 @@
 <div class="wrap">
   <div class="panel" id="projPanel" style="display:none">
     <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
-      <span>Expansion projection — grown lb/day (Grade 1)</span>
+      <span>Current state — lb/day grown (Grade 1)</span>
       <span style="font-size:9px;color:var(--text-dim);text-transform:none;letter-spacing:0">
         <span id="dataAge"></span>
         <button class="btn" style="margin-left:8px;font-size:9px" onclick="refreshData()">Refresh</button>
       </span>
     </div>
-    <p class="note">Current K/J/E = avg lb/day grown (cuke_harvest, 2025–26 per month). Sales = avg lb/day shipped (invoices, Farm=Cuke). Unsold = Current Total − Sales. K/J Post-Exp = current × capacity factor × retire uplift. E Post-Exp = (actual current E + new E acres × J lb/ac) × retire uplift. Retire uplift uses max(historical weeks, target week), linearly interpolated; cumulative bumps +10/+7/+5/+2% at weeks 9/10/11/12. Sheet data cached locally forever — click Refresh to re-fetch.</p>
+    <p class="note">Current K/J/E = avg lb/day grown (cuke_harvest, 2025–26 per month, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Unsold = Current Total − Sales. Weeks used = max(historical retire, target week override). Seasonality = (K+J monthly lb/day) / (annual avg). Sheet data cached locally forever — click Refresh to re-fetch.</p>
     <div id="status">Loading…</div>
+    <div id="projControls" style="margin-bottom:10px"></div>
     <div id="projBody"></div>
   </div>
 
-  <div class="panel" id="targetPanel" style="display:none">
-    <div class="panel-title">Sales target &amp; surplus</div>
-    <p class="note">Target lb/day sold per variety (K=6,000 / J=3,000 / E=2,400). Surplus = Post-Exp Total − Target Total. Negative values (yellow) = shortfall.</p>
-    <div id="targetBody"></div>
+  <div class="panel" id="postExpPanel" style="display:none">
+    <div class="panel-title">Post-expansion projection &amp; sales targets</div>
+    <p class="note">K/J Post-Exp = current lb/day × capacity factor × retire uplift. E Post-Exp = (actual current E + new E acres × J lb/ac) × retire uplift. Retire uplift: cumulative +10/+7/+5/+2% at weeks 9/10/11/12. Target lb/day sold (K=6,000 / J=3,000 / E=2,400) shown below. Surplus = Post-Exp Total − Target Total; negative (yellow) = shortfall.</p>
+    <div id="postExpBody"></div>
   </div>
 
   <div class="panel" id="reqPanel" style="display:none">
@@ -356,47 +357,61 @@ function renderProjection() {
     return (p || 0) - (c || 0);
   });
 
+  const row = (label, vals, cls, formatter) => {
+    const f = formatter || fmt;
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(f).join('')}</tr>`;
+  };
+  const tableHdr = '<table class="fin-table"><thead><tr><th></th>' +
+    MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
+
+  // --- Controls (box 1 header) ---
   const btns = [8, 9, 10, 11, 12].map(w => {
     const active = w === _targetWeek ? 'border-color:var(--accent);color:var(--accent)' : '';
     return `<button class="btn" style="${active};margin-left:4px" onclick="setTargetWeek(${w})">W${w}</button>`;
   }).join('');
   const cf = vars.map(v => `${v}=${capacityFactor(v).toFixed(2)}×`).join('  ');
-  const controls = `<div style="margin-bottom:10px;font-size:10px;color:var(--text-muted)">
-    Target retire week: ${btns}
-    <span style="margin-left:16px">Capacity factor: ${cf}</span>
-  </div>`;
+  document.getElementById('projControls').innerHTML =
+    `<span style="font-size:10px;color:var(--text-muted)">Target retire week: ${btns}
+     <span style="margin-left:16px">Capacity factor: ${cf}</span></span>`;
 
-  const row = (label, vals, cls, formatter) => {
-    const f = formatter || fmt;
-    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(f).join('')}</tr>`;
-  };
-
-  let html = controls;
-  html += '<div style="overflow-x:auto"><table class="fin-table"><thead><tr><th></th>' +
-    MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
-  html += row('Weeks used', effWeeks, null, fmtWeeks);
-  html += row('Seasonality (K+J)', seasonality, null, fmtIndex);
-  html += row('Current K',  current.K);
-  html += row('Current J',  current.J);
-  html += row('Current E',  current.E);
-  html += row('Current Total', curTot, 'diff-row');
+  // --- Box 1: current state ---
   const salesAvg = _summary.salesAvg;
   const unsold = curTot.map((c, i) => {
     const s = salesAvg[i];
     if (c == null && s == null) return null;
     return (c || 0) - (s || 0);
   });
-  html += row('Sales', salesAvg);
-  html += row('Unsold (Current − Sales)', unsold);
-  html += row('Post-Exp K', projected.K);
-  html += row('Post-Exp J', projected.J);
-  html += row('Post-Exp E', projected.E);
-  html += row('Post-Exp Total', projTot, 'diff-row');
-  html += '</tbody></table></div>';
-
-  document.getElementById('projBody').innerHTML = html;
+  let box1 = '<div style="overflow-x:auto">' + tableHdr;
+  box1 += row('Weeks used', effWeeks, null, fmtWeeks);
+  box1 += row('Seasonality (K+J)', seasonality, null, fmtIndex);
+  box1 += row('Current K',  current.K);
+  box1 += row('Current J',  current.J);
+  box1 += row('Current E',  current.E);
+  box1 += row('Current Total', curTot, 'diff-row');
+  box1 += row('Sales', salesAvg);
+  box1 += row('Unsold (Current − Sales)', unsold);
+  box1 += '</tbody></table></div>';
+  document.getElementById('projBody').innerHTML = box1;
   document.getElementById('projPanel').style.display = '';
-  // Stash projTot for the target panel to consume.
+
+  // --- Box 2: post-expansion + targets ---
+  const targets = TARGETS;
+  const targetTot = targets.K + targets.J + targets.E;
+  const surplus = projTot.map(p => p == null ? null : p - targetTot);
+  let box2 = '<div style="overflow-x:auto">' + tableHdr;
+  box2 += row('Post-Exp K', projected.K);
+  box2 += row('Post-Exp J', projected.J);
+  box2 += row('Post-Exp E', projected.E);
+  box2 += row('Post-Exp Total', projTot, 'diff-row');
+  box2 += row('Target sold K', Array(12).fill(targets.K));
+  box2 += row('Target sold J', Array(12).fill(targets.J));
+  box2 += row('Target sold E', Array(12).fill(targets.E));
+  box2 += row('Target sold Total', Array(12).fill(targetTot), 'diff-row');
+  box2 += row('Surplus (Post − Target)', surplus);
+  box2 += '</tbody></table></div>';
+  document.getElementById('postExpBody').innerHTML = box2;
+  document.getElementById('postExpPanel').style.display = '';
+
   _projTot = projTot;
   const status = document.getElementById('status');
   if (status) status.style.display = 'none';
@@ -466,7 +481,6 @@ async function fetchSheetSummary() {
 function renderAll() {
   if (!_summary) return;
   renderProjection();
-  renderTarget();
   renderRequired();
   renderEcon();
   const ageMin = Math.round((Date.now() - _summary.timestamp) / 60000);
@@ -561,26 +575,6 @@ function renderRequired() {
 
   document.getElementById('reqBody').innerHTML = html;
   document.getElementById('reqPanel').style.display = '';
-}
-
-function renderTarget() {
-  if (!_projTot) return;
-  const targets = TARGETS;
-  const targetTot = targets.K + targets.J + targets.E;
-  const row = (label, vals, cls, formatter) => {
-    const f = formatter || fmt;
-    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(f).join('')}</tr>`;
-  };
-  let html = '<div style="overflow-x:auto"><table class="fin-table"><thead><tr><th></th>' +
-    MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
-  html += row('Target sold K', Array(12).fill(targets.K));
-  html += row('Target sold J', Array(12).fill(targets.J));
-  html += row('Target sold E', Array(12).fill(targets.E));
-  html += row('Target sold Total', Array(12).fill(targetTot), 'diff-row');
-  html += row('Surplus (Post − Target)', _projTot.map(p => p == null ? null : p - targetTot));
-  html += '</tbody></table></div>';
-  document.getElementById('targetBody').innerHTML = html;
-  document.getElementById('targetPanel').style.display = '';
 }
 
 function renderEcon() {
