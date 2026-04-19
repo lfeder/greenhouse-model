@@ -56,7 +56,7 @@
 
   <div class="panel" id="reqPanel" style="display:none">
     <div class="panel-title">Required acres to hit sales target</div>
-    <p class="note">For each month, acres needed per variety to meet the sales target: <code>target / (lb/ac/day × retire uplift)</code>. K and J use their own per-ac productivity; E uses J's per-ac across all months (existing 0.8 ac of E isn't representative). Rounded up to 0.1 ac. Rotation total = sum across varieties per month. Build-if-dedicated = peak month per variety; build-if-rotational = peak of monthly totals.</p>
+    <p class="note">For each month, acres needed per variety to meet the sales target: <code>target / (lb/ac/day × retire uplift)</code>. K and J use their own per-ac productivity; E uses J's per-ac across all months (existing 0.8 ac of E isn't representative). Targets are seasonal — edit the Jan and Apr cells in the target rows above to simulate rotation (e.g. lower E in winter). Rounded up to 0.1 ac. Total build = sum of per-variety peaks.</p>
     <div id="reqControls" style="margin-bottom:10px"></div>
     <div id="reqBody"></div>
   </div>
@@ -397,20 +397,33 @@ function renderProjection() {
   document.getElementById('projPanel').style.display = '';
 
   // --- Box 2: post-expansion + targets ---
-  const targets = TARGETS;
-  const targetTot = targets.K + targets.J + targets.E;
-  const surplus = projTot.map(p => p == null ? null : p - targetTot);
-  // Editable Jan cell for a target row; rest of month cells display the same value.
+  // Per-month target values: Jan–Mar use winter, Apr–Dec use summer.
+  const targetPerMonth = v => Array(12).fill(null).map((_, i) => targetForMonth(v, i));
+  const targK = targetPerMonth('K');
+  const targJ = targetPerMonth('J');
+  const targE = targetPerMonth('E');
+  const targTot = targK.map((k, i) => k + targJ[i] + targE[i]);
+  const surplus = projTot.map((p, i) => p == null ? null : p - targTot[i]);
   const inputStyle = 'width:60px;background:var(--panel-dark);color:var(--text);' +
     'border:1px solid var(--border);border-radius:3px;font-family:inherit;' +
     'font-size:11px;padding:2px 4px;text-align:right';
   const targetRow = (label, key) => {
-    const val = targets[key];
-    const firstCell = `<td><input type="number" value="${val}" min="0" step="100"
-      onchange="setTarget('${key}', this.value)" style="${inputStyle}"></td>`;
-    const restCells = Array(11).fill(null).map(() =>
-      `<td>${val.toLocaleString()}</td>`).join('');
-    return `<tr><td>${label}</td>${firstCell}${restCells}</tr>`;
+    const w = TARGETS[key].winter;
+    const s = TARGETS[key].summer;
+    let cells = '';
+    for (let i = 0; i < 12; i++) {
+      if (i === 0) {
+        cells += `<td><input type="number" value="${w}" min="0" step="100"
+          onchange="setTarget('${key}','winter',this.value)" style="${inputStyle}"></td>`;
+      } else if (i === 3) {
+        cells += `<td><input type="number" value="${s}" min="0" step="100"
+          onchange="setTarget('${key}','summer',this.value)" style="${inputStyle}"></td>`;
+      } else {
+        const val = i < 3 ? w : s;
+        cells += `<td>${val.toLocaleString()}</td>`;
+      }
+    }
+    return `<tr><td>${label}</td>${cells}</tr>`;
   };
   let box2 = '<div style="overflow-x:auto">' + tableHdr;
   box2 += row('Post-Exp K', projected.K);
@@ -420,7 +433,7 @@ function renderProjection() {
   box2 += targetRow('Target sold K', 'K');
   box2 += targetRow('Target sold J', 'J');
   box2 += targetRow('Target sold E', 'E');
-  box2 += row('Target sold Total', Array(12).fill(targetTot), 'diff-row');
+  box2 += row('Target sold Total', targTot, 'diff-row');
   box2 += row('Surplus (Post − Target)', surplus);
   box2 += '</tbody></table></div>';
   document.getElementById('postExpBody').innerHTML = box2;
@@ -504,37 +517,49 @@ function renderAll() {
 }
 
 let _summary = null;
-let _projTot = null;  // set by renderProjection, consumed by renderTarget
+let _projTot = null;  // set by renderProjection
 let _inflation = Number(localStorage.getItem('cukesInflation')) || 0;  // percent
-let _rotation = localStorage.getItem('cukesRotation') !== 'false';  // default true
 
 function setInflation(v) {
   _inflation = Number(v) || 0;
   localStorage.setItem('cukesInflation', String(_inflation));
   renderAll();
 }
-function setRotation(on) {
-  _rotation = !!on;
-  localStorage.setItem('cukesRotation', String(_rotation));
-  renderAll();
-}
 window.setInflation = setInflation;
-window.setRotation = setRotation;
 
-// Default sales targets. User can override via editable Jan cell in the
-// target rows; values persist to localStorage.
-const TARGET_DEFAULTS = { K: 6000, J: 3000, E: 2400 };
+// Seasonal sales targets — two editable cells per variety (Jan fills Jan–Mar,
+// Apr fills Apr–Dec), lets the user simulate rotation by varying demand
+// between winter and the rest of the year.
+const TARGET_DEFAULTS = {
+  K: { winter: 6000, summer: 6000 },
+  J: { winter: 3000, summer: 3000 },
+  E: { winter: 2400, summer: 2400 },
+};
 const TARGETS = {
-  K: Number(localStorage.getItem('cukesTargetK')) || TARGET_DEFAULTS.K,
-  J: Number(localStorage.getItem('cukesTargetJ')) || TARGET_DEFAULTS.J,
-  E: Number(localStorage.getItem('cukesTargetE')) || TARGET_DEFAULTS.E,
+  K: {
+    winter: Number(localStorage.getItem('cukesTargetK_w')) || TARGET_DEFAULTS.K.winter,
+    summer: Number(localStorage.getItem('cukesTargetK_s')) || TARGET_DEFAULTS.K.summer,
+  },
+  J: {
+    winter: Number(localStorage.getItem('cukesTargetJ_w')) || TARGET_DEFAULTS.J.winter,
+    summer: Number(localStorage.getItem('cukesTargetJ_s')) || TARGET_DEFAULTS.J.summer,
+  },
+  E: {
+    winter: Number(localStorage.getItem('cukesTargetE_w')) || TARGET_DEFAULTS.E.winter,
+    summer: Number(localStorage.getItem('cukesTargetE_s')) || TARGET_DEFAULTS.E.summer,
+  },
 };
 
-function setTarget(v, val) {
+function targetForMonth(v, monthIdx) {  // monthIdx = 0..11
+  return monthIdx < 3 ? TARGETS[v].winter : TARGETS[v].summer;
+}
+
+function setTarget(v, season, val) {
   const n = Number(val);
   if (!isFinite(n) || n < 0) return;
-  TARGETS[v] = n;
-  localStorage.setItem('cukesTarget' + v, String(n));
+  TARGETS[v][season] = n;
+  const suffix = season === 'winter' ? '_w' : '_s';
+  localStorage.setItem('cukesTarget' + v + suffix, String(n));
   renderAll();
 }
 window.setTarget = setTarget;
@@ -560,27 +585,16 @@ function renderRequired() {
   // representative of what new E GHs will yield.
   const perAcE = perAcJ;
 
-  const reqK = perAcK.map(p => p == null ? null : ceil01(TARGETS.K / p));
-  const reqJ = perAcJ.map(p => p == null ? null : ceil01(TARGETS.J / p));
-  const reqE = perAcE.map(p => p == null ? null : ceil01(TARGETS.E / p));
-  const reqTotal = reqK.map((k, i) => {
-    const j = reqJ[i], e = reqE[i];
-    if (k == null && j == null && e == null) return null;
-    return (k || 0) + (j || 0) + (e || 0);
-  });
+  const reqK = perAcK.map((p, i) => p == null ? null : ceil01(targetForMonth('K', i) / p));
+  const reqJ = perAcJ.map((p, i) => p == null ? null : ceil01(targetForMonth('J', i) / p));
+  const reqE = perAcE.map((p, i) => p == null ? null : ceil01(targetForMonth('E', i) / p));
 
   const peakK = Math.max(...reqK.filter(v => v != null));
   const peakJ = Math.max(...reqJ.filter(v => v != null));
   const peakE = Math.max(...reqE.filter(v => v != null));
-  const peakRot = Math.max(...reqTotal.filter(v => v != null));
-  const dedicatedTotal = peakK + peakJ + peakE;
+  const totalBuild = peakK + peakJ + peakE;
 
-  const controls = `<label style="font-size:10px;color:var(--text-muted)">
-    <input type="checkbox" ${_rotation ? 'checked' : ''} onchange="setRotation(this.checked)"
-      style="margin-right:4px;accent-color:var(--accent)">
-    Rotation (GHs swap varieties month-to-month)
-  </label>`;
-  document.getElementById('reqControls').innerHTML = controls;
+  document.getElementById('reqControls').innerHTML = '';
 
   const fmtAc = v => v == null ? '<td class="empty">—</td>' : `<td>${v.toFixed(1)}</td>`;
   const rowAc = (label, vals, cls) =>
@@ -591,16 +605,14 @@ function renderRequired() {
   html += rowAc('Required K (ac)', reqK);
   html += rowAc('Required J (ac)', reqJ);
   html += rowAc('Required E (ac)', reqE);
-  if (_rotation) html += rowAc('Required Total (ac, rotated)', reqTotal, 'diff-row');
   html += '</tbody></table></div>';
 
   const existing = `K=${exK} J=${exJ} E=${exE} (total ${(exK+exJ+exE).toFixed(2)} ac)`;
   html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
     <div>Existing acres: ${existing}</div>
-    <div>Build-if-dedicated: K peak ${peakK.toFixed(1)} / J peak ${peakJ.toFixed(1)} / E peak ${peakE.toFixed(1)} →
-      total <b>${dedicatedTotal.toFixed(1)} ac</b> (add ${(dedicatedTotal - (exK+exJ+exE)).toFixed(1)} to existing)</div>
-    <div>Build-if-rotational: peak monthly total <b>${peakRot.toFixed(1)} ac</b>
-      (add ${(peakRot - (exK+exJ+exE)).toFixed(1)} to existing)</div>
+    <div>Peak per variety: K=${peakK.toFixed(1)} / J=${peakJ.toFixed(1)} / E=${peakE.toFixed(1)}
+      → total build <b>${totalBuild.toFixed(1)} ac</b>
+      (add ${(totalBuild - (exK+exJ+exE)).toFixed(1)} to existing)</div>
   </div>`;
 
   document.getElementById('reqBody').innerHTML = html;
