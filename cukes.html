@@ -600,11 +600,18 @@ function renderRequired() {
   const rowAc = (label, vals, cls) =>
     `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(fmtAc).join('')}</tr>`;
 
+  const reqTotal = reqK.map((k, i) => {
+    const j = reqJ[i], e = reqE[i];
+    if (k == null && j == null && e == null) return null;
+    return (k || 0) + (j || 0) + (e || 0);
+  });
+
   let html = '<div style="overflow-x:auto"><table class="fin-table"><thead><tr><th></th>' +
     MONTHS.map(m => `<th>${m}</th>`).join('') + '</tr></thead><tbody>';
   html += rowAc('Required K (ac)', reqK);
   html += rowAc('Required J (ac)', reqJ);
   html += rowAc('Required E (ac)', reqE);
+  html += rowAc('Required Total (ac)', reqTotal, 'diff-row');
   html += '</tbody></table></div>';
 
   const existing = `K=${exK} J=${exJ} E=${exE} (total ${(exK+exJ+exE).toFixed(2)} ac)`;
