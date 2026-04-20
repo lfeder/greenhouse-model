@@ -467,18 +467,7 @@ function renderProjection() {
   const box1AnnualRev = box1RevMonth.reduce((a, b) => a + b, 0);
   box1 += `<tr class="diff-row"><td>Revenue ($, sales)</td>${box1RevMonth.map(fmtDol).join('')}${fDollars(box1AnnualRev)}</tr>`;
 
-  // Required acres based on ACTUAL sales (not targets): divide monthly sales
-  // by the month's actual lb/ac/day from the existing footprint. No retire
-  // uplift — pure historical ratio. Grossed up 5% for slippage.
   const existingTotal = exK + exJJJ + exE;
-  const actualReqTotal = salesAvg.map((s, i) => {
-    if (s == null) return null;
-    const produced = curTot[i];
-    if (produced == null || produced === 0) return null;
-    const lbAcDay = produced / existingTotal;
-    return ceil01((s * (1 + SLIPPAGE_RATE)) / lbAcDay);
-  });
-  box1 += row('Required Total (ac, to meet sales)', actualReqTotal, 'diff-row', fmtAcres, peakAnnual(actualReqTotal));
   box1 += '</tbody></table></div>';
   document.getElementById('projBody').innerHTML = box1;
   document.getElementById('projPanel').style.display = '';
