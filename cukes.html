@@ -14,6 +14,7 @@
   .fin-table td.neg { color: var(--yellow); }
   .fin-table tr.year-break td { border-top: 1px solid var(--border); }
   .fin-table tr.diff-row td { border-top: 2px solid var(--border); color: var(--text); font-weight: 700; }
+  .fin-table tr.diff-below td { border-bottom: 2px solid var(--border); color: var(--text); font-weight: 700; }
   #status { color: var(--text-muted); font-size: 11px; padding: 12px 0; }
 </style>
 </head>
@@ -440,20 +441,20 @@ function renderProjection() {
   let box1 = '<div style="overflow-x:auto">' + tableHdr;
   // Box 1 shows actual historical retire weeks (no override).
   box1 += row('Weeks (shutdown)', histWeeks, null, fmtWeeks, fAvg(histWeeks));
-  box1 += row('Seasonality (K+J)', seasonality, null, fmtIndex, null);
-  box1 += row('Current K',  current.K, null, fmt, fAvgLb(avgOf(current.K)));
-  box1 += row('Current J',  current.J, null, fmt, fAvgLb(avgOf(current.J)));
-  box1 += row('Current E',  current.E, null, fmt, fAvgLb(avgOf(current.E)));
-  box1 += row('Current Total', curTot, 'diff-row', fmt, fAvgLb(avgOf(curTot)));
+  box1 += row('Season (Deficit from Max)', seasonality, null, fmtIndex, null);
+  box1 += row('Grown K',  current.K, null, fmt, fAvgLb(avgOf(current.K)));
+  box1 += row('Grown J',  current.J, null, fmt, fAvgLb(avgOf(current.J)));
+  box1 += row('Grown E',  current.E, null, fmt, fAvgLb(avgOf(current.E)));
+  box1 += row('Grown Total', curTot, 'diff-below', fmt, fAvgLb(avgOf(curTot)));
   const salesK = avgLbPerDayByMonth(_summary.saleByVM, 'K');
   const salesJ = avgLbPerDayByMonth(_summary.saleByVM, 'J');
   const salesE = avgLbPerDayByMonth(_summary.saleByVM, 'E');
-  box1 += row('Sales K', salesK, null, fmt, fAvgLb(avgOf(salesK)));
-  box1 += row('Sales J', salesJ, null, fmt, fAvgLb(avgOf(salesJ)));
-  box1 += row('Sales E', salesE, null, fmt, fAvgLb(avgOf(salesE)));
-  box1 += row('Sales Total', salesAvg, 'diff-row', fmt, fAvgLb(avgOf(salesAvg)));
+  box1 += row('Sold K', salesK, null, fmt, fAvgLb(avgOf(salesK)));
+  box1 += row('Sold J', salesJ, null, fmt, fAvgLb(avgOf(salesJ)));
+  box1 += row('Sold E', salesE, null, fmt, fAvgLb(avgOf(salesE)));
+  box1 += row('Sold Total', salesAvg, 'diff-below', fmt, fAvgLb(avgOf(salesAvg)));
   box1 += row('Slippage', slippage, null, fmt, fAvgLb(avgOf(slippage)));
-  box1 += row('Unsold', unsold, null, fmt, fAvgLb(avgOf(unsold)));
+  box1 += row('Surplus/Deficit', unsold, null, fmt, fAvgLb(avgOf(unsold)));
 
   // Revenue row — per-variety sales × days × price, summed per month.
   const box1RevMonth = Array(12).fill(null).map((_, i) => {
@@ -465,7 +466,7 @@ function renderProjection() {
   const fmtDol = v => v == null ? '<td class="empty">—</td>' :
     `<td>${(v / 1e3).toFixed(0)}K</td>`;
   const box1AnnualRev = box1RevMonth.reduce((a, b) => a + b, 0);
-  box1 += `<tr class="diff-row"><td>Revenue ($, sales)</td>${box1RevMonth.map(fmtDol).join('')}${fDollars(box1AnnualRev)}</tr>`;
+  box1 += `<tr class="diff-row"><td>Revenue ($)</td>${box1RevMonth.map(fmtDol).join('')}${fDollars(box1AnnualRev)}</tr>`;
 
   const existingTotal = exK + exJJJ + exE;
   box1 += '</tbody></table></div>';
@@ -514,7 +515,7 @@ function renderProjection() {
     let cells = '';
     const monthlyArr = [];
     for (let i = 0; i < 12; i++) {
-      const val = i < 3 ? w : s;
+      const val = (i < 3 || i === 11) ? w : s;
       monthlyArr.push(val);
       if (i === 0) {
         cells += `<td><input type="number" value="${w}" min="0" step="100"
@@ -550,8 +551,8 @@ function renderProjection() {
     if (supply == null) return null;
     return Math.min(supply * (1 - SLIPPAGE_RATE), targTot[i]);
   });
-  box2 += row('Actual sold (lb/day)', extSold, null, fmt, fAvgLb(avgOf(extSold)));
-  box2 += `<tr class="diff-row"><td>Revenue ($, sold)</td>${extRevMonth.map(fmtDol).join('')}${fDollars(extAnnualRev)}</tr>`;
+  box2 += row('Sales (lb/day)', extSold, null, fmt, fAvgLb(avgOf(extSold)));
+  box2 += `<tr class="diff-row"><td>Revenue ($)</td>${extRevMonth.map(fmtDol).join('')}${fDollars(extAnnualRev)}</tr>`;
   box2 += row('Surplus/Deficit', extSurplus, null, fmt, fAvgLb(avgOf(extSurplus)));
   box2 += rowAc('Required K (ac)', reqK);
   box2 += rowAc('Required J (ac)', reqJ);
@@ -586,7 +587,7 @@ function renderProjection() {
   box3 += row('New post-exp total lb/day', addSupply, 'diff-row', fmt, fAvgLb(avgOf(addSupply)));
   box3 += row('Slippage', addSlip, null, fmt, fAvgLb(avgOf(addSlip)));
   box3 += row('Target sold Total', targTot, null, fmt, fAvgLb(avgOf(targTot)));
-  box3 += `<tr class="diff-row"><td>Revenue ($, sold)</td>${addRevMonth.map(fmtDol).join('')}${fDollars(addAnnualRev)}</tr>`;
+  box3 += `<tr class="diff-row"><td>Revenue ($)</td>${addRevMonth.map(fmtDol).join('')}${fDollars(addAnnualRev)}</tr>`;
   box3 += row('Surplus/Deficit', addSurplus, null, fmt, fAvgLb(avgOf(addSurplus)));
   box3 += rowAc('Required Total (ac)', reqTotal, 'diff-row');
   box3 += '</tbody></table></div>';
@@ -741,7 +742,8 @@ const TARGETS = {
 };
 
 function targetForMonth(v, monthIdx) {  // monthIdx = 0..11
-  return monthIdx < 3 ? TARGETS[v].winter : TARGETS[v].summer;
+  // Winter = Jan, Feb, Mar, Dec. Summer = Apr..Nov.
+  return (monthIdx < 3 || monthIdx === 11) ? TARGETS[v].winter : TARGETS[v].summer;
 }
 
 function setTarget(v, season, val) {
