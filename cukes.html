@@ -33,6 +33,12 @@
 <script>document.getElementById('nav').innerHTML = buildNav('cukes.html'); initTheme();</script>
 
 <div class="wrap">
+  <div id="winterYearControl" style="margin:6px 0 10px;font-size:10px;color:var(--text-muted)">
+    Winter months (Jan–Mar) data from:
+    <button class="btn" id="wy25" onclick="setWinterYear(2025)">'25</button>
+    <button class="btn" id="wy26" onclick="setWinterYear(2026)">'26</button>
+  </div>
+
   <div class="panel" id="projPanel" style="display:none">
     <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
       <span>Current state — lb/day grown (Grade 1)</span>
@@ -147,9 +153,17 @@ function perDay(totals, y, m) {
   return lbs / daysInMonth(y, m);
 }
 
-// Single-year selection per month: Jan–Mar use 2026 (most recent), Apr–Dec
-// use 2025 (no 2026 data for those months).
-function yearForMonth(m) { return m <= 3 ? 2026 : 2025; }
+// Single-year selection per month. Jan–Mar from user-toggled winter year
+// (default 2026). Apr–Dec always 2025 (only year with data for those months).
+let _winterYear = Number(localStorage.getItem('cukesWinterYear')) || 2026;
+if (_winterYear !== 2025 && _winterYear !== 2026) _winterYear = 2026;
+function setWinterYear(y) {
+  _winterYear = Number(y);
+  localStorage.setItem('cukesWinterYear', String(_winterYear));
+  renderAll();
+}
+window.setWinterYear = setWinterYear;
+function yearForMonth(m) { return m <= 3 ? _winterYear : 2025; }
 
 function perMonthLbPerDay(totals) {
   const out = Array(12).fill(null);
@@ -315,10 +329,14 @@ function renderProjection() {
     return Math.max(hist == null ? 0 : hist, _targetWeek);
   });
   const retMultByMonth = effWeeks.map(retireMultFor);
-  const seasonality = _summary.seasonality;
+  const seasonality = seasonalityKJ(_summary.growByVM);
 
   const vars = ['K', 'J', 'E'];
-  const current = { K: _summary.currentK, J: _summary.currentJ, E: _summary.currentE };
+  const current = {
+    K: avgLbPerDayByMonth(_summary.growByVM, 'K'),
+    J: avgLbPerDayByMonth(_summary.growByVM, 'J'),
+    E: avgLbPerDayByMonth(_summary.growByVM, 'E'),
+  };
 
   const sumRow = obj => Array(12).fill(null).map((_, i) => {
     let sum = 0, any = false;
@@ -374,7 +392,7 @@ function renderProjection() {
   controlsEl.style.display = '';
 
   // --- Box 1: current state ---
-  const salesAvg = _summary.salesAvg;
+  const salesAvg = perMonthLbPerDay(_summary.saleTotals);
   const slippage = curTot.map(v => v == null ? null : v * SLIPPAGE_RATE);
   const unsold = curTot.map((c, i) => {
     const s = salesAvg[i];
@@ -417,9 +435,9 @@ function renderProjection() {
   box1 += row('Current J',  current.J, null, fmt, fAvgLb(avgOf(current.J)));
   box1 += row('Current E',  current.E, null, fmt, fAvgLb(avgOf(current.E)));
   box1 += row('Current Total', curTot, 'diff-row', fmt, fAvgLb(avgOf(curTot)));
-  const salesK = _summary.salesK || Array(12).fill(null);
-  const salesJ = _summary.salesJ || Array(12).fill(null);
-  const salesE = _summary.salesE || Array(12).fill(null);
+  const salesK = avgLbPerDayByMonth(_summary.saleByVM, 'K');
+  const salesJ = avgLbPerDayByMonth(_summary.saleByVM, 'J');
+  const salesE = avgLbPerDayByMonth(_summary.saleByVM, 'E');
   box1 += row('Sales K', salesK, null, fmt, fAvgLb(avgOf(salesK)));
   box1 += row('Sales J', salesJ, null, fmt, fAvgLb(avgOf(salesJ)));
   box1 += row('Sales E', salesE, null, fmt, fAvgLb(avgOf(salesE)));
@@ -582,7 +600,7 @@ function renderProjection() {
 // The sheet fetches are the slow part of the page. Once aggregated into
 // monthly arrays, nothing depends on the raw rows — projection re-renders
 // only need the summary + current settings/constants + target week.
-const CACHE_KEY = 'cukeSummary_v4';  // bumped when summary schema changes
+const CACHE_KEY = 'cukeSummary_v5';  // bumped when summary schema changes
 
 function loadCache() {
   try {
@@ -634,22 +652,25 @@ async function fetchSheetSummary() {
 
   return {
     timestamp: Date.now(),
-    growAvg: perMonthLbPerDay(growTotals),
-    salesAvg: perMonthLbPerDay(saleTotals),
+    growTotals,   // 'Y-M' -> lbs
+    saleTotals,   // 'Y-M' -> lbs
+    growByVM,     // 'V-Y-M' -> lbs
+    saleByVM,     // 'V-Y-M' -> lbs
     retireWeeks,
-    seasonality: seasonalityKJ(growByVM),
-    currentK: avgLbPerDayByMonth(growByVM, 'K'),
-    currentJ: avgLbPerDayByMonth(growByVM, 'J'),
-    currentE: avgLbPerDayByMonth(growByVM, 'E'),
-    salesK: avgLbPerDayByMonth(saleByVM, 'K'),
-    salesJ: avgLbPerDayByMonth(saleByVM, 'J'),
-    salesE: avgLbPerDayByMonth(saleByVM, 'E'),
     prices,
   };
 }
 
 function renderAll() {
   if (!_summary) return;
+  // Highlight active winter-year button.
+  for (const y of [2025, 2026]) {
+    const el = document.getElementById('wy' + (y % 100));
+    if (el) {
+      el.style.borderColor = (y === _winterYear) ? 'var(--accent)' : '';
+      el.style.color = (y === _winterYear) ? 'var(--accent)' : '';
+    }
+  }
   renderProjection();
   renderRoi();
   const ageMin = Math.round((Date.now() - _summary.timestamp) / 60000);
