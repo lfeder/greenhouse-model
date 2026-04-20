@@ -757,23 +757,16 @@ function renderRoi() {
     '<th>Total ac</th>' +
     '<th>Annual revenue</th>' +
     '<th>Cum. capex (new)</th>' +
-    '<th>Marginal rev (0.5 ac)</th>' +
-    '<th>Marginal ROI / yr</th>' +
     '<th>Cum. rev vs 12.55</th>' +
     '<th>Cum. ROI / yr</th>' +
     '</tr></thead><tbody>';
 
   const baselineRev = annualRevAt(existingTotal);
-  let prevRev = null;
-  let prevAc = null;
   let finalRev = baselineRev;
   let finalCapex = 0;
   for (const A of acreLevels) {
     const rev = annualRevAt(A);
     const capex = Math.max(0, A - existingTotal) * costPerAc;
-    const marginalRev = prevRev == null ? null : rev - prevRev;
-    const marginalCost = prevAc == null ? 0 : (A - prevAc) * costPerAc;
-    const marginalRoi = (marginalRev != null && marginalCost > 0) ? marginalRev / marginalCost : null;
     const cumAddRev = rev - baselineRev;
     const cumRoi = capex > 0 ? cumAddRev / capex : null;
     const label = Math.abs(A - existingTotal) < 1e-6
@@ -783,13 +776,9 @@ function renderRoi() {
       <td>${label}</td>
       <td>${fM(rev)}</td>
       <td>${fM(capex)}</td>
-      <td>${marginalRev == null ? '—' : fK_(marginalRev)}</td>
-      <td>${marginalRoi == null ? '—' : fPct(marginalRoi)}</td>
       <td>${capex > 0 ? fK_(cumAddRev) : '—'}</td>
       <td>${cumRoi == null ? '—' : fPct(cumRoi)}</td>
     </tr>`;
-    prevRev = rev;
-    prevAc = A;
     finalRev = rev;
     finalCapex = capex;
   }
