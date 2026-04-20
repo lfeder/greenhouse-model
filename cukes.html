@@ -69,7 +69,7 @@
 
   <div class="panel" id="roiPanel" style="display:none">
     <div class="panel-title">Return on added greenhouses</div>
-    <p class="note">Annual revenue per row = (Box 1 actual sales + theoretical capacity rev at that ac level) / 2 — halfway-elasticity assumption (we don't immediately sell 100% of new supply). The existing row equals the baseline. Cum rev vs baseline shows the lift above baseline; Cum ROI / yr = that / cumulative capex.</p>
+    <p class="note">Existing row shows baseline = (Box 1 actual sales + Box 2 extended rev) / 2 — the realistic starting point since today's theoretical $11.2M is unrealizable. Added-GH rows show theoretical capacity revenue (demand-capped); Cum rev vs baseline measures incremental lift vs that starting point; Cum ROI / yr = lift / capex.</p>
     <div id="roiBody"></div>
   </div>
 </div>
@@ -776,9 +776,13 @@ function renderRoi() {
 
   const existingTotal = _roiExistingTotal;
   const acreLevels = Array(5).fill(0).map((_, n) => existingTotal + n * AC_PER_GH);
-  // Realistic revenue at each level = (box 1 actual sales + theoretical capacity rev) / 2.
-  // Same halfway-elasticity assumption as the baseline. Existing row = baseline.
-  const annualRevAt = (A, n) => (_box1AnnualRev + _roiAnnualRev[n]) / 2;
+  // Existing row = baseline (today's actual ~ halfway between sales and capacity,
+  // since current $11.2M theoretical is unrealizable). Added-GH rows use the
+  // theoretical capacity revenue — that's the ceiling we can chase once capacity
+  // is in place, and incremental ROI compares to the realistic starting point.
+  const annualRevAt = (A, n) => n === 0
+    ? (_box1AnnualRev + _roiAnnualRev[0]) / 2
+    : _roiAnnualRev[n];
 
   const costPerAc = _settings.cucumberCostPerAc || 1000000;
   const fM = v => '$' + (v / 1e6).toFixed(1) + 'M';
