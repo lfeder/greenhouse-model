@@ -69,7 +69,7 @@
 
   <div class="panel" id="roiPanel" style="display:none">
     <div class="panel-title">Return on added greenhouses</div>
-    <p class="note">Baseline = (Box 1 actual sales revenue + Box 2 extended-capacity revenue) / 2 — midpoint assumption reflecting imperfect sales elasticity. Rows show existing + 1..4 GHs. Cum rev vs baseline and Cum ROI / yr use this baseline.</p>
+    <p class="note">Annual revenue per row = (Box 1 actual sales + theoretical capacity rev at that ac level) / 2 — halfway-elasticity assumption (we don't immediately sell 100% of new supply). The existing row equals the baseline. Cum rev vs baseline shows the lift above baseline; Cum ROI / yr = that / cumulative capex.</p>
     <div id="roiBody"></div>
   </div>
 </div>
@@ -776,9 +776,9 @@ function renderRoi() {
 
   const existingTotal = _roiExistingTotal;
   const acreLevels = Array(5).fill(0).map((_, n) => existingTotal + n * AC_PER_GH);
-  // Revenue per GH level is pre-computed by renderProjection using box 3's
-  // exact formula so the two panels don't drift.
-  const annualRevAt = (A, n) => _roiAnnualRev[n];
+  // Realistic revenue at each level = (box 1 actual sales + theoretical capacity rev) / 2.
+  // Same halfway-elasticity assumption as the baseline. Existing row = baseline.
+  const annualRevAt = (A, n) => (_box1AnnualRev + _roiAnnualRev[n]) / 2;
 
   const costPerAc = _settings.cucumberCostPerAc || 1000000;
   const fM = v => '$' + (v / 1e6).toFixed(1) + 'M';
