@@ -555,8 +555,14 @@ function renderProjection() {
   box2 += targetRow('Target sold J', 'J');
   box2 += targetRow('Target sold E', 'E');
   box2 += row('Target sold Total', targTot, 'diff-row', fmt, fAvgLb(avgOf(targTot)));
+  const extSold = Array(12).fill(null).map((_, i) => {
+    const supply = extSupply[i];
+    if (supply == null) return null;
+    return Math.min(supply * (1 - SLIPPAGE_RATE), targTot[i]);
+  });
+  box2 += row('Actual sold (lb/day)', extSold, null, fmt, fAvgLb(avgOf(extSold)));
   box2 += `<tr class="diff-row"><td>Revenue ($, sold)</td>${extRevMonth.map(fmtDol).join('')}${fDollars(extAnnualRev)}</tr>`;
-  box2 += row('Surplus', extSurplus, null, fmt, fAvgLb(avgOf(extSurplus)));
+  box2 += row('Surplus/Deficit', extSurplus, null, fmt, fAvgLb(avgOf(extSurplus)));
   box2 += rowAc('Required K (ac)', reqK);
   box2 += rowAc('Required J (ac)', reqJ);
   box2 += rowAc('Required E (ac)', reqE);
@@ -591,7 +597,7 @@ function renderProjection() {
   box3 += row('Slippage', addSlip, null, fmt, fAvgLb(avgOf(addSlip)));
   box3 += row('Target sold Total', targTot, null, fmt, fAvgLb(avgOf(targTot)));
   box3 += `<tr class="diff-row"><td>Revenue ($, sold)</td>${addRevMonth.map(fmtDol).join('')}${fDollars(addAnnualRev)}</tr>`;
-  box3 += row('Surplus', addSurplus, null, fmt, fAvgLb(avgOf(addSurplus)));
+  box3 += row('Surplus/Deficit', addSurplus, null, fmt, fAvgLb(avgOf(addSurplus)));
   box3 += rowAc('Required Total (ac)', reqTotal, 'diff-row');
   box3 += '</tbody></table></div>';
   document.getElementById('addGhBody').innerHTML = box3;
