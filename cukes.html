@@ -540,24 +540,27 @@ function renderProjection() {
   const extAnnualRev = extRevMonth.reduce((a, b) => a + b, 0);
 
   let box2 = '<div style="overflow-x:auto">' + tableHdr;
-  box2 += row('Total lb/day (extended)', extSupply, 'diff-row', fmt, fAvgLb(avgOf(extSupply)));
+  box2 += row('Total lb/day (extended)', extSupply, null, fmt, fAvgLb(avgOf(extSupply)));
   box2 += row('Slippage', extSlip, null, fmt, fAvgLb(avgOf(extSlip)));
-  box2 += targetRow('Target sold K', 'K');
-  box2 += targetRow('Target sold J', 'J');
-  box2 += targetRow('Target sold E', 'E');
-  box2 += row('Target sold Total', targTot, 'diff-row', fmt, fAvgLb(avgOf(targTot)));
+  box2 += targetRow('Target Sales K', 'K');
+  box2 += targetRow('Target Sales J', 'J');
+  box2 += targetRow('Target Sales E', 'E');
+  box2 += row('Target Sales Total', targTot, 'diff-below', fmt, fAvgLb(avgOf(targTot)));
   const extSold = Array(12).fill(null).map((_, i) => {
     const supply = extSupply[i];
     if (supply == null) return null;
     return Math.min(supply * (1 - SLIPPAGE_RATE), targTot[i]);
   });
   box2 += row('Sales (lb/day)', extSold, null, fmt, fAvgLb(avgOf(extSold)));
-  box2 += `<tr class="diff-row"><td>Revenue ($)</td>${extRevMonth.map(fmtDol).join('')}${fDollars(extAnnualRev)}</tr>`;
-  box2 += row('Surplus/Deficit', extSurplus, null, fmt, fAvgLb(avgOf(extSurplus)));
+  box2 += `<tr><td>Revenue ($)</td>${extRevMonth.map(fmtDol).join('')}${fDollars(extAnnualRev)}</tr>`;
+  box2 += row('Surplus/Deficit', extSurplus, 'diff-below', fmt, fAvgLb(avgOf(extSurplus)));
   box2 += rowAc('Required K (ac)', reqK);
   box2 += rowAc('Required J (ac)', reqJ);
   box2 += rowAc('Required E (ac)', reqE);
-  box2 += rowAc('Required Total (ac)', reqTotal, 'diff-row');
+  box2 += rowAc('Required Total (ac)', reqTotal);
+  // GH equivalent: ac / 1.38 rounded to 0.1.
+  const reqGH = reqTotal.map(v => v == null ? null : Math.ceil((v / AC_PER_GH) * 10) / 10);
+  box2 += rowAc('Required Total (GH)', reqGH);
   box2 += '</tbody></table></div>';
   document.getElementById('extendBody').innerHTML = box2;
   document.getElementById('extendPanel').style.display = '';
@@ -584,12 +587,12 @@ function renderProjection() {
      </span>`;
 
   let box3 = '<div style="overflow-x:auto">' + tableHdr;
-  box3 += row('New post-exp total lb/day', addSupply, 'diff-row', fmt, fAvgLb(avgOf(addSupply)));
+  box3 += row('Post Expansion (lb/day)', addSupply, null, fmt, fAvgLb(avgOf(addSupply)));
   box3 += row('Slippage', addSlip, null, fmt, fAvgLb(avgOf(addSlip)));
-  box3 += row('Target sold Total', targTot, null, fmt, fAvgLb(avgOf(targTot)));
-  box3 += `<tr class="diff-row"><td>Revenue ($)</td>${addRevMonth.map(fmtDol).join('')}${fDollars(addAnnualRev)}</tr>`;
+  box3 += row('Target Sales Total', targTot, null, fmt, fAvgLb(avgOf(targTot)));
+  box3 += `<tr><td>Revenue ($)</td>${addRevMonth.map(fmtDol).join('')}${fDollars(addAnnualRev)}</tr>`;
   box3 += row('Surplus/Deficit', addSurplus, null, fmt, fAvgLb(avgOf(addSurplus)));
-  box3 += rowAc('Required Total (ac)', reqTotal, 'diff-row');
+  box3 += rowAc('Required Total (ac)', reqTotal);
   box3 += '</tbody></table></div>';
   document.getElementById('addGhBody').innerHTML = box3;
   document.getElementById('addGhPanel').style.display = '';
