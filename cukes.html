@@ -41,7 +41,7 @@
         <button class="btn" style="margin-left:8px;font-size:9px" onclick="refreshData()">Refresh</button>
       </span>
     </div>
-    <p class="note">Current K/J/E = avg lb/day grown (cuke_harvest, 2025–26 per month, Grade 1). Sales = avg lb/day shipped (invoices, Farm=Cuke, Grade 1). Unsold = Current Total − Sales. Weeks at retire = actual historical cycle length per month (no override). Seasonality = (K+J monthly lb/day) / (annual avg). Sheet data cached locally forever — click Refresh to re-fetch.</p>
+    <p class="note">Current K/J/E = lb/day grown (cuke_harvest, Grade 1): Jan–Mar from 2026, Apr–Dec from 2025. Sales = lb/day shipped (invoices, Farm=Cuke, Grade 1) on the same Jan–Mar 2026 / Apr–Dec 2025 split. Unsold = Current Total − Sales. Weeks at retire = actual historical cycle length per month. Seasonality = (K+J monthly lb/day) / (annual avg). Sheet data cached locally forever — click Refresh to re-fetch.</p>
     <div id="status">Loading…</div>
     <div id="projBody"></div>
   </div>
@@ -141,17 +141,17 @@ function perDay(totals, y, m) {
   return lbs / daysInMonth(y, m);
 }
 
-// For each month 1..12, average the per-year values across years that have data.
-function avgAcrossYears(totals) {
+// Single-year selection per month: Jan–Mar use 2026 (most recent), Apr–Dec
+// use 2025 (no 2026 data for those months).
+function yearForMonth(m) { return m <= 3 ? 2026 : 2025; }
+
+function perMonthLbPerDay(totals) {
   const out = Array(12).fill(null);
   for (let m = 1; m <= 12; m++) {
-    const vals = [];
-    for (const y of YEARS) {
-      if (m > CUTOFF[y]) continue;
-      const v = perDay(totals, y, m);
-      if (v != null) vals.push(v);
-    }
-    if (vals.length) out[m - 1] = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const y = yearForMonth(m);
+    if (m > CUTOFF[y]) continue;
+    const v = perDay(totals, y, m);
+    if (v != null) out[m - 1] = v;
   }
   return out;
 }
@@ -208,18 +208,16 @@ function fmtIndex(v) {
   return `<td>${v.toFixed(1)}</td>`;
 }
 
-// Cross-variety (K+J) seasonality index per month = monthly lb/day avg / annual avg.
+// Cross-variety (K+J) seasonality index per month = monthly lb/day / annual avg.
+// Uses the same year-per-month selection as the other rows.
 function seasonalityKJ(growByVM) {
   const perMonth = Array(12).fill(null);
   for (let m = 1; m <= 12; m++) {
-    const vals = [];
-    for (const y of YEARS) {
-      if (m > CUTOFF[y]) continue;
-      const k = growByVM[`K-${y}-${m}`] || 0;
-      const j = growByVM[`J-${y}-${m}`] || 0;
-      if (k + j > 0) vals.push((k + j) / daysInMonth(y, m));
-    }
-    if (vals.length) perMonth[m - 1] = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const y = yearForMonth(m);
+    if (m > CUTOFF[y]) continue;
+    const k = growByVM[`K-${y}-${m}`] || 0;
+    const j = growByVM[`J-${y}-${m}`] || 0;
+    if (k + j > 0) perMonth[m - 1] = (k + j) / daysInMonth(y, m);
   }
   const validVals = perMonth.filter(v => v != null);
   if (!validVals.length) return Array(12).fill(null);
@@ -257,17 +255,14 @@ function growByVarietyMonth(growRows) {
   return totals;
 }
 
-// Avg lb/day by month for one variety, averaged across years with data.
+// Per-variety lb/day by month, single year: Jan–Mar from 2026, Apr–Dec from 2025.
 function avgLbPerDayByMonth(totals, variety) {
   const out = Array(12).fill(null);
   for (let m = 1; m <= 12; m++) {
-    const vals = [];
-    for (const y of YEARS) {
-      if (m > CUTOFF[y]) continue;
-      const lbs = totals[`${variety}-${y}-${m}`];
-      if (lbs) vals.push(lbs / daysInMonth(y, m));
-    }
-    if (vals.length) out[m - 1] = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const y = yearForMonth(m);
+    if (m > CUTOFF[y]) continue;
+    const lbs = totals[`${variety}-${y}-${m}`];
+    if (lbs) out[m - 1] = lbs / daysInMonth(y, m);
   }
   return out;
 }
@@ -545,7 +540,7 @@ function renderProjection() {
 // The sheet fetches are the slow part of the page. Once aggregated into
 // monthly arrays, nothing depends on the raw rows — projection re-renders
 // only need the summary + current settings/constants + target week.
-const CACHE_KEY = 'cukeSummary_v2';  // bumped when summary schema changes
+const CACHE_KEY = 'cukeSummary_v3';  // bumped when summary schema changes
 
 function loadCache() {
   try {
@@ -591,8 +586,8 @@ async function fetchSheetSummary() {
 
   return {
     timestamp: Date.now(),
-    growAvg: avgAcrossYears(growTotals),
-    salesAvg: avgAcrossYears(saleTotals),
+    growAvg: perMonthLbPerDay(growTotals),
+    salesAvg: perMonthLbPerDay(saleTotals),
     retireWeeks,
     seasonality: seasonalityKJ(growByVM),
     currentK: avgLbPerDayByMonth(growByVM, 'K'),
