@@ -48,23 +48,23 @@
 
   <div id="projControls" style="margin:4px 0 14px;display:none"></div>
 
-  <div class="panel" id="postExpPanel" style="display:none">
-    <div class="panel-title">Post-expansion projection &amp; sales targets</div>
-    <p class="note">K/J Post-Exp = current lb/day × capacity factor × retire uplift. E Post-Exp = (actual current E + new E acres × J lb/ac) × retire uplift. Retire uplift: cumulative +10/+7/+5/+2% at weeks 9/10/11/12. Target lb/day sold (K=6,000 / J=3,000 / E=2,400) shown below. Surplus = Post-Exp Total − Target Total; negative (yellow) = shortfall.</p>
-    <div id="postExpBody"></div>
+  <div class="panel" id="extendPanel" style="display:none">
+    <div class="panel-title">Extend and Sell more — existing 12.55 ac with retire uplift</div>
+    <p class="note">One row of total lb/day = actual production × retire uplift at the target week above. Revenue is demand-capped (we can only sell up to the target). Edit Jan and Apr target cells to simulate seasonal demand. Slippage is 5% of grown. Required acres shown per variety + total.</p>
+    <div id="extendBody"></div>
+  </div>
+
+  <div class="panel" id="addGhPanel" style="display:none">
+    <div class="panel-title">Add Greenhouses</div>
+    <p class="note">Toggle adds 0–4 × 60,000 sq ft GHs (~1.38 ac each) on top of the existing 12.55 ac. Rotation assumption: new capacity grows whichever variety demand needs. Revenue demand-capped at the same targets as box 2.</p>
+    <div id="addGhControls" style="margin-bottom:10px"></div>
+    <div id="addGhBody"></div>
   </div>
 
   <div class="panel" id="roiPanel" style="display:none">
-    <div class="panel-title">Marginal return per added acre</div>
-    <p class="note">New GHs come in 60,000 sq ft blocks (~1.38 ac each). Rows show the existing footprint plus 1–4 added GHs. At each total-acre level, revenue = sum over months of <code>min(1, ac/required) × target revenue</code>. Early GHs unlock easy months (summer); later GHs only chip at winter peaks, so cumulative ROI declines. Acres treated as a single pool (GHs rotate varieties). Required already grossed up for 5% slippage; revenue uses adjusted prices from the inflation slider.</p>
+    <div class="panel-title">Return on added greenhouses</div>
+    <p class="note">Baseline = (Box 1 actual sales revenue + Box 2 extended-capacity revenue) / 2 — midpoint assumption reflecting imperfect sales elasticity. Rows show existing + 1..4 GHs. Cum rev vs baseline and Cum ROI / yr use this baseline.</p>
     <div id="roiBody"></div>
-  </div>
-
-  <div class="panel" id="scenPanel" style="display:none">
-    <div class="panel-title">Scenario comparison — E sized winter vs summer</div>
-    <p class="note">Two scenarios: keep E at the winter (Jan) target year-round, or size E for the summer (Apr) target year-round. K and J targets are unchanged. Δ rev = (E summer − E winter) × 365 × price. Δ cost = extra E acres × cost/ac. Payback = Δ cost / Δ rev.</p>
-    <div id="scenControls" style="margin-bottom:10px"></div>
-    <div id="scenBody"></div>
   </div>
 </div>
 
@@ -319,26 +319,6 @@ function renderProjection() {
 
   const vars = ['K', 'J', 'E'];
   const current = { K: _summary.currentK, J: _summary.currentJ, E: _summary.currentE };
-  const projected = {};
-  // K and J: capacity factor × retire uplift.
-  for (const v of ['K', 'J']) {
-    const cf = capacityFactor(v);
-    projected[v] = current[v].map((x, i) => x == null ? null : x * cf * retMultByMonth[i]);
-  }
-  // E: existing E actuals + (new E acres × J lb/ac), all × retire uplift.
-  // Works the same for zero-baseline months (existing part is 0).
-  const jExistingAc = (_constants.existing_ops && _constants.existing_ops.japanese_acres) || 3.5;
-  const newEAc = _settings.newEAcres || 0;
-  projected.E = Array(12).fill(null);
-  for (let i = 0; i < 12; i++) {
-    const curE = current.E[i];
-    const jLb = current.J[i];
-    const baseE = curE != null ? curE : 0;
-    const newELb = (jLb != null && newEAc > 0) ? (jLb / jExistingAc) * newEAc : 0;
-    const pre = baseE + newELb;
-    if (pre > 0) projected.E[i] = pre * retMultByMonth[i];
-    else if (curE != null) projected.E[i] = 0;
-  }
 
   const sumRow = obj => Array(12).fill(null).map((_, i) => {
     let sum = 0, any = false;
@@ -346,12 +326,6 @@ function renderProjection() {
     return any ? sum : null;
   });
   const curTot = sumRow(current);
-  const projTot = sumRow(projected);
-  const delta = projTot.map((p, i) => {
-    const c = curTot[i];
-    if (p == null && c == null) return null;
-    return (p || 0) - (c || 0);
-  });
 
   // row() renders monthly cells + an Annual cell on the far right.
   // annualCell is an already-rendered <td>…</td> string, or null for '—'.
@@ -481,15 +455,39 @@ function renderProjection() {
   document.getElementById('projBody').innerHTML = box1;
   document.getElementById('projPanel').style.display = '';
 
-  // --- Box 2: post-expansion + targets ---
-  // Per-month target values: Jan–Mar use winter, Apr–Dec use summer.
+  // --- Shared: per-month target values (Jan–Mar winter, Apr–Dec summer) ---
   const targetPerMonth = v => Array(12).fill(null).map((_, i) => targetForMonth(v, i));
   const targK = targetPerMonth('K');
   const targJ = targetPerMonth('J');
   const targE = targetPerMonth('E');
   const targTot = targK.map((k, i) => k + targJ[i] + targE[i]);
-  const slippageProj = projTot.map(v => v == null ? null : v * SLIPPAGE_RATE);
-  const surplus = projTot.map((p, i) => p == null ? null : p - (slippageProj[i] || 0) - targTot[i]);
+
+  // Monthly target revenue (full demand revenue per month).
+  const monthlyTargetRev = Array(12).fill(0).map((_, i) => {
+    const d = daysInMonth(2025, i + 1);
+    return targK[i] * d * adjPrice.K + targJ[i] * d * adjPrice.J + targE[i] * d * adjPrice.E;
+  });
+
+  // Capacity supply (lb/day) at A acres, after retire uplift.
+  const supplyAt = A => curTot.map((v, i) => v == null ? null : v * retMultByMonth[i] * (A / existingTotal));
+
+  // Demand-capped revenue per month at A acres — sells proportionally to target mix.
+  // Per month: frac = min(1, (supply_after_slip) / target_total). Revenue = frac × monthly target rev.
+  const revAt = A => Array(12).fill(0).map((_, i) => {
+    const supply = curTot[i] == null ? 0 : curTot[i] * retMultByMonth[i] * (A / existingTotal);
+    const sellable = supply * (1 - SLIPPAGE_RATE);
+    if (targTot[i] <= 0) return 0;
+    const frac = Math.min(1, sellable / targTot[i]);
+    return frac * monthlyTargetRev[i];
+  });
+
+  // Helpers shared by box 2 and box 3 rendering.
+  const fmtAc = v => v == null ? '<td class="empty">—</td>' : `<td>${v.toFixed(1)}</td>`;
+  const rowAc = (label, vals, cls) => {
+    const peak = fPeak(vals);
+    const ann = peak == null ? '<td class="empty">—</td>' : peak;
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(fmtAc).join('')}${ann}</tr>`;
+  };
   const inputStyle = 'width:60px;background:var(--panel-dark);color:var(--text);' +
     'border:1px solid var(--border);border-radius:3px;font-family:inherit;' +
     'font-size:11px;padding:2px 4px;text-align:right';
@@ -514,48 +512,68 @@ function renderProjection() {
     const annual = fAvgLb(avgOf(monthlyArr));
     return `<tr><td>${label}</td>${cells}${annual}</tr>`;
   };
+
+  // --- Box 2: Extend and Sell more (existing 12.55 ac × retire uplift) ---
+  const extSupply = supplyAt(existingTotal);
+  const extSlip = extSupply.map(v => v == null ? null : v * SLIPPAGE_RATE);
+  const extSurplus = extSupply.map((v, i) =>
+    v == null ? null : v - (extSlip[i] || 0) - targTot[i]);
+  const extRevMonth = revAt(existingTotal);
+  const extAnnualRev = extRevMonth.reduce((a, b) => a + b, 0);
+
   let box2 = '<div style="overflow-x:auto">' + tableHdr;
-  box2 += row('Post-Exp K', projected.K, null, fmt, fAvgLb(avgOf(projected.K)));
-  box2 += row('Post-Exp J', projected.J, null, fmt, fAvgLb(avgOf(projected.J)));
-  box2 += row('Post-Exp E', projected.E, null, fmt, fAvgLb(avgOf(projected.E)));
-  box2 += row('Post-Exp Total', projTot, 'diff-row', fmt, fAvgLb(avgOf(projTot)));
-  box2 += row('Slippage', slippageProj, null, fmt, fAvgLb(avgOf(slippageProj)));
+  box2 += row('Total lb/day (extended)', extSupply, 'diff-row', fmt, fAvgLb(avgOf(extSupply)));
+  box2 += row('Slippage', extSlip, null, fmt, fAvgLb(avgOf(extSlip)));
   box2 += targetRow('Target sold K', 'K');
   box2 += targetRow('Target sold J', 'J');
   box2 += targetRow('Target sold E', 'E');
   box2 += row('Target sold Total', targTot, 'diff-row', fmt, fAvgLb(avgOf(targTot)));
-  box2 += row('Surplus', surplus, null, fmt, fAvgLb(avgOf(surplus)));
-
-  // Required acres + peaks already computed above (shared with box 1 footer).
-  const fmtAc = v => v == null ? '<td class="empty">—</td>' : `<td>${v.toFixed(1)}</td>`;
-  const rowAc = (label, vals, cls) => {
-    const peak = fPeak(vals);
-    const ann = peak == null ? '<td class="empty">—</td>' : peak;
-    return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${vals.map(fmtAc).join('')}${ann}</tr>`;
-  };
+  box2 += `<tr class="diff-row"><td>Revenue ($, sold)</td>${extRevMonth.map(fmtDol).join('')}${fDollars(extAnnualRev)}</tr>`;
+  box2 += row('Surplus', extSurplus, null, fmt, fAvgLb(avgOf(extSurplus)));
   box2 += rowAc('Required K (ac)', reqK);
   box2 += rowAc('Required J (ac)', reqJ);
   box2 += rowAc('Required E (ac)', reqE);
   box2 += rowAc('Required Total (ac)', reqTotal, 'diff-row');
-
-  // Monthly revenue — demand-capped per variety (sell the min of produced vs target).
-  const revMonth = Array(12).fill(null).map((_, i) => {
-    const d = daysInMonth(2025, i + 1);
-    const soldK = Math.min(projected.K[i] || 0, targK[i]);
-    const soldJ = Math.min(projected.J[i] || 0, targJ[i]);
-    const soldE = Math.min(projected.E[i] || 0, targE[i]);
-    return soldK * d * adjPrice.K + soldJ * d * adjPrice.J + soldE * d * adjPrice.E;
-  });
-  const annualRevDol = revMonth.reduce((a, b) => a + b, 0);
-  const revRow = `<tr class="diff-row"><td>Revenue ($, sold)</td>${revMonth.map(fmtDol).join('')}${fDollars(annualRevDol)}</tr>`;
-  box2 += revRow;
-
   box2 += '</tbody></table></div>';
+  document.getElementById('extendBody').innerHTML = box2;
+  document.getElementById('extendPanel').style.display = '';
 
-  document.getElementById('postExpBody').innerHTML = box2;
-  document.getElementById('postExpPanel').style.display = '';
+  // --- Box 3: Add Greenhouses ---
+  const addedAc = _addedGHs * AC_PER_GH;
+  const totalAcAdd = existingTotal + addedAc;
+  const addSupply = supplyAt(totalAcAdd);
+  const addSlip = addSupply.map(v => v == null ? null : v * SLIPPAGE_RATE);
+  const addSurplus = addSupply.map((v, i) =>
+    v == null ? null : v - (addSlip[i] || 0) - targTot[i]);
+  const addRevMonth = revAt(totalAcAdd);
+  const addAnnualRev = addRevMonth.reduce((a, b) => a + b, 0);
 
-  _projTot = projTot;
+  // Toggle UI for GH count.
+  const ghBtns = [0, 1, 2, 3, 4].map(n => {
+    const active = n === _addedGHs ? 'border-color:var(--accent);color:var(--accent)' : '';
+    return `<button class="btn" style="${active};margin-left:4px" onclick="setAddedGHs(${n})">+${n}</button>`;
+  }).join('');
+  document.getElementById('addGhControls').innerHTML =
+    `<span style="font-size:10px;color:var(--text-muted)">
+       Add greenhouses (60k sf each, ~${AC_PER_GH.toFixed(2)} ac): ${ghBtns}
+       <span style="margin-left:16px">Total ac = ${totalAcAdd.toFixed(2)} (+${addedAc.toFixed(2)} new)</span>
+     </span>`;
+
+  let box3 = '<div style="overflow-x:auto">' + tableHdr;
+  box3 += row('New post-exp total lb/day', addSupply, 'diff-row', fmt, fAvgLb(avgOf(addSupply)));
+  box3 += row('Slippage', addSlip, null, fmt, fAvgLb(avgOf(addSlip)));
+  box3 += row('Target sold Total', targTot, null, fmt, fAvgLb(avgOf(targTot)));
+  box3 += `<tr class="diff-row"><td>Revenue ($, sold)</td>${addRevMonth.map(fmtDol).join('')}${fDollars(addAnnualRev)}</tr>`;
+  box3 += row('Surplus', addSurplus, null, fmt, fAvgLb(avgOf(addSurplus)));
+  box3 += rowAc('Required Total (ac)', reqTotal, 'diff-row');
+  box3 += '</tbody></table></div>';
+  document.getElementById('addGhBody').innerHTML = box3;
+  document.getElementById('addGhPanel').style.display = '';
+
+  // Stash for ROI baseline.
+  _box1AnnualRev = box1AnnualRev;
+  _box2AnnualRev = extAnnualRev;
+
   const status = document.getElementById('status');
   if (status) status.style.display = 'none';
 }
@@ -634,7 +652,6 @@ function renderAll() {
   if (!_summary) return;
   renderProjection();
   renderRoi();
-  renderScenario();
   const ageMin = Math.round((Date.now() - _summary.timestamp) / 60000);
   const ageEl = document.getElementById('dataAge');
   if (ageEl) ageEl.textContent =
@@ -642,15 +659,29 @@ function renderAll() {
 }
 
 let _summary = null;
-let _projTot = null;  // set by renderProjection
+let _box1AnnualRev = 0;
+let _box2AnnualRev = 0;
 let _inflation = Number(localStorage.getItem('cukesInflation')) || 0;  // percent
+let _addedGHs = (() => {
+  const v = Number(localStorage.getItem('cukesAddedGHs'));
+  return (isFinite(v) && v >= 0 && v <= 4) ? v : 1;
+})();
 
 function setInflation(v) {
   _inflation = Number(v) || 0;
   localStorage.setItem('cukesInflation', String(_inflation));
   renderAll();
 }
+function setAddedGHs(n) {
+  _addedGHs = n;
+  localStorage.setItem('cukesAddedGHs', String(n));
+  renderAll();
+}
 window.setInflation = setInflation;
+window.setAddedGHs = setAddedGHs;
+
+// 60,000 sq ft GH → acres.
+const AC_PER_GH = 60000 / 43560;
 
 // Seasonal sales targets — two editable cells per variety (Jan fills Jan–Mar,
 // Apr fills Apr–Dec), lets the user simulate rotation by varying demand
@@ -754,25 +785,36 @@ function renderRoi() {
   const fK_ = v => (v < 0 ? '-' : '') + Math.round(Math.abs(v) / 1e3).toLocaleString() + 'K';
   const fPct = v => (v * 100).toFixed(0) + '%';
 
-  let html = '<div style="overflow-x:auto"><table class="fin-table">' +
+  // Baseline = (Box 1 sales revenue + Box 2 extended-capacity revenue) / 2.
+  // Reflects imperfect sales elasticity — we can't immediately sell 100% of
+  // new supply, so we anchor the return comparison halfway between today's
+  // actual sales and the theoretical capacity-limited ceiling.
+  const baseline = (_box1AnnualRev + _box2AnnualRev) / 2;
+
+  let html = '';
+  html += `<div style="margin-bottom:10px;font-size:11px;color:var(--text-sub)">
+    Baseline = (Box 1 sales <b>${fM(_box1AnnualRev)}</b>
+    + Box 2 extended <b>${fM(_box2AnnualRev)}</b>) / 2
+    = <b>${fM(baseline)}</b>
+  </div>`;
+  html += '<div style="overflow-x:auto"><table class="fin-table">' +
     '<thead><tr>' +
     '<th>Total ac</th>' +
     '<th>Annual revenue</th>' +
     '<th>Cum. capex (new)</th>' +
-    '<th>Cum. rev vs 12.55</th>' +
+    '<th>Cum. rev vs baseline</th>' +
     '<th>Δ rev vs prev</th>' +
     '<th>Cum. ROI / yr</th>' +
     '</tr></thead><tbody>';
 
-  const baselineRev = annualRevAt(existingTotal);
   let prevRev = null;
-  let finalRev = baselineRev;
+  let finalRev = null;
   let finalCapex = 0;
   for (let idx = 0; idx < acreLevels.length; idx++) {
     const A = acreLevels[idx];
     const rev = annualRevAt(A);
     const capex = Math.max(0, A - existingTotal) * costPerAc;
-    const cumAddRev = rev - baselineRev;
+    const cumAddRev = rev - baseline;
     const cumRoi = capex > 0 ? cumAddRev / capex : null;
     const deltaRev = prevRev == null ? null : rev - prevRev;
     const nGH = idx;  // 0 = existing
@@ -783,9 +825,9 @@ function renderRoi() {
       <td>${label}</td>
       <td>${fM(rev)}</td>
       <td>${fM(capex)}</td>
-      <td>${capex > 0 ? fK_(cumAddRev) : '—'}</td>
+      <td>${fK_(cumAddRev)}</td>
       <td>${deltaRev == null ? '—' : fK_(deltaRev)}</td>
-      <td>${cumRoi == null ? '—' : fPct(cumRoi)}</td>
+      <td>${capex > 0 ? fPct(cumRoi) : '—'}</td>
     </tr>`;
     prevRev = rev;
     finalRev = rev;
@@ -793,14 +835,14 @@ function renderRoi() {
   }
   html += '</tbody></table></div>';
 
-  const totalAddRev = finalRev - baselineRev;
+  const totalAddRev = finalRev - baseline;
   const fullRatio = finalCapex > 0 ? totalAddRev / finalCapex : null;
   const payback = fullRatio ? 1 / fullRatio : null;
   html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
     <div>Full build (${existingTotal.toFixed(2)} → ${acreLevels[acreLevels.length-1].toFixed(1)} ac):
-      <b>+${fK_(totalAddRev)} annual rev</b>
+      <b>${fK_(totalAddRev)} annual rev vs baseline</b>
       / <b>${fM(finalCapex)} capex</b>
-      → rev/capex ratio <b>${fullRatio == null ? '—' : fPct(fullRatio)}</b>
+      → ratio <b>${fullRatio == null ? '—' : fPct(fullRatio)}</b>
       ${payback == null ? '' : '(payback ' + payback.toFixed(1) + ' yr)'}</div>
   </div>`;
 
@@ -808,109 +850,6 @@ function renderRoi() {
   document.getElementById('roiPanel').style.display = '';
 }
 
-function renderScenario() {
-  if (!_summary || !_constants || !_settings) return;
-  const { currentJ, retireWeeks, prices } = _summary;
-  const effWeeks = retireWeeks.map(w => Math.max(w == null ? 0 : w, _targetWeek));
-  const retMult = effWeeks.map(retireMultFor);
-  const exJ = _constants.existing_ops.japanese_acres;
-  const perAcJ = currentJ.map((v, i) => (v == null) ? null : (v / exJ) * retMult[i]);
-  const perAcK = _summary.currentK.map((v, i) =>
-    (v == null) ? null : (v / _constants.existing_ops.keiki_acres) * retMult[i]);
-
-  const SLIP = 1 + SLIPPAGE_RATE;
-  // For each E target value, compute peak E acres needed across all 12 months
-  // (target grossed up by slippage).
-  const peakEacres = eTarget => {
-    let peak = 0;
-    for (let i = 0; i < 12; i++) {
-      if (perAcJ[i] == null || perAcJ[i] <= 0) continue;
-      const need = ceil01((eTarget * SLIP) / perAcJ[i]);
-      if (need > peak) peak = need;
-    }
-    return peak;
-  };
-
-  // K and J peaks use current seasonal targets (same in both scenarios).
-  let peakK = 0, peakJ = 0;
-  for (let i = 0; i < 12; i++) {
-    if (perAcK[i] != null && perAcK[i] > 0) {
-      const k = ceil01((targetForMonth('K', i) * SLIP) / perAcK[i]);
-      if (k > peakK) peakK = k;
-    }
-    if (perAcJ[i] != null && perAcJ[i] > 0) {
-      const j = ceil01((targetForMonth('J', i) * SLIP) / perAcJ[i]);
-      if (j > peakJ) peakJ = j;
-    }
-  }
-
-  const eWinter = TARGETS.E.winter;
-  const eSummer = TARGETS.E.summer;
-  const peakE_A = peakEacres(eWinter);
-  const peakE_B = peakEacres(eSummer);
-  const totalA = peakK + peakJ + peakE_A;
-  const totalB = peakK + peakJ + peakE_B;
-
-  const costPerAc = _settings.cucumberCostPerAc || 1000000;
-  const infMult = 1 + (_inflation / 100);
-  const adjPriceE = (prices.E || 0) * infMult;
-  const adjPriceK = (prices.K || 0) * infMult;
-  const adjPriceJ = (prices.J || 0) * infMult;
-
-  // Annual K, J revenue = target × 365 × price, same in both scenarios
-  // (K and J targets unchanged). For E: winter value vs summer value applied
-  // to all 12 months.
-  const revK_avg = ((TARGETS.K.winter * 3 + TARGETS.K.summer * 9) / 12);
-  const revJ_avg = ((TARGETS.J.winter * 3 + TARGETS.J.summer * 9) / 12);
-  const revKJ_annual = (revK_avg * adjPriceK + revJ_avg * adjPriceJ) * 365;
-  const revE_A = eWinter * adjPriceE * 365;
-  const revE_B = eSummer * adjPriceE * 365;
-  const totalRevA = revKJ_annual + revE_A;
-  const totalRevB = revKJ_annual + revE_B;
-
-  const costA = totalA * costPerAc;
-  const costB = totalB * costPerAc;
-  const dCost = costB - costA;
-  const dRev = totalRevB - totalRevA;
-  const payback = dRev > 0 ? dCost / dRev : null;
-
-  const fM = v => (v / 1e6).toFixed(2) + 'M';
-  const fP = v => '$' + v.toFixed(2);
-
-  const controls = `<label style="font-size:10px;color:var(--text-muted);margin-right:12px">
-    Inflation: <input type="range" min="0" max="50" step="1" value="${_inflation}"
-      oninput="setInflation(this.value)" style="vertical-align:middle;width:140px">
-    <span style="margin-left:6px">${_inflation}%</span>
-  </label>
-  <span style="font-size:10px;color:var(--text-muted)">
-    Base price/lb — K=${fP(prices.K)} J=${fP(prices.J)} E=${fP(prices.E)}
-    → adj K=${fP(adjPriceK)} J=${fP(adjPriceJ)} E=${fP(adjPriceE)}
-  </span>`;
-  document.getElementById('scenControls').innerHTML = controls;
-
-  const row = (label, a, b, d, cls) =>
-    `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td><td>${a}</td><td>${b}</td><td>${d}</td></tr>`;
-
-  let html = '<div style="overflow-x:auto"><table class="fin-table">' +
-    '<thead><tr><th></th><th>Winter-sized E</th><th>Summer-sized E</th><th>Δ</th></tr></thead><tbody>';
-  html += row('E target (lb/day)', eWinter.toLocaleString(), eSummer.toLocaleString(),
-    '+' + (eSummer - eWinter).toLocaleString());
-  html += row('E peak acres', peakE_A.toFixed(1), peakE_B.toFixed(1), '+' + (peakE_B - peakE_A).toFixed(1));
-  html += row('Total build acres (K+J+E)', totalA.toFixed(1), totalB.toFixed(1),
-    '+' + (totalB - totalA).toFixed(1), 'diff-row');
-  html += row('Construction cost', fM(costA), fM(costB), '+' + fM(dCost));
-  html += row('Annual revenue', fM(totalRevA), fM(totalRevB), '+' + fM(dRev), 'diff-row');
-  html += '</tbody></table></div>';
-
-  html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
-    <div>Extra cost to size for summer E: <b>${fM(dCost)}</b></div>
-    <div>Extra annual revenue: <b>${fM(dRev)}</b></div>
-    <div>Payback on the extra build: ${payback == null ? '—' : payback.toFixed(1) + ' yr'}</div>
-  </div>`;
-
-  document.getElementById('scenBody').innerHTML = html;
-  document.getElementById('scenPanel').style.display = '';
-}
 
 async function loadSettingsConstants() {
   const [s, c] = await Promise.all([
