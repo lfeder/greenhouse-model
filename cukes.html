@@ -55,8 +55,8 @@
   </div>
 
   <div class="panel" id="roiPanel" style="display:none">
-    <div class="panel-title">Return per acre added</div>
-    <p class="note">Per-variety annual lbs grown per acre × sellable fraction (95% after slippage) × adjusted price/lb = annual revenue per acre. Return on capital = annual revenue ÷ construction cost per acre. E uses J's per-ac productivity as a proxy.</p>
+    <div class="panel-title">Marginal return per added acre</div>
+    <p class="note">At each total-acre level, revenue = sum over months of <code>min(1, ac/required) × target revenue</code>. Early acres unlock easy months (summer); later acres only chip at winter peaks, so marginal revenue (and ROI) falls. Acres treated as a single pool (GHs rotate varieties). Required already grossed up for 5% slippage; revenue uses adjusted prices from the inflation slider. Cost per ac = <code>cucumberCostPerAc</code>.</p>
     <div id="roiBody"></div>
   </div>
 
@@ -695,61 +695,94 @@ function renderRoi() {
   const retMult = effWeeks.map(retireMultFor);
   const exK = _constants.existing_ops.keiki_acres;
   const exJ = _constants.existing_ops.japanese_acres;
+  const exE = _constants.existing_ops.english_acres;
+  const existingTotal = exK + exJ + exE;
   const perAcK = currentK.map((v, i) => (v == null) ? null : (v / exK) * retMult[i]);
   const perAcJ = currentJ.map((v, i) => (v == null) ? null : (v / exJ) * retMult[i]);
 
-  const sumLbsPerAc = arr => {
-    let t = 0;
-    for (let i = 0; i < 12; i++) if (arr[i] != null) t += arr[i] * daysInMonth(2025, i + 1);
-    return t;
-  };
-  const lbsK = sumLbsPerAc(perAcK);
-  const lbsJ = sumLbsPerAc(perAcJ);
-  const lbsE = lbsJ;  // E uses J proxy
+  const SLIP = 1 + SLIPPAGE_RATE;
+  // Required acres per variety per month (E uses J's per-ac; grossed by slippage).
+  const reqK = perAcK.map((p, i) => p == null ? null : ceil01((targetForMonth('K', i) * SLIP) / p));
+  const reqJ = perAcJ.map((p, i) => p == null ? null : ceil01((targetForMonth('J', i) * SLIP) / p));
+  const reqE = perAcJ.map((p, i) => p == null ? null : ceil01((targetForMonth('E', i) * SLIP) / p));
+  const reqTotal = reqK.map((k, i) => {
+    const j = reqJ[i], e = reqE[i];
+    if (k == null && j == null && e == null) return null;
+    return (k || 0) + (j || 0) + (e || 0);
+  });
 
-  const netF = 1 - SLIPPAGE_RATE;
   const infMult = 1 + (_inflation / 100);
   const pK = (prices.K || 0) * infMult;
   const pJ = (prices.J || 0) * infMult;
   const pE = (prices.E || 0) * infMult;
 
-  const revK = lbsK * netF * pK;
-  const revJ = lbsJ * netF * pJ;
-  const revE = lbsE * netF * pE;
+  // Per-month target revenue (what we'd earn if demand were fully met).
+  const monthlyTargetRev = Array(12).fill(0).map((_, i) => {
+    const d = daysInMonth(2025, i + 1);
+    return targetForMonth('K', i) * d * pK
+         + targetForMonth('J', i) * d * pJ
+         + targetForMonth('E', i) * d * pE;
+  });
+
+  // Annual revenue at a given total acre level — each month is partially
+  // satisfied proportional to (A / required).
+  const annualRevAt = A => {
+    let total = 0;
+    for (let i = 0; i < 12; i++) {
+      const req = reqTotal[i];
+      if (req == null || req <= 0) continue;
+      const frac = Math.min(1, A / req);
+      total += frac * monthlyTargetRev[i];
+    }
+    return total;
+  };
+
+  // Acre range: existing → ceiling of winter peak, in 0.5-ac steps.
+  const peakReq = Math.max(...reqTotal.filter(v => v != null));
+  const maxA = Math.ceil(peakReq * 2) / 2;
+  const acreLevels = [existingTotal];
+  let nextA = Math.ceil((existingTotal + 1e-6) * 2) / 2;
+  while (nextA <= maxA + 1e-9) {
+    acreLevels.push(Math.round(nextA * 10) / 10);
+    nextA += 0.5;
+  }
 
   const costPerAc = _settings.cucumberCostPerAc || 1000000;
-  const roiK = revK / costPerAc;
-  const roiJ = revJ / costPerAc;
-  const roiE = revE / costPerAc;
-
   const fM = v => '$' + (v / 1e6).toFixed(2) + 'M';
-  const fK_ = v => Math.round(v / 1e3).toLocaleString() + 'K';
-  const fP = v => '$' + v.toFixed(2);
-  const fPct = v => (v * 100).toFixed(1) + '%';
+  const fK_ = v => (v < 0 ? '-' : '') + Math.round(Math.abs(v) / 1e3).toLocaleString() + 'K';
+  const fPct = v => (v * 100).toFixed(0) + '%';
 
-  // Acre range: 1.0 … 5.5 in 0.5 steps.
-  const acreCounts = [];
-  for (let a = 1.0; a <= 5.5 + 1e-9; a += 0.5) acreCounts.push(Math.round(a * 10) / 10);
+  let html = '<div style="overflow-x:auto"><table class="fin-table">' +
+    '<thead><tr>' +
+    '<th>Total ac</th>' +
+    '<th>Annual revenue</th>' +
+    '<th>Cum. capex (new)</th>' +
+    '<th>Marginal rev (0.5 ac)</th>' +
+    '<th>Marginal ROI / yr</th>' +
+    '</tr></thead><tbody>';
 
-  const fAc = a => `<th>${a.toFixed(1)} ac</th>`;
-  const header = '<thead><tr><th></th>' + acreCounts.map(fAc).join('') + '</tr></thead>';
-
-  const scaledRow = (label, perAcVal, formatter) =>
-    `<tr><td>${label}</td>${acreCounts.map(a => `<td>${formatter(perAcVal * a)}</td>`).join('')}</tr>`;
-
-  let html = '<div style="overflow-x:auto"><table class="fin-table">' + header + '<tbody>';
-  html += scaledRow('Capex',   costPerAc, fM);
-  html += scaledRow('Rev K/yr', revK,     fK_);
-  html += scaledRow('Rev J/yr', revJ,     fK_);
-  html += scaledRow('Rev E/yr', revE,     fK_);
+  let prevRev = null;
+  let prevAc = null;
+  for (const A of acreLevels) {
+    const rev = annualRevAt(A);
+    const capex = Math.max(0, A - existingTotal) * costPerAc;
+    const marginalRev = prevRev == null ? null : rev - prevRev;
+    const marginalCost = prevAc == null ? 0 : (A - prevAc) * costPerAc;
+    const marginalRoi = (marginalRev != null && marginalCost > 0) ? marginalRev / marginalCost : null;
+    const label = Math.abs(A - existingTotal) < 1e-6
+      ? `${A.toFixed(2)} (existing)`
+      : A.toFixed(1);
+    html += `<tr>
+      <td>${label}</td>
+      <td>${fM(rev)}</td>
+      <td>${fM(capex)}</td>
+      <td>${marginalRev == null ? '—' : fK_(marginalRev)}</td>
+      <td>${marginalRoi == null ? '—' : fPct(marginalRoi)}</td>
+    </tr>`;
+    prevRev = rev;
+    prevAc = A;
+  }
   html += '</tbody></table></div>';
-
-  html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
-    <div>Per-ac annual revenue — K=${fK_(revK)} (${fP(pK)}/lb, ${fK_(lbsK)} lb gross, ${fK_(lbsK*netF)} sellable)
-      / J=${fK_(revJ)} / E=${fK_(revE)} (E uses J per-ac)</div>
-    <div>Return on capital — K <b>${fPct(roiK)}</b> / J <b>${fPct(roiJ)}</b> / E <b>${fPct(roiE)}</b>
-      (at $${(costPerAc/1e6).toFixed(1)}M/ac)</div>
-  </div>`;
 
   document.getElementById('roiBody').innerHTML = html;
   document.getElementById('roiPanel').style.display = '';
