@@ -69,7 +69,7 @@
 
   <div class="panel" id="roiPanel" style="display:none">
     <div class="panel-title">Return on added greenhouses</div>
-    <p class="note">Existing row shows baseline = (Box 1 actual sales + Box 2 extended rev) / 2 — the realistic starting point since today's theoretical $11.2M is unrealizable. Added-GH rows show theoretical capacity revenue (demand-capped); Cum rev vs baseline measures incremental lift vs that starting point; Cum ROI / yr = lift / capex.</p>
+    <p class="note">Baseline row = (Box 1 actual sales + Box 2 extended rev) / 2 — today's realistic earnings since theoretical $11.2M at 12.5 ac is unrealizable. Added-GH rows show theoretical capacity revenue (demand-capped); Cum rev vs baseline is incremental lift. Cum OpInc ROI / yr = (incremental rev × 30% OpInc margin) ÷ cumulative capex.</p>
     <div id="roiBody"></div>
   </div>
 </div>
@@ -808,9 +808,10 @@ function renderRoi() {
     '<th>Cum. capex (new)</th>' +
     '<th>Cum. rev vs baseline</th>' +
     '<th>Δ rev vs prev</th>' +
-    '<th>Cum. ROI / yr</th>' +
+    '<th>Cum. OpInc ROI / yr</th>' +
     '</tr></thead><tbody>';
 
+  const OP_INC_MARGIN = 0.30;
   let prevRev = null;
   let finalRev = null;
   let finalCapex = 0;
@@ -819,7 +820,8 @@ function renderRoi() {
     const rev = annualRevAt(A, idx);
     const capex = Math.max(0, A - existingTotal) * costPerAc;
     const cumAddRev = rev - baseline;
-    const cumRoi = capex > 0 ? cumAddRev / capex : null;
+    const cumOpInc = cumAddRev * OP_INC_MARGIN;
+    const cumRoi = capex > 0 ? cumOpInc / capex : null;
     const deltaRev = prevRev == null ? null : rev - prevRev;
     const nGH = idx;  // 0 = baseline
     const label = nGH === 0
@@ -840,7 +842,8 @@ function renderRoi() {
   html += '</tbody></table></div>';
 
   const totalAddRev = finalRev - baseline;
-  const fullRatio = finalCapex > 0 ? totalAddRev / finalCapex : null;
+  const totalAddOpInc = totalAddRev * OP_INC_MARGIN;
+  const fullRatio = finalCapex > 0 ? totalAddOpInc / finalCapex : null;
   const payback = fullRatio ? 1 / fullRatio : null;
   html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
     <div>Full build (${existingTotal.toFixed(1)} → ${acreLevels[acreLevels.length-1].toFixed(1)} ac):
