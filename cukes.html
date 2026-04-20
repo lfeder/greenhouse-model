@@ -42,7 +42,7 @@
 
   <div class="panel" id="projPanel" style="display:none">
     <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
-      <span>Current state — lb/day grown (Grade 1)</span>
+      <span>Current state, Grade 1, in numbers lb/day unless noted</span>
       <span style="font-size:9px;color:var(--text-dim);text-transform:none;letter-spacing:0">
         <span id="dataAge"></span>
         <button class="btn" style="margin-left:8px;font-size:9px" onclick="refreshData()">Refresh</button>
@@ -442,17 +442,17 @@ function renderProjection() {
   // Box 1 shows actual historical retire weeks (no override).
   box1 += row('Weeks (shutdown)', histWeeks, null, fmtWeeks, fAvg(histWeeks));
   box1 += row('Season (Deficit from Max)', seasonality, null, fmtIndex, null);
-  box1 += row('Grown K (lb/day)',  current.K, null, fmt, fAvgLb(avgOf(current.K)));
-  box1 += row('Grown J (lb/day)',  current.J, null, fmt, fAvgLb(avgOf(current.J)));
-  box1 += row('Grown E (lb/day)',  current.E, null, fmt, fAvgLb(avgOf(current.E)));
-  box1 += row('Grown Total (lb/day)', curTot, 'diff-below', fmt, fAvgLb(avgOf(curTot)));
+  box1 += row('Grown K',  current.K, null, fmt, fAvgLb(avgOf(current.K)));
+  box1 += row('Grown J',  current.J, null, fmt, fAvgLb(avgOf(current.J)));
+  box1 += row('Grown E',  current.E, null, fmt, fAvgLb(avgOf(current.E)));
+  box1 += row('Grown Total', curTot, 'diff-below', fmt, fAvgLb(avgOf(curTot)));
   const salesK = avgLbPerDayByMonth(_summary.saleByVM, 'K');
   const salesJ = avgLbPerDayByMonth(_summary.saleByVM, 'J');
   const salesE = avgLbPerDayByMonth(_summary.saleByVM, 'E');
-  box1 += row('Sold K (lb/day)', salesK, null, fmt, fAvgLb(avgOf(salesK)));
-  box1 += row('Sold J (lb/day)', salesJ, null, fmt, fAvgLb(avgOf(salesJ)));
-  box1 += row('Sold E (lb/day)', salesE, null, fmt, fAvgLb(avgOf(salesE)));
-  box1 += row('Sold Total (lb/day)', salesAvg, 'diff-below', fmt, fAvgLb(avgOf(salesAvg)));
+  box1 += row('Sold K', salesK, null, fmt, fAvgLb(avgOf(salesK)));
+  box1 += row('Sold J', salesJ, null, fmt, fAvgLb(avgOf(salesJ)));
+  box1 += row('Sold E', salesE, null, fmt, fAvgLb(avgOf(salesE)));
+  box1 += row('Sold Total', salesAvg, 'diff-below', fmt, fAvgLb(avgOf(salesAvg)));
   box1 += row('Slippage', slippage, null, fmt, fAvgLb(avgOf(slippage)));
   box1 += row('Surplus/Deficit', unsold, null, fmt, fAvgLb(avgOf(unsold)));
 
@@ -540,7 +540,7 @@ function renderProjection() {
   const extAnnualRev = extRevMonth.reduce((a, b) => a + b, 0);
 
   let box2 = '<div style="overflow-x:auto">' + tableHdr;
-  box2 += row('Total lb/day (extended)', extSupply, null, fmt, fAvgLb(avgOf(extSupply)));
+  box2 += row('Total Grown (extended)', extSupply, null, fmt, fAvgLb(avgOf(extSupply)));
   box2 += row('Slippage', extSlip, null, fmt, fAvgLb(avgOf(extSlip)));
   box2 += targetRow('Target Sales K', 'K');
   box2 += targetRow('Target Sales J', 'J');
@@ -551,7 +551,7 @@ function renderProjection() {
     if (supply == null) return null;
     return Math.min(supply * (1 - SLIPPAGE_RATE), targTot[i]);
   });
-  box2 += row('Sales (lb/day)', extSold, null, fmt, fAvgLb(avgOf(extSold)));
+  box2 += row('Sales', extSold, null, fmt, fAvgLb(avgOf(extSold)));
   box2 += `<tr><td>Revenue ($)</td>${extRevMonth.map(fmtDol).join('')}${fDollars(extAnnualRev)}</tr>`;
   box2 += row('Surplus/Deficit', extSurplus, 'diff-below', fmt, fAvgLb(avgOf(extSurplus)));
   box2 += rowAc('Required K (ac)', reqK);
@@ -587,7 +587,7 @@ function renderProjection() {
      </span>`;
 
   let box3 = '<div style="overflow-x:auto">' + tableHdr;
-  box3 += row('Post Expansion (lb/day)', addSupply, null, fmt, fAvgLb(avgOf(addSupply)));
+  box3 += row('Post Expansion', addSupply, null, fmt, fAvgLb(avgOf(addSupply)));
   box3 += row('Slippage', addSlip, null, fmt, fAvgLb(avgOf(addSlip)));
   box3 += row('Target Sales Total', targTot, null, fmt, fAvgLb(avgOf(targTot)));
   box3 += `<tr><td>Revenue ($)</td>${addRevMonth.map(fmtDol).join('')}${fDollars(addAnnualRev)}</tr>`;
