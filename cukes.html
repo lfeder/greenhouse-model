@@ -391,10 +391,11 @@ function renderProjection() {
 
   // --- Box 1: current state ---
   const salesAvg = _summary.salesAvg;
+  const slippage = curTot.map(v => v == null ? null : v * SLIPPAGE_RATE);
   const unsold = curTot.map((c, i) => {
     const s = salesAvg[i];
     if (c == null && s == null) return null;
-    return (c || 0) - (s || 0);
+    return (c || 0) - (s || 0) - (slippage[i] || 0);
   });
   // Required acres per month — used by both box 1 (summary footer) and box 2.
   const exK = _constants.existing_ops.keiki_acres;
@@ -403,9 +404,10 @@ function renderProjection() {
   const perAcOf = (arr, ex) => arr.map((v, i) => (v == null || !ex) ? null : (v / ex) * retMultByMonth[i]);
   const perAcK = perAcOf(current.K, exK);
   const perAcJ = perAcOf(current.J, exJJJ);
-  const reqK = perAcK.map((p, i) => p == null ? null : ceil01(targetForMonth('K', i) / p));
-  const reqJ = perAcJ.map((p, i) => p == null ? null : ceil01(targetForMonth('J', i) / p));
-  const reqE = perAcJ.map((p, i) => p == null ? null : ceil01(targetForMonth('E', i) / p));
+  // Required = target grossed up by slippage (need to grow extra to cover 5% loss).
+  const reqK = perAcK.map((p, i) => p == null ? null : ceil01((targetForMonth('K', i) * (1 + SLIPPAGE_RATE)) / p));
+  const reqJ = perAcJ.map((p, i) => p == null ? null : ceil01((targetForMonth('J', i) * (1 + SLIPPAGE_RATE)) / p));
+  const reqE = perAcJ.map((p, i) => p == null ? null : ceil01((targetForMonth('E', i) * (1 + SLIPPAGE_RATE)) / p));
   const reqTotal = reqK.map((k, i) => {
     const j = reqJ[i], e = reqE[i];
     if (k == null && j == null && e == null) return null;
@@ -438,7 +440,8 @@ function renderProjection() {
   box1 += row('Sales J', salesJ, null, fmt, fLbs(annualLbs(salesJ)));
   box1 += row('Sales E', salesE, null, fmt, fLbs(annualLbs(salesE)));
   box1 += row('Sales Total', salesAvg, 'diff-row', fmt, fLbs(annualLbs(salesAvg)));
-  box1 += row('Unsold (Current − Sales)', unsold, null, fmt, fLbs(annualLbs(unsold)));
+  box1 += row('Slippage', slippage, null, fmt, fLbs(annualLbs(slippage)));
+  box1 += row('Unsold', unsold, null, fmt, fLbs(annualLbs(unsold)));
   // Required acres based on ACTUAL sales (not targets): divide monthly sales
   // by the month's actual lb/ac/day from the existing footprint. No retire
   // uplift — pure historical ratio.
@@ -448,7 +451,7 @@ function renderProjection() {
     const produced = curTot[i];
     if (produced == null || produced === 0) return null;
     const lbAcDay = produced / existingTotal;
-    return ceil01(s / lbAcDay);
+    return ceil01((s * (1 + SLIPPAGE_RATE)) / lbAcDay);
   });
   box1 += row('Required Total (ac, to meet sales)', actualReqTotal, 'diff-row', fmtAcres, peakAnnual(actualReqTotal));
   box1 += '</tbody></table></div>';
@@ -462,7 +465,8 @@ function renderProjection() {
   const targJ = targetPerMonth('J');
   const targE = targetPerMonth('E');
   const targTot = targK.map((k, i) => k + targJ[i] + targE[i]);
-  const surplus = projTot.map((p, i) => p == null ? null : p - targTot[i]);
+  const slippageProj = projTot.map(v => v == null ? null : v * SLIPPAGE_RATE);
+  const surplus = projTot.map((p, i) => p == null ? null : p - (slippageProj[i] || 0) - targTot[i]);
   const inputStyle = 'width:60px;background:var(--panel-dark);color:var(--text);' +
     'border:1px solid var(--border);border-radius:3px;font-family:inherit;' +
     'font-size:11px;padding:2px 4px;text-align:right';
@@ -492,11 +496,12 @@ function renderProjection() {
   box2 += row('Post-Exp J', projected.J, null, fmt, fLbs(annualLbs(projected.J)));
   box2 += row('Post-Exp E', projected.E, null, fmt, fLbs(annualLbs(projected.E)));
   box2 += row('Post-Exp Total', projTot, 'diff-row', fmt, fLbs(annualLbs(projTot)));
+  box2 += row('Slippage', slippageProj, null, fmt, fLbs(annualLbs(slippageProj)));
   box2 += targetRow('Target sold K', 'K');
   box2 += targetRow('Target sold J', 'J');
   box2 += targetRow('Target sold E', 'E');
   box2 += row('Target sold Total', targTot, 'diff-row', fmt, fLbs(annualLbs(targTot)));
-  box2 += row('Surplus (Post − Target)', surplus, null, fmt, fLbs(annualLbs(surplus)));
+  box2 += row('Surplus', surplus, null, fmt, fLbs(annualLbs(surplus)));
 
   // Required acres + peaks already computed above (shared with box 1 footer).
   const fmtAc = v => v == null ? '<td class="empty">—</td>' : `<td>${v.toFixed(1)}</td>`;
@@ -673,6 +678,9 @@ window.setTarget = setTarget;
 // Round UP to nearest 0.1.
 function ceil01(x) { return Math.ceil(x * 10) / 10; }
 
+// Fraction of grown lbs lost to slippage (rejects, shrink, etc.).
+const SLIPPAGE_RATE = 0.05;
+
 function renderScenario() {
   if (!_summary || !_constants || !_settings) return;
   const { currentJ, retireWeeks, prices } = _summary;
@@ -683,12 +691,14 @@ function renderScenario() {
   const perAcK = _summary.currentK.map((v, i) =>
     (v == null) ? null : (v / _constants.existing_ops.keiki_acres) * retMult[i]);
 
-  // For each E target value, compute peak E acres needed across all 12 months.
+  const SLIP = 1 + SLIPPAGE_RATE;
+  // For each E target value, compute peak E acres needed across all 12 months
+  // (target grossed up by slippage).
   const peakEacres = eTarget => {
     let peak = 0;
     for (let i = 0; i < 12; i++) {
       if (perAcJ[i] == null || perAcJ[i] <= 0) continue;
-      const need = ceil01(eTarget / perAcJ[i]);
+      const need = ceil01((eTarget * SLIP) / perAcJ[i]);
       if (need > peak) peak = need;
     }
     return peak;
@@ -698,11 +708,11 @@ function renderScenario() {
   let peakK = 0, peakJ = 0;
   for (let i = 0; i < 12; i++) {
     if (perAcK[i] != null && perAcK[i] > 0) {
-      const k = ceil01(targetForMonth('K', i) / perAcK[i]);
+      const k = ceil01((targetForMonth('K', i) * SLIP) / perAcK[i]);
       if (k > peakK) peakK = k;
     }
     if (perAcJ[i] != null && perAcJ[i] > 0) {
-      const j = ceil01(targetForMonth('J', i) / perAcJ[i]);
+      const j = ceil01((targetForMonth('J', i) * SLIP) / perAcJ[i]);
       if (j > peakJ) peakJ = j;
     }
   }
