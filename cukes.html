@@ -384,7 +384,7 @@ function renderProjection() {
     if (!valid.length) return null;
     return `<td>${Math.max(...valid).toFixed(1)}</td>`;
   };
-  const fDollars = v => `<td>${(v / 1e6).toFixed(2)}M</td>`;
+  const fDollars = v => `<td>${(v / 1e6).toFixed(1)}M</td>`;
 
   // Adjusted prices (shared between box 1 and box 2 revenue rows).
   const prices = _summary.prices || { K: 0, J: 0, E: 0 };
@@ -603,9 +603,15 @@ function renderProjection() {
   document.getElementById('addGhBody').innerHTML = box3;
   document.getElementById('addGhPanel').style.display = '';
 
-  // Stash for ROI baseline.
+  // Stash for ROI baseline + annual rev at each GH level (reuse box 3's formula
+  // so the two panels don't drift apart).
   _box1AnnualRev = box1AnnualRev;
   _box2AnnualRev = extAnnualRev;
+  _roiAnnualRev = Array(5).fill(0).map((_, n) => {
+    const A = existingTotal + n * AC_PER_GH;
+    return revAt(A).reduce((a, b) => a + b, 0);
+  });
+  _roiExistingTotal = existingTotal;
 
   const status = document.getElementById('status');
   if (status) status.style.display = 'none';
@@ -697,6 +703,8 @@ function renderAll() {
 let _summary = null;
 let _box1AnnualRev = 0;
 let _box2AnnualRev = 0;
+let _roiAnnualRev = [];   // [rev at +0, +1, +2, +3, +4 GH]
+let _roiExistingTotal = 0;
 let _inflation = Number(localStorage.getItem('cukesInflation')) || 0;  // percent
 let _addedGHs = (() => {
   const v = Number(localStorage.getItem('cukesAddedGHs'));
@@ -764,66 +772,16 @@ const SLIPPAGE_RATE = 0.05;
 
 function renderRoi() {
   if (!_summary || !_constants || !_settings) return;
-  const { retireWeeks, prices } = _summary;
-  const currentK = avgLbPerDayByMonth(_summary.growByVM, 'K');
-  const currentJ = avgLbPerDayByMonth(_summary.growByVM, 'J');
-  const histWeeks = (retireWeeks || []).map(w => w || 0);
-  const effWeeks = histWeeks.map(w => Math.max(w, _targetWeek));
-  const retMult = effWeeks.map((w, i) => {
-    const hM = retireMultFor(histWeeks[i]);
-    return hM > 0 ? retireMultFor(w) / hM : 1;
-  });
-  const exK = _constants.existing_ops.keiki_acres;
-  const exJ = _constants.existing_ops.japanese_acres;
-  const exE = _constants.existing_ops.english_acres;
-  const existingTotal = exK + exJ + exE;
-  const perAcK = currentK.map((v, i) => (v == null) ? null : (v / exK) * retMult[i]);
-  const perAcJ = currentJ.map((v, i) => (v == null) ? null : (v / exJ) * retMult[i]);
+  if (!_roiAnnualRev || _roiAnnualRev.length !== 5) return;
 
-  const SLIP = 1 + SLIPPAGE_RATE;
-  // Required acres per variety per month (E uses J's per-ac; grossed by slippage).
-  const reqK = perAcK.map((p, i) => p == null ? null : ceil01((targetForMonth('K', i) * SLIP) / p));
-  const reqJ = perAcJ.map((p, i) => p == null ? null : ceil01((targetForMonth('J', i) * SLIP) / p));
-  const reqE = perAcJ.map((p, i) => p == null ? null : ceil01((targetForMonth('E', i) * SLIP) / p));
-  const reqTotal = reqK.map((k, i) => {
-    const j = reqJ[i], e = reqE[i];
-    if (k == null && j == null && e == null) return null;
-    return (k || 0) + (j || 0) + (e || 0);
-  });
-
-  const infMult = 1 + (_inflation / 100);
-  const pK = (prices.K || 0) * infMult;
-  const pJ = (prices.J || 0) * infMult;
-  const pE = (prices.E || 0) * infMult;
-
-  // Per-month target revenue (what we'd earn if demand were fully met).
-  const monthlyTargetRev = Array(12).fill(0).map((_, i) => {
-    const d = daysInMonth(2025, i + 1);
-    return targetForMonth('K', i) * d * pK
-         + targetForMonth('J', i) * d * pJ
-         + targetForMonth('E', i) * d * pE;
-  });
-
-  // Annual revenue at a given total acre level — each month is partially
-  // satisfied proportional to (A / required).
-  const annualRevAt = A => {
-    let total = 0;
-    for (let i = 0; i < 12; i++) {
-      const req = reqTotal[i];
-      if (req == null || req <= 0) continue;
-      const frac = Math.min(1, A / req);
-      total += frac * monthlyTargetRev[i];
-    }
-    return total;
-  };
-
-  // Build increments are 60,000 sq ft GHs (~1.377 ac each). Show 1–4 GHs added.
-  const AC_PER_GH = 60000 / 43560;
-  const acreLevels = [existingTotal];
-  for (let n = 1; n <= 4; n++) acreLevels.push(existingTotal + n * AC_PER_GH);
+  const existingTotal = _roiExistingTotal;
+  const acreLevels = Array(5).fill(0).map((_, n) => existingTotal + n * AC_PER_GH);
+  // Revenue per GH level is pre-computed by renderProjection using box 3's
+  // exact formula so the two panels don't drift.
+  const annualRevAt = (A, n) => _roiAnnualRev[n];
 
   const costPerAc = _settings.cucumberCostPerAc || 1000000;
-  const fM = v => '$' + (v / 1e6).toFixed(2) + 'M';
+  const fM = v => '$' + (v / 1e6).toFixed(1) + 'M';
   const fK_ = v => (v < 0 ? '-' : '') + Math.round(Math.abs(v) / 1e3).toLocaleString() + 'K';
   const fPct = v => (v * 100).toFixed(0) + '%';
 
@@ -854,7 +812,7 @@ function renderRoi() {
   let finalCapex = 0;
   for (let idx = 0; idx < acreLevels.length; idx++) {
     const A = acreLevels[idx];
-    const rev = annualRevAt(A);
+    const rev = annualRevAt(A, idx);
     const capex = Math.max(0, A - existingTotal) * costPerAc;
     const cumAddRev = rev - baseline;
     const cumRoi = capex > 0 ? cumAddRev / capex : null;
