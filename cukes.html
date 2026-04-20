@@ -54,6 +54,12 @@
     <div id="postExpBody"></div>
   </div>
 
+  <div class="panel" id="roiPanel" style="display:none">
+    <div class="panel-title">Return per acre added</div>
+    <p class="note">Per-variety annual lbs grown per acre × sellable fraction (95% after slippage) × adjusted price/lb = annual revenue per acre. Return on capital = annual revenue ÷ construction cost per acre. E uses J's per-ac productivity as a proxy.</p>
+    <div id="roiBody"></div>
+  </div>
+
   <div class="panel" id="scenPanel" style="display:none">
     <div class="panel-title">Scenario comparison — E sized winter vs summer</div>
     <p class="note">Two scenarios: keep E at the winter (Jan) target year-round, or size E for the summer (Apr) target year-round. K and J targets are unchanged. Δ rev = (E summer − E winter) × 365 × price. Δ cost = extra E acres × cost/ac. Payback = Δ cost / Δ rev.</p>
@@ -620,6 +626,7 @@ async function fetchSheetSummary() {
 function renderAll() {
   if (!_summary) return;
   renderProjection();
+  renderRoi();
   renderScenario();
   const ageMin = Math.round((Date.now() - _summary.timestamp) / 60000);
   const ageEl = document.getElementById('dataAge');
@@ -680,6 +687,73 @@ function ceil01(x) { return Math.ceil(x * 10) / 10; }
 
 // Fraction of grown lbs lost to slippage (rejects, shrink, etc.).
 const SLIPPAGE_RATE = 0.05;
+
+function renderRoi() {
+  if (!_summary || !_constants || !_settings) return;
+  const { currentK, currentJ, retireWeeks, prices } = _summary;
+  const effWeeks = retireWeeks.map(w => Math.max(w == null ? 0 : w, _targetWeek));
+  const retMult = effWeeks.map(retireMultFor);
+  const exK = _constants.existing_ops.keiki_acres;
+  const exJ = _constants.existing_ops.japanese_acres;
+  const perAcK = currentK.map((v, i) => (v == null) ? null : (v / exK) * retMult[i]);
+  const perAcJ = currentJ.map((v, i) => (v == null) ? null : (v / exJ) * retMult[i]);
+
+  const sumLbsPerAc = arr => {
+    let t = 0;
+    for (let i = 0; i < 12; i++) if (arr[i] != null) t += arr[i] * daysInMonth(2025, i + 1);
+    return t;
+  };
+  const lbsK = sumLbsPerAc(perAcK);
+  const lbsJ = sumLbsPerAc(perAcJ);
+  const lbsE = lbsJ;  // E uses J proxy
+
+  const netF = 1 - SLIPPAGE_RATE;
+  const infMult = 1 + (_inflation / 100);
+  const pK = (prices.K || 0) * infMult;
+  const pJ = (prices.J || 0) * infMult;
+  const pE = (prices.E || 0) * infMult;
+
+  const revK = lbsK * netF * pK;
+  const revJ = lbsJ * netF * pJ;
+  const revE = lbsE * netF * pE;
+
+  const costPerAc = _settings.cucumberCostPerAc || 1000000;
+  const roiK = revK / costPerAc;
+  const roiJ = revJ / costPerAc;
+  const roiE = revE / costPerAc;
+
+  const fM = v => '$' + (v / 1e6).toFixed(2) + 'M';
+  const fK_ = v => Math.round(v / 1e3).toLocaleString() + 'K';
+  const fP = v => '$' + v.toFixed(2);
+  const fPct = v => (v * 100).toFixed(1) + '%';
+
+  // Acre range: 1.0 … 5.5 in 0.5 steps.
+  const acreCounts = [];
+  for (let a = 1.0; a <= 5.5 + 1e-9; a += 0.5) acreCounts.push(Math.round(a * 10) / 10);
+
+  const fAc = a => `<th>${a.toFixed(1)} ac</th>`;
+  const header = '<thead><tr><th></th>' + acreCounts.map(fAc).join('') + '</tr></thead>';
+
+  const scaledRow = (label, perAcVal, formatter) =>
+    `<tr><td>${label}</td>${acreCounts.map(a => `<td>${formatter(perAcVal * a)}</td>`).join('')}</tr>`;
+
+  let html = '<div style="overflow-x:auto"><table class="fin-table">' + header + '<tbody>';
+  html += scaledRow('Capex',   costPerAc, fM);
+  html += scaledRow('Rev K/yr', revK,     fK_);
+  html += scaledRow('Rev J/yr', revJ,     fK_);
+  html += scaledRow('Rev E/yr', revE,     fK_);
+  html += '</tbody></table></div>';
+
+  html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
+    <div>Per-ac annual revenue — K=${fK_(revK)} (${fP(pK)}/lb, ${fK_(lbsK)} lb gross, ${fK_(lbsK*netF)} sellable)
+      / J=${fK_(revJ)} / E=${fK_(revE)} (E uses J per-ac)</div>
+    <div>Return on capital — K <b>${fPct(roiK)}</b> / J <b>${fPct(roiJ)}</b> / E <b>${fPct(roiE)}</b>
+      (at $${(costPerAc/1e6).toFixed(1)}M/ac)</div>
+  </div>`;
+
+  document.getElementById('roiBody').innerHTML = html;
+  document.getElementById('roiPanel').style.display = '';
+}
 
 function renderScenario() {
   if (!_summary || !_constants || !_settings) return;
