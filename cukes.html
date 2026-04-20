@@ -225,11 +225,12 @@ function fmtWeeks(v) {
 
 function fmtIndex(v) {
   if (v == null) return '<td class="empty">—</td>';
-  return `<td>${v.toFixed(1)}</td>`;
+  return `<td>${(v * 100).toFixed(0)}%</td>`;
 }
 
-// Cross-variety (K+J) seasonality index per month = monthly lb/day / annual avg.
-// Uses the same year-per-month selection as the other rows.
+// Cross-variety (K+J) seasonality per month = (monthly lb/day − max) / max.
+// Expressed as a non-positive fraction: 0 for the peak month, negative for
+// every other month. Uses the same year-per-month selection as other rows.
 function seasonalityKJ(growByVM) {
   const perMonth = Array(12).fill(null);
   for (let m = 1; m <= 12; m++) {
@@ -241,8 +242,8 @@ function seasonalityKJ(growByVM) {
   }
   const validVals = perMonth.filter(v => v != null);
   if (!validVals.length) return Array(12).fill(null);
-  const annualAvg = validVals.reduce((a, b) => a + b, 0) / validVals.length;
-  return perMonth.map(v => v == null ? null : v / annualAvg);
+  const maxVal = Math.max(...validVals);
+  return perMonth.map(v => v == null ? null : (v - maxVal) / maxVal);
 }
 
 // Loose match: invoice sheet Farm/Variety fields vary in casing across tabs.
