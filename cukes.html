@@ -431,7 +431,13 @@ function renderProjection() {
   box1 += row('Current J',  current.J, null, fmt, fLbs(annualLbs(current.J)));
   box1 += row('Current E',  current.E, null, fmt, fLbs(annualLbs(current.E)));
   box1 += row('Current Total', curTot, 'diff-row', fmt, fLbs(annualLbs(curTot)));
-  box1 += row('Sales', salesAvg, null, fmt, fLbs(annualLbs(salesAvg)));
+  const salesK = _summary.salesK || Array(12).fill(null);
+  const salesJ = _summary.salesJ || Array(12).fill(null);
+  const salesE = _summary.salesE || Array(12).fill(null);
+  box1 += row('Sales K', salesK, null, fmt, fLbs(annualLbs(salesK)));
+  box1 += row('Sales J', salesJ, null, fmt, fLbs(annualLbs(salesJ)));
+  box1 += row('Sales E', salesE, null, fmt, fLbs(annualLbs(salesE)));
+  box1 += row('Sales Total', salesAvg, 'diff-row', fmt, fLbs(annualLbs(salesAvg)));
   box1 += row('Unsold (Current − Sales)', unsold, null, fmt, fLbs(annualLbs(unsold)));
   // Required acres based on ACTUAL sales (not targets): divide monthly sales
   // by the month's actual lb/ac/day from the existing footprint. No retire
@@ -540,7 +546,7 @@ function renderProjection() {
 // The sheet fetches are the slow part of the page. Once aggregated into
 // monthly arrays, nothing depends on the raw rows — projection re-renders
 // only need the summary + current settings/constants + target week.
-const CACHE_KEY = 'cukeSummary_v3';  // bumped when summary schema changes
+const CACHE_KEY = 'cukeSummary_v4';  // bumped when summary schema changes
 
 function loadCache() {
   try {
@@ -569,8 +575,10 @@ async function fetchSheetSummary() {
   const growByVM = growByVarietyMonth(growRows);
 
   // Base $/lb per variety from Grade 1 cuke invoices (ProductCode prefix K/J/E).
+  // Also aggregate per-variety sales lbs by (year, month) for box 1 per-variety rows.
   const priceNum = { K: 0, J: 0, E: 0 };
   const priceDen = { K: 0, J: 0, E: 0 };
+  const saleByVM = {};  // 'V-Y-M' -> lbs
   for (const r of invoiceRows) {
     if (!isCukeInvoice(r) || !grade1(r)) continue;
     const v = classifyKJE(r.ProductCode);
@@ -580,6 +588,10 @@ async function fetchSheetSummary() {
     if (lbs <= 0) continue;
     priceNum[v] += dlrs;
     priceDen[v] += lbs;
+    if (r._y && r._m && YEARS.includes(r._y) && r._m <= CUTOFF[r._y]) {
+      const key = `${v}-${r._y}-${r._m}`;
+      saleByVM[key] = (saleByVM[key] || 0) + lbs;
+    }
   }
   const prices = {};
   for (const v of ['K', 'J', 'E']) prices[v] = priceDen[v] > 0 ? priceNum[v] / priceDen[v] : 0;
@@ -593,7 +605,10 @@ async function fetchSheetSummary() {
     currentK: avgLbPerDayByMonth(growByVM, 'K'),
     currentJ: avgLbPerDayByMonth(growByVM, 'J'),
     currentE: avgLbPerDayByMonth(growByVM, 'E'),
-    prices,  // { K, J, E } $/lb
+    salesK: avgLbPerDayByMonth(saleByVM, 'K'),
+    salesJ: avgLbPerDayByMonth(saleByVM, 'J'),
+    salesE: avgLbPerDayByMonth(saleByVM, 'E'),
+    prices,
   };
 }
 
