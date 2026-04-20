@@ -4,7 +4,7 @@
   "existing_ops": {
     "keiki_acres": 8.25, "keiki_rev_per_ac": 875000,
     "japanese_acres": 3.5, "japanese_rev_per_ac": 1085000,
-    "english_acres": 0.8, "english_lbs_per_ac": 316667,
+    "english_acres": 0.75, "english_lbs_per_ac": 316667,
     "lettuce_acres": 2.5, "lettuce_rev": 3000000,
     "exp_ratio": 0.66,
     "default_growth": 0.05,

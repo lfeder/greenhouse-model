@@ -822,10 +822,9 @@ function renderRoi() {
     const cumRoi = capex > 0 ? cumAddRev / capex : null;
     const deltaRev = prevRev == null ? null : rev - prevRev;
     const nGH = idx;  // 0 = baseline
-    const acDisp = (Math.floor(A * 10) / 10).toFixed(1);
     const label = nGH === 0
-      ? `${acDisp} (baseline)`
-      : `${acDisp} (+${nGH} GH)`;
+      ? `${A.toFixed(1)} (baseline)`
+      : `${A.toFixed(1)} (+${nGH} GH)`;
     html += `<tr>
       <td>${label}</td>
       <td>${fM(rev)}</td>
@@ -843,9 +842,8 @@ function renderRoi() {
   const totalAddRev = finalRev - baseline;
   const fullRatio = finalCapex > 0 ? totalAddRev / finalCapex : null;
   const payback = fullRatio ? 1 / fullRatio : null;
-  const fFloor1 = v => (Math.floor(v * 10) / 10).toFixed(1);
   html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
-    <div>Full build (${fFloor1(existingTotal)} → ${fFloor1(acreLevels[acreLevels.length-1])} ac):
+    <div>Full build (${existingTotal.toFixed(1)} → ${acreLevels[acreLevels.length-1].toFixed(1)} ac):
       <b>${fK_(totalAddRev)} annual rev vs baseline</b>
       / <b>${fM(finalCapex)} capex</b>
       → ratio <b>${fullRatio == null ? '—' : fPct(fullRatio)}</b>
