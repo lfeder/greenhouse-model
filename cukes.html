@@ -56,7 +56,7 @@
 
   <div class="panel" id="roiPanel" style="display:none">
     <div class="panel-title">Marginal return per added acre</div>
-    <p class="note">At each total-acre level, revenue = sum over months of <code>min(1, ac/required) × target revenue</code>. Early acres unlock easy months (summer); later acres only chip at winter peaks, so marginal revenue (and ROI) falls. Acres treated as a single pool (GHs rotate varieties). Required already grossed up for 5% slippage; revenue uses adjusted prices from the inflation slider. Cost per ac = <code>cucumberCostPerAc</code>.</p>
+    <p class="note">New GHs come in 60,000 sq ft blocks (~1.38 ac each). Rows show the existing footprint plus 1–4 added GHs. At each total-acre level, revenue = sum over months of <code>min(1, ac/required) × target revenue</code>. Early GHs unlock easy months (summer); later GHs only chip at winter peaks, so cumulative ROI declines. Acres treated as a single pool (GHs rotate varieties). Required already grossed up for 5% slippage; revenue uses adjusted prices from the inflation slider.</p>
     <div id="roiBody"></div>
   </div>
 
@@ -365,18 +365,17 @@ function renderProjection() {
     MONTHS.map(m => `<th>${m}</th>`).join('') + '<th>Annual</th></tr></thead><tbody>';
 
   // Annual formatters.
-  const annualLbs = arr => {
-    let t = 0;
-    for (let i = 0; i < 12; i++) if (arr[i] != null) t += arr[i] * daysInMonth(2025, i + 1);
-    return t;
-  };
-  const fLbs = v => v >= 1e6
-    ? `<td>${(v / 1e6).toFixed(2)}M</td>`
-    : `<td>${Math.round(v / 1e3).toLocaleString()}K</td>`;
-  const fAvg = arr => {
+  const avgOf = arr => {
     const valid = arr.filter(v => v != null);
     if (!valid.length) return null;
-    return `<td>${(valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(1)}</td>`;
+    return valid.reduce((a, b) => a + b, 0) / valid.length;
+  };
+  const fAvgLb = v => v == null
+    ? '<td class="empty">—</td>'
+    : `<td>${Math.round(v).toLocaleString()}</td>`;
+  const fAvg = arr => {
+    const v = avgOf(arr);
+    return v == null ? null : `<td>${v.toFixed(1)}</td>`;
   };
   const fPeak = arr => {
     const valid = arr.filter(v => v != null);
@@ -384,6 +383,11 @@ function renderProjection() {
     return `<td>${Math.max(...valid).toFixed(1)}</td>`;
   };
   const fDollars = v => `<td>${(v / 1e6).toFixed(2)}M</td>`;
+
+  // Adjusted prices (shared between box 1 and box 2 revenue rows).
+  const prices = _summary.prices || { K: 0, J: 0, E: 0 };
+  const infMult = 1 + (_inflation / 100);
+  const adjPrice = { K: prices.K * infMult, J: prices.J * infMult, E: prices.E * infMult };
 
   // --- Controls between boxes ---
   const btns = [8, 9, 10, 11, 12].map(w => {
@@ -435,22 +439,35 @@ function renderProjection() {
   const histWeeks = _summary.retireWeeks || Array(12).fill(null);
   box1 += row('Weeks at retire', histWeeks, null, fmtWeeks, fAvg(histWeeks));
   box1 += row('Seasonality (K+J)', seasonality, null, fmtIndex, null);
-  box1 += row('Current K',  current.K, null, fmt, fLbs(annualLbs(current.K)));
-  box1 += row('Current J',  current.J, null, fmt, fLbs(annualLbs(current.J)));
-  box1 += row('Current E',  current.E, null, fmt, fLbs(annualLbs(current.E)));
-  box1 += row('Current Total', curTot, 'diff-row', fmt, fLbs(annualLbs(curTot)));
+  box1 += row('Current K',  current.K, null, fmt, fAvgLb(avgOf(current.K)));
+  box1 += row('Current J',  current.J, null, fmt, fAvgLb(avgOf(current.J)));
+  box1 += row('Current E',  current.E, null, fmt, fAvgLb(avgOf(current.E)));
+  box1 += row('Current Total', curTot, 'diff-row', fmt, fAvgLb(avgOf(curTot)));
   const salesK = _summary.salesK || Array(12).fill(null);
   const salesJ = _summary.salesJ || Array(12).fill(null);
   const salesE = _summary.salesE || Array(12).fill(null);
-  box1 += row('Sales K', salesK, null, fmt, fLbs(annualLbs(salesK)));
-  box1 += row('Sales J', salesJ, null, fmt, fLbs(annualLbs(salesJ)));
-  box1 += row('Sales E', salesE, null, fmt, fLbs(annualLbs(salesE)));
-  box1 += row('Sales Total', salesAvg, 'diff-row', fmt, fLbs(annualLbs(salesAvg)));
-  box1 += row('Slippage', slippage, null, fmt, fLbs(annualLbs(slippage)));
-  box1 += row('Unsold', unsold, null, fmt, fLbs(annualLbs(unsold)));
+  box1 += row('Sales K', salesK, null, fmt, fAvgLb(avgOf(salesK)));
+  box1 += row('Sales J', salesJ, null, fmt, fAvgLb(avgOf(salesJ)));
+  box1 += row('Sales E', salesE, null, fmt, fAvgLb(avgOf(salesE)));
+  box1 += row('Sales Total', salesAvg, 'diff-row', fmt, fAvgLb(avgOf(salesAvg)));
+  box1 += row('Slippage', slippage, null, fmt, fAvgLb(avgOf(slippage)));
+  box1 += row('Unsold', unsold, null, fmt, fAvgLb(avgOf(unsold)));
+
+  // Revenue row — per-variety sales × days × price, summed per month.
+  const box1RevMonth = Array(12).fill(null).map((_, i) => {
+    const d = daysInMonth(2025, i + 1);
+    return (salesK[i] || 0) * d * adjPrice.K
+         + (salesJ[i] || 0) * d * adjPrice.J
+         + (salesE[i] || 0) * d * adjPrice.E;
+  });
+  const fmtDol = v => v == null ? '<td class="empty">—</td>' :
+    `<td>${(v / 1e3).toFixed(0)}K</td>`;
+  const box1AnnualRev = box1RevMonth.reduce((a, b) => a + b, 0);
+  box1 += `<tr class="diff-row"><td>Revenue ($, sales)</td>${box1RevMonth.map(fmtDol).join('')}${fDollars(box1AnnualRev)}</tr>`;
+
   // Required acres based on ACTUAL sales (not targets): divide monthly sales
   // by the month's actual lb/ac/day from the existing footprint. No retire
-  // uplift — pure historical ratio.
+  // uplift — pure historical ratio. Grossed up 5% for slippage.
   const existingTotal = exK + exJJJ + exE;
   const actualReqTotal = salesAvg.map((s, i) => {
     if (s == null) return null;
@@ -494,20 +511,20 @@ function renderProjection() {
         cells += `<td>${val.toLocaleString()}</td>`;
       }
     }
-    const annual = fLbs(annualLbs(monthlyArr));
+    const annual = fAvgLb(avgOf(monthlyArr));
     return `<tr><td>${label}</td>${cells}${annual}</tr>`;
   };
   let box2 = '<div style="overflow-x:auto">' + tableHdr;
-  box2 += row('Post-Exp K', projected.K, null, fmt, fLbs(annualLbs(projected.K)));
-  box2 += row('Post-Exp J', projected.J, null, fmt, fLbs(annualLbs(projected.J)));
-  box2 += row('Post-Exp E', projected.E, null, fmt, fLbs(annualLbs(projected.E)));
-  box2 += row('Post-Exp Total', projTot, 'diff-row', fmt, fLbs(annualLbs(projTot)));
-  box2 += row('Slippage', slippageProj, null, fmt, fLbs(annualLbs(slippageProj)));
+  box2 += row('Post-Exp K', projected.K, null, fmt, fAvgLb(avgOf(projected.K)));
+  box2 += row('Post-Exp J', projected.J, null, fmt, fAvgLb(avgOf(projected.J)));
+  box2 += row('Post-Exp E', projected.E, null, fmt, fAvgLb(avgOf(projected.E)));
+  box2 += row('Post-Exp Total', projTot, 'diff-row', fmt, fAvgLb(avgOf(projTot)));
+  box2 += row('Slippage', slippageProj, null, fmt, fAvgLb(avgOf(slippageProj)));
   box2 += targetRow('Target sold K', 'K');
   box2 += targetRow('Target sold J', 'J');
   box2 += targetRow('Target sold E', 'E');
-  box2 += row('Target sold Total', targTot, 'diff-row', fmt, fLbs(annualLbs(targTot)));
-  box2 += row('Surplus', surplus, null, fmt, fLbs(annualLbs(surplus)));
+  box2 += row('Target sold Total', targTot, 'diff-row', fmt, fAvgLb(avgOf(targTot)));
+  box2 += row('Surplus', surplus, null, fmt, fAvgLb(avgOf(surplus)));
 
   // Required acres + peaks already computed above (shared with box 1 footer).
   const fmtAc = v => v == null ? '<td class="empty">—</td>' : `<td>${v.toFixed(1)}</td>`;
@@ -521,21 +538,16 @@ function renderProjection() {
   box2 += rowAc('Required E (ac)', reqE);
   box2 += rowAc('Required Total (ac)', reqTotal, 'diff-row');
 
-  // Monthly revenue from post-exp production.
-  const prices = _summary.prices || { K: 0, J: 0, E: 0 };
-  const infMult = 1 + (_inflation / 100);
-  const adjPrice = { K: prices.K * infMult, J: prices.J * infMult, E: prices.E * infMult };
+  // Monthly revenue — demand-capped per variety (sell the min of produced vs target).
   const revMonth = Array(12).fill(null).map((_, i) => {
     const d = daysInMonth(2025, i + 1);
-    const k = (projected.K[i] || 0) * d * adjPrice.K;
-    const j = (projected.J[i] || 0) * d * adjPrice.J;
-    const e = (projected.E[i] || 0) * d * adjPrice.E;
-    return k + j + e;
+    const soldK = Math.min(projected.K[i] || 0, targK[i]);
+    const soldJ = Math.min(projected.J[i] || 0, targJ[i]);
+    const soldE = Math.min(projected.E[i] || 0, targE[i]);
+    return soldK * d * adjPrice.K + soldJ * d * adjPrice.J + soldE * d * adjPrice.E;
   });
-  const fmtDol = v => v == null ? '<td class="empty">—</td>' :
-    `<td>${(v / 1e3).toFixed(0)}K</td>`;
   const annualRevDol = revMonth.reduce((a, b) => a + b, 0);
-  const revRow = `<tr class="diff-row"><td>Revenue ($, post-exp)</td>${revMonth.map(fmtDol).join('')}${fDollars(annualRevDol)}</tr>`;
+  const revRow = `<tr class="diff-row"><td>Revenue ($, sold)</td>${revMonth.map(fmtDol).join('')}${fDollars(annualRevDol)}</tr>`;
   box2 += revRow;
 
   box2 += '</tbody></table></div>';
@@ -737,15 +749,10 @@ function renderRoi() {
     return total;
   };
 
-  // Acre range: existing → ceiling of winter peak, in 0.5-ac steps.
-  const peakReq = Math.max(...reqTotal.filter(v => v != null));
-  const maxA = Math.ceil(peakReq * 2) / 2;
+  // Build increments are 60,000 sq ft GHs (~1.377 ac each). Show 1–4 GHs added.
+  const AC_PER_GH = 60000 / 43560;
   const acreLevels = [existingTotal];
-  let nextA = Math.ceil((existingTotal + 1e-6) * 2) / 2;
-  while (nextA <= maxA + 1e-9) {
-    acreLevels.push(Math.round(nextA * 10) / 10);
-    nextA += 0.5;
-  }
+  for (let n = 1; n <= 4; n++) acreLevels.push(existingTotal + n * AC_PER_GH);
 
   const costPerAc = _settings.cucumberCostPerAc || 1000000;
   const fM = v => '$' + (v / 1e6).toFixed(2) + 'M';
@@ -764,14 +771,16 @@ function renderRoi() {
   const baselineRev = annualRevAt(existingTotal);
   let finalRev = baselineRev;
   let finalCapex = 0;
-  for (const A of acreLevels) {
+  for (let idx = 0; idx < acreLevels.length; idx++) {
+    const A = acreLevels[idx];
     const rev = annualRevAt(A);
     const capex = Math.max(0, A - existingTotal) * costPerAc;
     const cumAddRev = rev - baselineRev;
     const cumRoi = capex > 0 ? cumAddRev / capex : null;
-    const label = Math.abs(A - existingTotal) < 1e-6
+    const nGH = idx;  // 0 = existing
+    const label = nGH === 0
       ? `${A.toFixed(2)} (existing)`
-      : A.toFixed(1);
+      : `${A.toFixed(2)} (+${nGH} GH)`;
     html += `<tr>
       <td>${label}</td>
       <td>${fM(rev)}</td>
