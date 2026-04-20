@@ -154,9 +154,9 @@ function perDay(totals, y, m) {
 }
 
 // Single-year selection per month. Jan–Mar from user-toggled winter year
-// (default 2026). Apr–Dec always 2025 (only year with data for those months).
-let _winterYear = Number(localStorage.getItem('cukesWinterYear')) || 2026;
-if (_winterYear !== 2025 && _winterYear !== 2026) _winterYear = 2026;
+// (default 2025). Apr–Dec always 2025 (only year with data for those months).
+let _winterYear = Number(localStorage.getItem('cukesWinterYear')) || 2025;
+if (_winterYear !== 2025 && _winterYear !== 2026) _winterYear = 2025;
 function setWinterYear(y) {
   _winterYear = Number(y);
   localStorage.setItem('cukesWinterYear', String(_winterYear));
@@ -323,12 +323,20 @@ window.setTargetWeek = setTargetWeek;
 function renderProjection() {
   if (!_summary || !_constants || !_settings) return;
 
-  // Effective weeks per month = max(historical retire weeks, override target).
+  // Historical retire mults come from actual Jan–Dec weeks; box 1's actuals
+  // already reflect this. To express the override as an uplift, divide:
+  //   ratio = retire_mult(max(historical, override)) / retire_mult(historical)
+  // If override ≤ historical, ratio = 1 (no change). Override > historical → uplift.
+  const histWeeks = (_summary.retireWeeks || []).map(w => w || 0);
   const effWeeks = Array(12).fill(null).map((_, i) => {
-    const hist = _summary.retireWeeks && _summary.retireWeeks[i];
-    return Math.max(hist == null ? 0 : hist, _targetWeek);
+    return Math.max(histWeeks[i] || 0, _targetWeek);
   });
-  const retMultByMonth = effWeeks.map(retireMultFor);
+  const histMultByMonth = histWeeks.map(retireMultFor);
+  const retMultByMonth = effWeeks.map((w, i) => {
+    const hM = histMultByMonth[i];
+    if (!hM || hM <= 0) return 1;
+    return retireMultFor(w) / hM;
+  });
   const seasonality = seasonalityKJ(_summary.growByVM);
 
   const vars = ['K', 'J', 'E'];
@@ -353,8 +361,10 @@ function renderProjection() {
     const ann = annualCell == null ? '<td class="empty">—</td>' : annualCell;
     return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${monthly}${ann}</tr>`;
   };
+  const monthHdr = i => `${i + 1}-${String(yearForMonth(i + 1) % 100).padStart(2, '0')}`;
   const tableHdr = '<table class="fin-table"><thead><tr><th></th>' +
-    MONTHS.map(m => `<th>${m}</th>`).join('') + '<th>Annual</th></tr></thead><tbody>';
+    Array(12).fill(0).map((_, i) => `<th>${monthHdr(i)}</th>`).join('') +
+    '<th>Annual</th></tr></thead><tbody>';
 
   // Annual formatters.
   const avgOf = arr => {
@@ -428,7 +438,6 @@ function renderProjection() {
 
   let box1 = '<div style="overflow-x:auto">' + tableHdr;
   // Box 1 shows actual historical retire weeks (no override).
-  const histWeeks = _summary.retireWeeks || Array(12).fill(null);
   box1 += row('Weeks at retire', histWeeks, null, fmtWeeks, fAvg(histWeeks));
   box1 += row('Seasonality (K+J)', seasonality, null, fmtIndex, null);
   box1 += row('Current K',  current.K, null, fmt, fAvgLb(avgOf(current.K)));
@@ -749,9 +758,15 @@ const SLIPPAGE_RATE = 0.05;
 
 function renderRoi() {
   if (!_summary || !_constants || !_settings) return;
-  const { currentK, currentJ, retireWeeks, prices } = _summary;
-  const effWeeks = retireWeeks.map(w => Math.max(w == null ? 0 : w, _targetWeek));
-  const retMult = effWeeks.map(retireMultFor);
+  const { retireWeeks, prices } = _summary;
+  const currentK = avgLbPerDayByMonth(_summary.growByVM, 'K');
+  const currentJ = avgLbPerDayByMonth(_summary.growByVM, 'J');
+  const histWeeks = (retireWeeks || []).map(w => w || 0);
+  const effWeeks = histWeeks.map(w => Math.max(w, _targetWeek));
+  const retMult = effWeeks.map((w, i) => {
+    const hM = retireMultFor(histWeeks[i]);
+    return hM > 0 ? retireMultFor(w) / hM : 1;
+  });
   const exK = _constants.existing_ops.keiki_acres;
   const exJ = _constants.existing_ops.japanese_acres;
   const exE = _constants.existing_ops.english_acres;
