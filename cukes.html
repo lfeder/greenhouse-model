@@ -483,11 +483,11 @@ function renderProjection() {
   const salesK = avgLbPerDayByMonth(_summary.saleByVM, 'K');
   const salesJ = avgLbPerDayByMonth(_summary.saleByVM, 'J');
   const salesE = avgLbPerDayByMonth(_summary.saleByVM, 'E');
+  box1 += subRow('Slippage', slippage, fmt, fAvgLb(avgOf(slippage)), 'sold');
   box1 += subRow('Sold K', salesK, fmt, fAvgLb(avgOf(salesK)), 'sold');
   box1 += subRow('Sold J', salesJ, fmt, fAvgLb(avgOf(salesJ)), 'sold');
   box1 += subRow('Sold E', salesE, fmt, fAvgLb(avgOf(salesE)), 'sold');
   box1 += totalRow('sold', 'Sold Total', salesAvg, 'diff-below', fmt, fAvgLb(avgOf(salesAvg)));
-  box1 += row('Slippage', slippage, null, fmt, fAvgLb(avgOf(slippage)));
   box1 += row('Surplus/Deficit', unsold, null, fmt, fAvgLb(avgOf(unsold)));
 
   // Revenue row — per-variety sales × days × price, summed per month.
