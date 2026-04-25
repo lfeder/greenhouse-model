@@ -621,7 +621,7 @@ function renderProjection() {
 // The sheet fetches are the slow part of the page. Once aggregated into
 // monthly arrays, nothing depends on the raw rows — projection re-renders
 // only need the summary + current settings/constants + target week.
-const CACHE_KEY = 'cukeSummary_v7';  // bumped when summary schema changes
+const CACHE_KEY = 'cukeSummary_v8';  // bumped when summary schema changes
 
 function loadCache() {
   try {
@@ -661,12 +661,11 @@ async function fetchSheetSummary() {
     const lbs = Number(r.Pounds) || 0;
     const dlrs = Number(r.Dollars) || 0;
     if (lbs <= 0) continue;
+    if (!r._y || !r._m || !YEARS.includes(r._y) || r._m > CUTOFF[r._y]) continue;
     priceNum[v] += dlrs;
     priceDen[v] += lbs;
-    if (r._y && r._m && YEARS.includes(r._y) && r._m <= CUTOFF[r._y]) {
-      const key = `${v}-${r._y}-${r._m}`;
-      saleByVM[key] = (saleByVM[key] || 0) + lbs;
-    }
+    const key = `${v}-${r._y}-${r._m}`;
+    saleByVM[key] = (saleByVM[key] || 0) + lbs;
   }
   const prices = {};
   for (const v of ['K', 'J', 'E']) prices[v] = priceDen[v] > 0 ? priceNum[v] / priceDen[v] : 0;
