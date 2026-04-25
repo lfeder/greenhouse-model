@@ -113,9 +113,14 @@ function parseGvizTable(table) {
         const dm = cell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
         if (dm) {
           obj[col] = cell.f || cell.v;
-          obj._y = +dm[1];
-          obj._m = +dm[2] + 1;
-          obj._d = +dm[3];
+          // Only HarvestDate populates _y/_m/_d. Other date columns (e.g.
+          // ReportedDateTime) would otherwise clobber these and silently
+          // shift bucketing onto the wrong date.
+          if (col === 'HarvestDate') {
+            obj._y = +dm[1];
+            obj._m = +dm[2] + 1;
+            obj._d = +dm[3];
+          }
         }
       } else {
         obj[col] = cell.v;
@@ -196,10 +201,16 @@ function retireWeeksByMonth(growRows) {
     (buckets[c.lastM] ||= []).push(c.maxDay);
   }
 
+  // HarvestDay is days from seeding; transplant into the GH happens ~14 days
+  // after seeding, and "weeks at shutdown" is meant to count weeks in the GH.
+  const TRANSPLANT_OFFSET_DAYS = 14;
   const out = Array(12).fill(null);
   for (let m = 1; m <= 12; m++) {
     const arr = buckets[m];
-    if (arr && arr.length) out[m - 1] = (arr.reduce((a, b) => a + b, 0) / arr.length) / 7;
+    if (arr && arr.length) {
+      const avgDay = arr.reduce((a, b) => a + b, 0) / arr.length;
+      out[m - 1] = (avgDay - TRANSPLANT_OFFSET_DAYS) / 7;
+    }
   }
   return out;
 }
@@ -606,7 +617,7 @@ function renderProjection() {
 // The sheet fetches are the slow part of the page. Once aggregated into
 // monthly arrays, nothing depends on the raw rows — projection re-renders
 // only need the summary + current settings/constants + target week.
-const CACHE_KEY = 'cukeSummary_v5';  // bumped when summary schema changes
+const CACHE_KEY = 'cukeSummary_v6';  // bumped when summary schema changes
 
 function loadCache() {
   try {
