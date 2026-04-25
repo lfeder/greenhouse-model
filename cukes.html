@@ -113,10 +113,10 @@ function parseGvizTable(table) {
         const dm = cell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
         if (dm) {
           obj[col] = cell.f || cell.v;
-          // Only HarvestDate populates _y/_m/_d. Other date columns (e.g.
-          // ReportedDateTime) would otherwise clobber these and silently
-          // shift bucketing onto the wrong date.
-          if (col === 'HarvestDate') {
+          // Only the row's primary date column populates _y/_m/_d. Other
+          // date columns (e.g. ReportedDateTime) would otherwise clobber
+          // these and silently shift bucketing onto the wrong date.
+          if (col === 'HarvestDate' || col === 'InvoiceDate') {
             obj._y = +dm[1];
             obj._m = +dm[2] + 1;
             obj._d = +dm[3];
@@ -621,7 +621,7 @@ function renderProjection() {
 // The sheet fetches are the slow part of the page. Once aggregated into
 // monthly arrays, nothing depends on the raw rows — projection re-renders
 // only need the summary + current settings/constants + target week.
-const CACHE_KEY = 'cukeSummary_v8';  // bumped when summary schema changes
+const CACHE_KEY = 'cukeSummary_v9';  // bumped when summary schema changes
 
 function loadCache() {
   try {
