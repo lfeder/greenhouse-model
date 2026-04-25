@@ -49,8 +49,7 @@
   <div id="projControls" style="margin:4px 0 14px;display:none"></div>
 
   <div class="panel" id="extendPanel" style="display:none">
-    <div class="panel-title">Extend and Sell more — existing 12.55 ac with retire uplift</div>
-    <p class="note">One row of total lb/day = actual production × retire uplift at the target week above. Revenue is demand-capped (we can only sell up to the target). Edit Jan and Apr target cells to simulate seasonal demand. Slippage is 5% of sold. Required acres shown per variety + total.</p>
+    <div class="panel-title">Extend and Sell more with existing 12.5 ac</div>
     <div id="extendBody"></div>
   </div>
 
@@ -434,7 +433,7 @@ function renderProjection() {
   }).join('');
   const controlsEl = document.getElementById('projControls');
   controlsEl.innerHTML =
-    `<span style="font-size:10px;color:var(--text-muted)">Target retire week: ${btns}</span>`;
+    `<span style="font-size:10px;color:var(--text-muted)">Target Shutdown week: ${btns}</span>`;
   controlsEl.style.display = '';
 
   // --- Box 1: current state ---
