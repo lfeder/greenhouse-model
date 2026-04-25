@@ -482,7 +482,6 @@ function renderProjection() {
   const salesK = avgLbPerDayByMonth(_summary.saleByVM, 'K');
   const salesJ = avgLbPerDayByMonth(_summary.saleByVM, 'J');
   const salesE = avgLbPerDayByMonth(_summary.saleByVM, 'E');
-  box1 += subRow('Slippage', slippage, fmt, fAvgLb(avgOf(slippage)), 'sold');
   box1 += subRow('Sold K', salesK, fmt, fAvgLb(avgOf(salesK)), 'sold');
   box1 += subRow('Sold J', salesJ, fmt, fAvgLb(avgOf(salesJ)), 'sold');
   box1 += subRow('Sold E', salesE, fmt, fAvgLb(avgOf(salesE)), 'sold');
@@ -522,13 +521,13 @@ function renderProjection() {
   // Capacity supply (lb/day) at A acres, after retire uplift.
   const supplyAt = A => curTot.map((v, i) => v == null ? null : v * retMultByMonth[i] * (A / existingTotal));
 
-  // Demand-capped revenue per month at A acres — sells proportionally to target mix.
-  // Per month: frac = min(1, (supply_after_slip) / target_total). Revenue = frac × monthly target rev.
+  // Demand-capped revenue per month at A acres. Slippage is 5% of sales, so
+  // max sales the supply can support = supply / (1 + SLIPPAGE_RATE).
   const revAt = A => Array(12).fill(0).map((_, i) => {
     const supply = curTot[i] == null ? 0 : curTot[i] * retMultByMonth[i] * (A / existingTotal);
-    const sellable = supply * (1 - SLIPPAGE_RATE);
     if (targTot[i] <= 0) return 0;
-    const frac = Math.min(1, sellable / targTot[i]);
+    const maxSalesFromSupply = supply / (1 + SLIPPAGE_RATE);
+    const frac = Math.min(1, maxSalesFromSupply / targTot[i]);
     return frac * monthlyTargetRev[i];
   });
 
@@ -565,35 +564,44 @@ function renderProjection() {
   };
 
   // --- Box 2: Extend and Sell more (existing 12.55 ac × retire uplift) ---
+  // Solve for sales we can actually move: E fixed at 600, K/J split 2:1 of
+  // what's left after slippage budget, each rounded to nearest 250 lb/day.
+  const round250 = v => Math.round(v / 250) * 250;
+  const E_FIXED = 600;
   const extSupply = supplyAt(existingTotal);
-  const extSlip = extSupply.map(v => v == null ? null : v * SLIPPAGE_RATE);
+  const extSalesK = Array(12).fill(null);
+  const extSalesJ = Array(12).fill(null);
+  const extSalesE = Array(12).fill(null);
+  for (let i = 0; i < 12; i++) {
+    const supply = extSupply[i];
+    if (supply == null) continue;
+    const totalSales = supply / (1 + SLIPPAGE_RATE);
+    const e = Math.min(E_FIXED, Math.max(0, totalSales));
+    const remaining = Math.max(0, totalSales - e);
+    extSalesE[i] = e;
+    extSalesK[i] = Math.max(0, round250(remaining * (2 / 3)));
+    extSalesJ[i] = Math.max(0, round250(remaining * (1 / 3)));
+  }
+  const extSalesTot = extSalesK.map((k, i) => (k || 0) + (extSalesJ[i] || 0) + (extSalesE[i] || 0));
+  const extSlip = extSalesTot.map(v => v * SLIPPAGE_RATE);
   const extSurplus = extSupply.map((v, i) =>
-    v == null ? null : v - (extSlip[i] || 0) - targTot[i]);
-  const extRevMonth = revAt(existingTotal);
+    v == null ? null : v - extSalesTot[i] - extSlip[i]);
+  const extRevMonth = Array(12).fill(0).map((_, i) => {
+    const d = daysInMonth(2025, i + 1);
+    return (extSalesK[i] || 0) * d * adjPrice.K
+         + (extSalesJ[i] || 0) * d * adjPrice.J
+         + (extSalesE[i] || 0) * d * adjPrice.E;
+  });
   const extAnnualRev = extRevMonth.reduce((a, b) => a + b, 0);
 
   let box2 = '<div style="overflow-x:auto">' + tableHdr;
   box2 += row('Total Grown (extended)', extSupply, null, fmt, fAvgLb(avgOf(extSupply)));
-  box2 += row('Slippage', extSlip, null, fmt, fAvgLb(avgOf(extSlip)));
-  box2 += targetRow('Target Sales K', 'K');
-  box2 += targetRow('Target Sales J', 'J');
-  box2 += targetRow('Target Sales E', 'E');
-  box2 += row('Target Sales Total', targTot, 'diff-below', fmt, fAvgLb(avgOf(targTot)));
-  const extSold = Array(12).fill(null).map((_, i) => {
-    const supply = extSupply[i];
-    if (supply == null) return null;
-    return Math.min(supply * (1 - SLIPPAGE_RATE), targTot[i]);
-  });
-  box2 += row('Sales', extSold, null, fmt, fAvgLb(avgOf(extSold)));
+  box2 += row('Sales K', extSalesK, null, fmt, fAvgLb(avgOf(extSalesK)));
+  box2 += row('Sales J', extSalesJ, null, fmt, fAvgLb(avgOf(extSalesJ)));
+  box2 += row('Sales E', extSalesE, null, fmt, fAvgLb(avgOf(extSalesE)));
+  box2 += row('Sales Total', extSalesTot, 'diff-below', fmt, fAvgLb(avgOf(extSalesTot)));
   box2 += `<tr><td>Revenue ($)</td>${extRevMonth.map(fmtDol).join('')}${fDollars(extAnnualRev)}</tr>`;
   box2 += row('Surplus/Deficit', extSurplus, 'diff-below', fmt, fAvgLb(avgOf(extSurplus)));
-  box2 += rowAc('Required K (ac)', reqK);
-  box2 += rowAc('Required J (ac)', reqJ);
-  box2 += rowAc('Required E (ac)', reqE);
-  box2 += rowAc('Required Total (ac)', reqTotal);
-  // GH equivalent: ac / 1.38 rounded to 0.1.
-  const reqGH = reqTotal.map(v => v == null ? null : Math.ceil((v / AC_PER_GH) * 10) / 10);
-  box2 += rowAc('Required Total (GH)', reqGH);
   box2 += '</tbody></table></div>';
   document.getElementById('extendBody').innerHTML = box2;
   document.getElementById('extendPanel').style.display = '';
@@ -602,9 +610,9 @@ function renderProjection() {
   const addedAc = _addedGHs * AC_PER_GH;
   const totalAcAdd = existingTotal + addedAc;
   const addSupply = supplyAt(totalAcAdd);
-  const addSlip = addSupply.map(v => v == null ? null : v * SLIPPAGE_RATE);
+  const addSlip = targTot.map(v => v * SLIPPAGE_RATE);
   const addSurplus = addSupply.map((v, i) =>
-    v == null ? null : v - (addSlip[i] || 0) - targTot[i]);
+    v == null ? null : v - targTot[i] - addSlip[i]);
   const addRevMonth = revAt(totalAcAdd);
   const addAnnualRev = addRevMonth.reduce((a, b) => a + b, 0);
 
@@ -621,8 +629,10 @@ function renderProjection() {
 
   let box3 = '<div style="overflow-x:auto">' + tableHdr;
   box3 += row('Post Expansion', addSupply, null, fmt, fAvgLb(avgOf(addSupply)));
-  box3 += row('Slippage', addSlip, null, fmt, fAvgLb(avgOf(addSlip)));
-  box3 += row('Target Sales Total', targTot, null, fmt, fAvgLb(avgOf(targTot)));
+  box3 += targetRow('Target Sales K', 'K');
+  box3 += targetRow('Target Sales J', 'J');
+  box3 += targetRow('Target Sales E', 'E');
+  box3 += row('Target Sales Total', targTot, 'diff-below', fmt, fAvgLb(avgOf(targTot)));
   box3 += `<tr><td>Revenue ($)</td>${addRevMonth.map(fmtDol).join('')}${fDollars(addAnnualRev)}</tr>`;
   box3 += row('Surplus/Deficit', addSurplus, null, fmt, fAvgLb(avgOf(addSurplus)));
   box3 += rowAc('Required Total (ac)', reqTotal);
