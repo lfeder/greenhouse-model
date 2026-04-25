@@ -175,8 +175,9 @@ function perMonthLbPerDay(totals) {
 
 // Group Grade-1 rows by SeedingCycle (globally unique). For each cycle: last
 // harvest date + max HarvestDay. Exclude cycles ending in the current HST
-// month (always look backwards). Bucket by end-month, average max HarvestDay
-// per bucket, convert to weeks.
+// month (always look backwards). Bucket by (year, end-month), average max
+// HarvestDay per bucket, convert to weeks. Returns a `${y}-${m}` map; the
+// caller resolves which year to display per column via yearForMonth().
 function retireWeeksByMonth(growRows) {
   const nowHst = new Date(Date.now() - 10 * 3600e3);
   const curY = nowHst.getUTCFullYear();
@@ -198,19 +199,17 @@ function retireWeeksByMonth(growRows) {
   for (const sc in byCycle) {
     const c = byCycle[sc];
     if (c.lastY === curY && c.lastM === curM) continue;  // current month excluded
-    (buckets[c.lastM] ||= []).push(c.maxDay);
+    (buckets[`${c.lastY}-${c.lastM}`] ||= []).push(c.maxDay);
   }
 
   // HarvestDay is days from seeding; transplant into the GH happens ~14 days
   // after seeding, and "weeks at shutdown" is meant to count weeks in the GH.
   const TRANSPLANT_OFFSET_DAYS = 14;
-  const out = Array(12).fill(null);
-  for (let m = 1; m <= 12; m++) {
-    const arr = buckets[m];
-    if (arr && arr.length) {
-      const avgDay = arr.reduce((a, b) => a + b, 0) / arr.length;
-      out[m - 1] = (avgDay - TRANSPLANT_OFFSET_DAYS) / 7;
-    }
+  const out = {};
+  for (const k in buckets) {
+    const arr = buckets[k];
+    const avgDay = arr.reduce((a, b) => a + b, 0) / arr.length;
+    out[k] = (avgDay - TRANSPLANT_OFFSET_DAYS) / 7;
   }
   return out;
 }
@@ -331,11 +330,16 @@ function renderProjection() {
   // already reflect this. To express the override as an uplift, divide:
   //   ratio = retire_mult(max(historical, override)) / retire_mult(historical)
   // If override ≤ historical, ratio = 1 (no change). Override > historical → uplift.
-  const histWeeks = (_summary.retireWeeks || []).map(w => w || 0);
-  const effWeeks = Array(12).fill(null).map((_, i) => {
-    return Math.max(histWeeks[i] || 0, _targetWeek);
+  // retireWeeks is a `${y}-${m}` map. For each displayed column, pick the year
+  // shown by yearForMonth so column "1-25" really means Jan 2025 (etc.).
+  const retireWeeksMap = _summary.retireWeeks || {};
+  const histWeeks = Array(12).fill(null).map((_, i) => {
+    const m = i + 1;
+    const v = retireWeeksMap[`${yearForMonth(m)}-${m}`];
+    return (v == null) ? null : v;
   });
-  const histMultByMonth = histWeeks.map(retireMultFor);
+  const effWeeks = histWeeks.map(w => Math.max(w || 0, _targetWeek));
+  const histMultByMonth = histWeeks.map(w => retireMultFor(w || 0));
   const retMultByMonth = effWeeks.map((w, i) => {
     const hM = histMultByMonth[i];
     if (!hM || hM <= 0) return 1;
@@ -617,7 +621,7 @@ function renderProjection() {
 // The sheet fetches are the slow part of the page. Once aggregated into
 // monthly arrays, nothing depends on the raw rows — projection re-renders
 // only need the summary + current settings/constants + target week.
-const CACHE_KEY = 'cukeSummary_v6';  // bumped when summary schema changes
+const CACHE_KEY = 'cukeSummary_v7';  // bumped when summary schema changes
 
 function loadCache() {
   try {
