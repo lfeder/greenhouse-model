@@ -323,6 +323,14 @@ function setTargetWeek(w) {
 }
 window.setTargetWeek = setTargetWeek;
 
+function toggleSub(group) {
+  const key = group === 'grown' ? 'cukesGrownOpen' : 'cukesSoldOpen';
+  const open = localStorage.getItem(key) === '1';
+  localStorage.setItem(key, open ? '0' : '1');
+  if (_summary) renderAll();
+}
+window.toggleSub = toggleSub;
+
 function renderProjection() {
   if (!_summary || !_constants || !_settings) return;
 
@@ -368,6 +376,26 @@ function renderProjection() {
     const monthly = vals.map(f).join('');
     const ann = annualCell == null ? '<td class="empty">—</td>' : annualCell;
     return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${monthly}${ann}</tr>`;
+  };
+  // Collapsible per-variety rows above each Total. State persists in
+  // localStorage; default collapsed.
+  const grownOpen = localStorage.getItem('cukesGrownOpen') === '1';
+  const soldOpen  = localStorage.getItem('cukesSoldOpen')  === '1';
+  const subRow = (label, vals, formatter, annualCell, group) => {
+    const hidden = (group === 'grown' ? !grownOpen : !soldOpen) ? ' style="display:none"' : '';
+    const f = formatter || fmt;
+    const monthly = vals.map(f).join('');
+    const ann = annualCell == null ? '<td class="empty">—</td>' : annualCell;
+    return `<tr class="sub-${group}"${hidden}><td style="padding-left:18px">${label}</td>${monthly}${ann}</tr>`;
+  };
+  const totalRow = (group, label, vals, cls, formatter, annualCell) => {
+    const open = group === 'grown' ? grownOpen : soldOpen;
+    const sign = open ? '−' : '+';
+    const f = formatter || fmt;
+    const monthly = vals.map(f).join('');
+    const ann = annualCell == null ? '<td class="empty">—</td>' : annualCell;
+    const labelCell = `<td style="cursor:pointer;user-select:none" onclick="toggleSub('${group}')"><span style="display:inline-block;width:12px;color:var(--text-muted)">${sign}</span>${label}</td>`;
+    return `<tr${cls ? ` class="${cls}"` : ''}>${labelCell}${monthly}${ann}</tr>`;
   };
   const monthHdr = i => `${i + 1}-${String(yearForMonth(i + 1) % 100).padStart(2, '0')}`;
   const tableHdr = '<table class="fin-table"><thead><tr><th></th>' +
@@ -448,17 +476,17 @@ function renderProjection() {
   // Box 1 shows actual historical retire weeks (no override).
   box1 += row('Weeks (shutdown)', histWeeks, null, fmtWeeks, fAvg(histWeeks));
   box1 += row('Season (Deficit from Max)', seasonality, null, fmtIndex, null);
-  box1 += row('Grown K',  current.K, null, fmt, fAvgLb(avgOf(current.K)));
-  box1 += row('Grown J',  current.J, null, fmt, fAvgLb(avgOf(current.J)));
-  box1 += row('Grown E',  current.E, null, fmt, fAvgLb(avgOf(current.E)));
-  box1 += row('Grown Total', curTot, 'diff-below', fmt, fAvgLb(avgOf(curTot)));
+  box1 += subRow('Grown K', current.K, fmt, fAvgLb(avgOf(current.K)), 'grown');
+  box1 += subRow('Grown J', current.J, fmt, fAvgLb(avgOf(current.J)), 'grown');
+  box1 += subRow('Grown E', current.E, fmt, fAvgLb(avgOf(current.E)), 'grown');
+  box1 += totalRow('grown', 'Grown Total', curTot, 'diff-below', fmt, fAvgLb(avgOf(curTot)));
   const salesK = avgLbPerDayByMonth(_summary.saleByVM, 'K');
   const salesJ = avgLbPerDayByMonth(_summary.saleByVM, 'J');
   const salesE = avgLbPerDayByMonth(_summary.saleByVM, 'E');
-  box1 += row('Sold K', salesK, null, fmt, fAvgLb(avgOf(salesK)));
-  box1 += row('Sold J', salesJ, null, fmt, fAvgLb(avgOf(salesJ)));
-  box1 += row('Sold E', salesE, null, fmt, fAvgLb(avgOf(salesE)));
-  box1 += row('Sold Total', salesAvg, 'diff-below', fmt, fAvgLb(avgOf(salesAvg)));
+  box1 += subRow('Sold K', salesK, fmt, fAvgLb(avgOf(salesK)), 'sold');
+  box1 += subRow('Sold J', salesJ, fmt, fAvgLb(avgOf(salesJ)), 'sold');
+  box1 += subRow('Sold E', salesE, fmt, fAvgLb(avgOf(salesE)), 'sold');
+  box1 += totalRow('sold', 'Sold Total', salesAvg, 'diff-below', fmt, fAvgLb(avgOf(salesAvg)));
   box1 += row('Slippage', slippage, null, fmt, fAvgLb(avgOf(slippage)));
   box1 += row('Surplus/Deficit', unsold, null, fmt, fAvgLb(avgOf(unsold)));
 
