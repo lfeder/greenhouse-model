@@ -856,7 +856,7 @@ function renderRoi() {
     const A = acreLevels[idx];
     const rev = annualRevAt(A, idx);
     const capex = Math.max(0, A - existingTotal) * costPerAc;
-    const cumAddRev = rev - baseline;
+    const cumAddRev = idx === 0 ? 0 : rev - baseline;
     const cumOpInc = cumAddRev * OP_INC_MARGIN;
     const cumRoi = capex > 0 ? cumOpInc / capex : null;
     const deltaRev = prevRev == null ? null : rev - prevRev;
