@@ -16,6 +16,17 @@
   .fin-table tr.diff-row td { border-top: 2px solid var(--border); color: var(--text); font-weight: 700; }
   .fin-table tr.diff-below td { border-bottom: 2px solid var(--border); color: var(--text); font-weight: 700; }
   #status { color: var(--text-muted); font-size: 11px; padding: 12px 0; }
+
+  /* Print: one tall page, no breaks. Use Ctrl/Cmd+P → Save as PDF. */
+  @media print {
+    @page { size: 12in 30in; margin: 0.4in; }
+    html, body { background: var(--bg) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .wrap { max-width: none; padding: 0; }
+    .header, #themeToggle, #nav, button, #projControls, #addGhControls, #winterYearControl { display: none !important; }
+    .panel, .fin-table, tr, .fin-table tbody { page-break-inside: avoid !important; break-inside: avoid !important; }
+    /* Force collapsed sub-rows visible in print. */
+    tr.sub-grown, tr.sub-sold { display: table-row !important; }
+  }
 </style>
 </head>
 <body>
