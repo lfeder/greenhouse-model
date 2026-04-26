@@ -545,9 +545,12 @@ function renderProjection() {
     let cells = '';
     const monthlyArr = [];
     for (let i = 0; i < 12; i++) {
-      const val = (i < 3 || i === 11) ? w : s;
+      const val = targetForMonth(key, i);
       monthlyArr.push(val);
-      if (i === 0) {
+      if (key === 'E') {
+        cells += `<td><input type="number" value="${val}" min="0" step="100"
+          onchange="setTargetMonthly('E',${i},this.value)" style="${inputStyle}"></td>`;
+      } else if (i === 0) {
         cells += `<td><input type="number" value="${w}" min="0" step="100"
           onchange="setTarget('${key}','winter',this.value)" style="${inputStyle}"></td>`;
       } else if (i === 3) {
@@ -782,9 +785,19 @@ const TARGETS = {
     winter: Number(localStorage.getItem('cukesTargetE_w')) || TARGET_DEFAULTS.E.winter,
     summer: Number(localStorage.getItem('cukesTargetE_s')) || TARGET_DEFAULTS.E.summer,
   },
+  // E supports per-month overrides (every cell editable in box 3). null = fall
+  // back to winter/summer.
+  E_monthly: Array(12).fill(null).map((_, i) => {
+    const v = localStorage.getItem('cukesTargetE_m' + i);
+    return v == null || v === '' ? null : Number(v);
+  }),
 };
 
 function targetForMonth(v, monthIdx) {  // monthIdx = 0..11
+  if (v === 'E') {
+    const o = TARGETS.E_monthly[monthIdx];
+    if (o != null && isFinite(o)) return o;
+  }
   // Winter = Jan, Feb, Mar, Dec. Summer = Apr..Nov.
   return (monthIdx < 3 || monthIdx === 11) ? TARGETS[v].winter : TARGETS[v].summer;
 }
@@ -798,6 +811,15 @@ function setTarget(v, season, val) {
   renderAll();
 }
 window.setTarget = setTarget;
+
+function setTargetMonthly(v, monthIdx, val) {
+  const n = Number(val);
+  if (!isFinite(n) || n < 0) return;
+  TARGETS[v + '_monthly'][monthIdx] = n;
+  localStorage.setItem('cukesTarget' + v + '_m' + monthIdx, String(n));
+  renderAll();
+}
+window.setTargetMonthly = setTargetMonthly;
 
 // Round UP to nearest 0.1.
 function ceil01(x) { return Math.ceil(x * 10) / 10; }
