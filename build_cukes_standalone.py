@@ -290,6 +290,34 @@ def build_html(summary: dict) -> str:
         "<script>initTheme();</script>",
     )
 
+    # Override Box 3 target defaults to match the Box 2 solved sales.
+    cukes = cukes.replace(
+        "const TARGET_DEFAULTS = {\n"
+        "  K: { winter: 6000, summer: 6000 },\n"
+        "  J: { winter: 3000, summer: 3000 },\n"
+        "  E: { winter: 2400, summer: 2400 },\n"
+        "};",
+        "const TARGET_DEFAULTS = {\n"
+        "  K: { winter: 6500, summer: 6500 },\n"
+        "  J: { winter: 2200, summer: 3500 },\n"
+        "  E: { winter: 2400, summer: 2400 },\n"
+        "};",
+    )
+    # Per-month E defaults: 500, 700, 1600, then 2400 Apr–Nov, 1900 Dec.
+    cukes = cukes.replace(
+        "  E_monthly: Array(12).fill(null).map((_, i) => {\n"
+        "    const v = localStorage.getItem('cukesTargetE_m' + i);\n"
+        "    return v == null || v === '' ? null : Number(v);\n"
+        "  }),",
+        "  E_monthly: (() => {\n"
+        "    const defaults = [500, 700, 1600, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 1900];\n"
+        "    return defaults.map((d, i) => {\n"
+        "      const v = localStorage.getItem('cukesTargetE_m' + i);\n"
+        "      return (v == null || v === '') ? d : Number(v);\n"
+        "    });\n"
+        "  })(),",
+    )
+
     # Drop Box 4 (ROI panel) from the standalone — internal-only analysis.
     cukes = cukes.replace(
         '  <div class="panel" id="roiPanel" style="display:none">\n'
