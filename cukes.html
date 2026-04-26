@@ -26,7 +26,13 @@
     .panel, .fin-table, tr, .fin-table tbody { page-break-inside: avoid !important; break-inside: avoid !important; }
     /* Force collapsed sub-rows visible in print. */
     tr.sub-grown, tr.sub-sold { display: table-row !important; }
+    /* Drop the horizontal scrollbars from the table wrappers. */
+    .panel div[style*="overflow-x"] { overflow: visible !important; }
   }
+  /* Always-on: hide scrollbar chrome on the table wrappers (content can still
+     scroll on touch). */
+  .panel div[style*="overflow-x"] { scrollbar-width: none; }
+  .panel div[style*="overflow-x"]::-webkit-scrollbar { display: none; }
 </style>
 </head>
 <body>
