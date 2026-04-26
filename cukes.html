@@ -39,7 +39,7 @@
 
 <div class="header">
   <div class="header-inner">
-    <div class="header-title">Cukes lb/day</div>
+    <div class="header-title">Cukes lb/day, Grade One</div>
     <div style="display:flex;align-items:baseline;gap:14px">
       <div style="display:flex;gap:12px;font-size:10px" id="nav"></div>
       <div style="font-size:10px">v {{VERSION}}</div>
@@ -52,8 +52,8 @@
 
 <div class="wrap">
   <div class="panel" id="projPanel" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:8px">
-      <div class="panel-title" style="margin:0">Box 1: Current state, Grade 1, all numbers lb/day unless noted</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <div class="panel-title" style="margin:0">Box 1:</div>
       <div id="winterYearControl" style="font-size:10px;color:var(--text-muted);white-space:nowrap">
         Winter (Jan–Mar):
         <button class="btn" id="wy25" onclick="setWinterYear(2025)">'25</button>
@@ -65,16 +65,16 @@
   </div>
 
   <div class="panel" id="extendPanel" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:8px">
-      <div class="panel-title" style="margin:0">Box 2: Extend and Sell more with existing 12.5 ac</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <div class="panel-title" style="margin:0">Box 2: Extend Shut-down week</div>
       <div id="projControls" style="display:none;white-space:nowrap"></div>
     </div>
     <div id="extendBody"></div>
   </div>
 
   <div class="panel" id="addGhPanel" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:8px">
-      <div class="panel-title" style="margin:0">Box 3: Add Greenhouses</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+      <div class="panel-title" style="margin:0">Box 3:</div>
       <div id="addGhControls" style="white-space:nowrap"></div>
     </div>
     <div id="addGhBody"></div>
@@ -454,7 +454,7 @@ function renderProjection() {
   }).join('');
   const controlsEl = document.getElementById('projControls');
   controlsEl.innerHTML =
-    `<span style="font-size:10px;color:var(--text-muted)">Target Shutdown week: ${btns}</span>`;
+    `<span style="font-size:10px;color:var(--text-muted)">${btns}</span>`;
   controlsEl.style.display = '';
 
   // --- Box 1: current state ---
