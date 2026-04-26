@@ -817,20 +817,26 @@ function renderRoi() {
   // since current $11.2M theoretical is unrealizable). Added-GH rows use the
   // theoretical capacity revenue — that's the ceiling we can chase once capacity
   // is in place, and incremental ROI compares to the realistic starting point.
-  const annualRevAt = (A, n) => n === 0 ? _box2AnnualRev : _roiAnnualRev[n];
+  const annualRevAt = (A, n) => n === 0
+    ? (_box1AnnualRev + _roiAnnualRev[0]) / 2
+    : _roiAnnualRev[n];
 
   const costPerAc = _settings.cucumberCostPerAc || 1000000;
   const fM = v => '$' + (v / 1e6).toFixed(1) + 'M';
   const fK_ = v => (v < 0 ? '-' : '') + Math.round(Math.abs(v) / 1e3).toLocaleString() + 'K';
   const fPct = v => (v * 100).toFixed(0) + '%';
 
-  // Baseline = Box 2 extended-capacity revenue (existing 12.5 ac, retire
-  // uplift, solved sales mix). Added-GH rows compare against this ceiling.
-  const baseline = _box2AnnualRev;
+  // Baseline = (Box 1 sales revenue + Box 2 extended-capacity revenue) / 2.
+  // Reflects imperfect sales elasticity — we can't immediately sell 100% of
+  // new supply, so we anchor the return comparison halfway between today's
+  // actual sales and the theoretical capacity-limited ceiling.
+  const baseline = (_box1AnnualRev + _box2AnnualRev) / 2;
 
   let html = '';
   html += `<div style="margin-bottom:10px;font-size:11px;color:var(--text-sub)">
-    Baseline = Box 2 extended <b>${fM(_box2AnnualRev)}</b>
+    Baseline = (Box 1 sales <b>${fM(_box1AnnualRev)}</b>
+    + Box 2 extended <b>${fM(_box2AnnualRev)}</b>) / 2
+    = <b>${fM(baseline)}</b>
   </div>`;
   html += '<div style="overflow-x:auto"><table class="fin-table">' +
     '<thead><tr>' +
