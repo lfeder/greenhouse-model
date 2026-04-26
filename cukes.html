@@ -878,18 +878,6 @@ function renderRoi() {
   }
   html += '</tbody></table></div>';
 
-  const totalAddRev = finalRev - baseline;
-  const totalAddOpInc = totalAddRev * OP_INC_MARGIN;
-  const fullRatio = finalCapex > 0 ? totalAddOpInc / finalCapex : null;
-  const payback = fullRatio ? 1 / fullRatio : null;
-  html += `<div style="margin-top:10px;font-size:11px;color:var(--text-sub)">
-    <div>Full build (${existingTotal.toFixed(1)} → ${acreLevels[acreLevels.length-1].toFixed(1)} ac):
-      <b>${fK_(totalAddRev)} annual rev vs baseline</b>
-      / <b>${fM(finalCapex)} capex</b>
-      → ratio <b>${fullRatio == null ? '—' : fPct(fullRatio)}</b>
-      ${payback == null ? '' : '(payback ' + payback.toFixed(1) + ' yr)'}</div>
-  </div>`;
-
   document.getElementById('roiBody').innerHTML = html;
   document.getElementById('roiPanel').style.display = '';
 }
