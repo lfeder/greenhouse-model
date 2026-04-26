@@ -75,7 +75,7 @@
     </div>
 
     <div id="addGhPanel" style="display:none;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
         <div class="panel-title" style="margin:0">Box 3:</div>
         <div id="addGhControls" style="white-space:nowrap"></div>
       </div>
@@ -503,7 +503,7 @@ function renderProjection() {
   box1 += subRow('Grown K', current.K, fmt, fAvgLb(avgOf(current.K)), 'grown');
   box1 += subRow('Grown J', current.J, fmt, fAvgLb(avgOf(current.J)), 'grown');
   box1 += subRow('Grown E', current.E, fmt, fAvgLb(avgOf(current.E)), 'grown');
-  box1 += totalRow('grown', 'Grown Total', curTot, 'diff-below', fmt, fAvgLb(avgOf(curTot)));
+  box1 += totalRow('grown', 'Grown Total', curTot, null, fmt, fAvgLb(avgOf(curTot)));
   const salesK = avgLbPerDayByMonth(_summary.saleByVM, 'K');
   const salesJ = avgLbPerDayByMonth(_summary.saleByVM, 'J');
   const salesE = avgLbPerDayByMonth(_summary.saleByVM, 'E');
@@ -511,7 +511,7 @@ function renderProjection() {
   box1 += subRow('Sold J', salesJ, fmt, fAvgLb(avgOf(salesJ)), 'sold');
   box1 += subRow('Sold E', salesE, fmt, fAvgLb(avgOf(salesE)), 'sold');
   box1 += totalRow('sold', 'Sold Total', salesAvg, 'diff-below', fmt, fAvgLb(avgOf(salesAvg)));
-  box1 += row('Surplus/Deficit', unsold, null, fmt, fAvgLb(avgOf(unsold)));
+  box1 += row('Surplus/Deficit', unsold, 'diff-below', fmt, fAvgLb(avgOf(unsold)));
 
   // Revenue row — per-variety sales × days × price, summed per month.
   const box1RevMonth = Array(12).fill(null).map((_, i) => {
@@ -523,7 +523,7 @@ function renderProjection() {
   const fmtDol = v => v == null ? '<td class="empty">—</td>' :
     `<td>${(v / 1e3).toFixed(0)}K</td>`;
   const box1AnnualRev = box1RevMonth.reduce((a, b) => a + b, 0);
-  box1 += `<tr class="diff-row"><td>Revenue ($)</td>${box1RevMonth.map(fmtDol).join('')}${fDollars(box1AnnualRev)}</tr>`;
+  box1 += `<tr><td>Revenue ($)</td>${box1RevMonth.map(fmtDol).join('')}${fDollars(box1AnnualRev)}</tr>`;
 
   const existingTotal = exK + exJJJ + exE;
   box1 += '</tbody></table></div>';
@@ -661,7 +661,7 @@ function renderProjection() {
   box3 += targetRow('Target Sales J', 'J');
   box3 += targetRow('Target Sales E', 'E');
   box3 += row('Target Sales Total', targTot, 'diff-below', fmt, fAvgLb(avgOf(targTot)));
-  box3 += row('Surplus/Deficit', box3Surplus, null, fmt, fAvgLb(avgOf(box3Surplus)));
+  box3 += row('Surplus/Deficit', box3Surplus, 'diff-below', fmt, fAvgLb(avgOf(box3Surplus)));
   box3 += `<tr><td>Revenue ($)</td>${box3RevMonth.map(fmtDol).join('')}${fDollars(box3AnnualRev)}</tr>`;
   box3 += rowAc('Required Total (ac)', reqTotal);
   box3 += '</tbody></table></div>';
