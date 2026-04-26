@@ -34,22 +34,20 @@
 <script>document.getElementById('nav').innerHTML = buildNav('cukes.html'); initTheme();</script>
 
 <div class="wrap">
-  <div id="winterYearControl" style="margin:6px 0 10px;font-size:10px;color:var(--text-muted)">
-    Winter months (Jan–Mar) data from:
-    <button class="btn" id="wy25" onclick="setWinterYear(2025)">'25</button>
-    <button class="btn" id="wy26" onclick="setWinterYear(2026)">'26</button>
-  </div>
-
   <div class="panel" id="projPanel" style="display:none">
     <div class="panel-title">Current state, Grade 1, all numbers lb/day unless noted</div>
+    <div id="winterYearControl" style="margin-bottom:10px;font-size:10px;color:var(--text-muted)">
+      Winter months (Jan–Mar) data from:
+      <button class="btn" id="wy25" onclick="setWinterYear(2025)">'25</button>
+      <button class="btn" id="wy26" onclick="setWinterYear(2026)">'26</button>
+    </div>
     <div id="status">Loading…</div>
     <div id="projBody"></div>
   </div>
 
-  <div id="projControls" style="margin:4px 0 14px;display:none"></div>
-
   <div class="panel" id="extendPanel" style="display:none">
     <div class="panel-title">Extend and Sell more with existing 12.5 ac</div>
+    <div id="projControls" style="margin-bottom:10px;display:none"></div>
     <div id="extendBody"></div>
   </div>
 
