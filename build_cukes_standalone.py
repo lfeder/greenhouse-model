@@ -290,6 +290,16 @@ def build_html(summary: dict) -> str:
         "<script>initTheme();</script>",
     )
 
+    # Drop Box 4 (ROI panel) from the standalone — internal-only analysis.
+    cukes = cukes.replace(
+        '  <div class="panel" id="roiPanel" style="display:none">\n'
+        '    <div class="panel-title">Box 4: Return on added greenhouses</div>\n'
+        '    <div id="roiBody"></div>\n'
+        '  </div>\n',
+        "",
+    )
+    cukes = cukes.replace("  renderRoi();\n", "")
+
     return cukes
 
 
