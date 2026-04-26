@@ -15,6 +15,7 @@
   .fin-table tr.year-break td { border-top: 1px solid var(--border); }
   .fin-table tr.diff-row td { border-top: 2px solid var(--border); color: var(--text); font-weight: 700; }
   .fin-table tr.diff-below td { border-bottom: 2px solid var(--border); color: var(--text); font-weight: 700; }
+  .fin-table th:first-child, .fin-table td:first-child { width: 170px; white-space: nowrap; }
   #status { color: var(--text-muted); font-size: 11px; padding: 12px 0; }
 
   /* Print: one tall page, no breaks. Use Ctrl/Cmd+P → Save as PDF. */
@@ -813,10 +814,13 @@ const TARGETS = {
   },
   // E supports per-month overrides (every cell editable in box 3). null = fall
   // back to winter/summer.
-  E_monthly: Array(12).fill(null).map((_, i) => {
-    const v = localStorage.getItem('cukesTargetE_m' + i);
-    return v == null || v === '' ? null : Number(v);
-  }),
+  E_monthly: (() => {
+    const defaults = [500, 700, 1600, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 2400, 1900];
+    return defaults.map((d, i) => {
+      const v = localStorage.getItem('cukesTargetE_m' + i);
+      return (v == null || v === '') ? d : Number(v);
+    });
+  })(),
 };
 
 function targetForMonth(v, monthIdx) {  // monthIdx = 0..11
