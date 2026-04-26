@@ -421,6 +421,7 @@ function renderProjection() {
   const tableHdr = '<table class="fin-table"><thead><tr><th></th>' +
     Array(12).fill(0).map((_, i) => `<th>${monthHdr(i)}</th>`).join('') +
     '<th>Annual</th></tr></thead><tbody>';
+  const tableHdrNoCols = '<table class="fin-table"><tbody>';
 
   // Annual formatters.
   const avgOf = arr => {
@@ -618,7 +619,7 @@ function renderProjection() {
   });
   const box2AnnualRev = box2RevMonth.reduce((a, b) => a + b, 0);
 
-  let box2 = '<div style="overflow-x:auto">' + tableHdr;
+  let box2 = '<div style="overflow-x:auto">' + tableHdrNoCols;
   box2 += row('Total Grown (extended)', box2Supply, null, fmt, fAvgLb(avgOf(box2Supply)));
   box2 += row('Sales K', box2SalesK, null, fmt, fAvgLb(avgOf(box2SalesK)));
   box2 += row('Sales J', box2SalesJ, null, fmt, fAvgLb(avgOf(box2SalesJ)));
@@ -651,7 +652,7 @@ function renderProjection() {
        <span style="margin-left:16px">Total ac = ${box3TotalAc.toFixed(2)} (+${box3AddedAc.toFixed(2)} new)</span>
      </span>`;
 
-  let box3 = '<div style="overflow-x:auto">' + tableHdr;
+  let box3 = '<div style="overflow-x:auto">' + tableHdrNoCols;
   box3 += row('Post Expansion', box3Supply, null, fmt, fAvgLb(avgOf(box3Supply)));
   box3 += targetRow('Target Sales K', 'K');
   box3 += targetRow('Target Sales J', 'J');
