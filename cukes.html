@@ -624,8 +624,8 @@ function renderProjection() {
   box2 += row('Sales J', box2SalesJ, null, fmt, fAvgLb(avgOf(box2SalesJ)));
   box2 += row('Sales E', box2SalesE, null, fmt, fAvgLb(avgOf(box2SalesE)));
   box2 += row('Sales Total', box2SalesTot, 'diff-below', fmt, fAvgLb(avgOf(box2SalesTot)));
-  box2 += `<tr><td>Revenue ($)</td>${box2RevMonth.map(fmtDol).join('')}${fDollars(box2AnnualRev)}</tr>`;
   box2 += row('Surplus/Deficit', box2Surplus, 'diff-below', fmt, fAvgLb(avgOf(box2Surplus)));
+  box2 += `<tr><td>Revenue ($)</td>${box2RevMonth.map(fmtDol).join('')}${fDollars(box2AnnualRev)}</tr>`;
   box2 += '</tbody></table></div>';
   document.getElementById('extendBody').innerHTML = box2;
   document.getElementById('extendPanel').style.display = '';
@@ -657,8 +657,8 @@ function renderProjection() {
   box3 += targetRow('Target Sales J', 'J');
   box3 += targetRow('Target Sales E', 'E');
   box3 += row('Target Sales Total', targTot, 'diff-below', fmt, fAvgLb(avgOf(targTot)));
-  box3 += `<tr><td>Revenue ($)</td>${box3RevMonth.map(fmtDol).join('')}${fDollars(box3AnnualRev)}</tr>`;
   box3 += row('Surplus/Deficit', box3Surplus, null, fmt, fAvgLb(avgOf(box3Surplus)));
+  box3 += `<tr><td>Revenue ($)</td>${box3RevMonth.map(fmtDol).join('')}${fDollars(box3AnnualRev)}</tr>`;
   box3 += rowAc('Required Total (ac)', reqTotal);
   box3 += '</tbody></table></div>';
   document.getElementById('addGhBody').innerHTML = box3;
