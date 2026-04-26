@@ -762,7 +762,7 @@ let _box4ExistingTotal = 0;
 let _inflation = Number(localStorage.getItem('cukesInflation')) || 0;  // percent
 let _addedGHs = (() => {
   const v = Number(localStorage.getItem('cukesAddedGHs'));
-  return (isFinite(v) && v >= 0 && v <= 4) ? v : 1;
+  return (isFinite(v) && v >= 0 && v <= 4) ? v : 4;
 })();
 
 function setInflation(v) {
