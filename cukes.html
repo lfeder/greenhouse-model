@@ -489,7 +489,7 @@ function renderProjection() {
   let box1 = '<div style="overflow-x:auto">' + tableHdr;
   // Box 1 shows actual historical retire weeks (no override).
   box1 += row('Weeks (shutdown)', histWeeks, null, fmtWeeks, fAvg(histWeeks));
-  box1 += row('Season (Deficit from Max)', seasonality, null, fmtIndex, null);
+  box1 += row('Variation from Max', seasonality, null, fmtIndex, null);
   box1 += subRow('Grown K', current.K, fmt, fAvgLb(avgOf(current.K)), 'grown');
   box1 += subRow('Grown J', current.J, fmt, fAvgLb(avgOf(current.J)), 'grown');
   box1 += subRow('Grown E', current.E, fmt, fAvgLb(avgOf(current.E)), 'grown');
