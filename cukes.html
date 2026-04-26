@@ -55,7 +55,7 @@
   <div class="panel">
     <div id="projPanel" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:6px">
-        <div class="panel-title" style="margin:0">Box 1: Current,</div>
+        <div class="panel-title" style="margin:0">Box 1: Current</div>
         <div id="winterYearControl" style="font-size:10px;color:var(--text-muted);white-space:nowrap">
           Winter (Jan–Mar):
           <button class="btn" id="wy25" onclick="setWinterYear(2025)">'25</button>
@@ -75,8 +75,8 @@
     </div>
 
     <div id="addGhPanel" style="display:none;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
-        <div class="panel-title" style="margin:0">Box 3:</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:6px">
+        <div class="panel-title" style="margin:0">Box 3: Add greenhouses</div>
         <div id="addGhControls" style="white-space:nowrap"></div>
       </div>
       <div id="addGhBody"></div>
@@ -651,7 +651,7 @@ function renderProjection() {
   }).join('');
   document.getElementById('addGhControls').innerHTML =
     `<span style="font-size:10px;color:var(--text-muted)">
-       Add greenhouses (60k sf each, ~${AC_PER_GH.toFixed(2)} ac): ${ghBtns}
+       (60k sf each): ${ghBtns}
        <span style="margin-left:16px">Total ac = ${box3TotalAc.toFixed(2)} (+${box3AddedAc.toFixed(2)} new)</span>
      </span>`;
 
