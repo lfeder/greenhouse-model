@@ -523,7 +523,7 @@ function renderGantt(d) {
     if (isBuy) {
       tbuyRow = rowHtml;
     } else if (isInfra) {
-      if (newVal > 0 || key === 'LAND') rows += rowHtml;
+      if (newVal > 0 || key === 'LAND' || key === 'PACK') rows += rowHtml;
     } else {
       if ((item.acres_existing || 0) + (item.acres_new || 0) > 0) rows += rowHtml;
     }
