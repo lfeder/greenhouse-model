@@ -1197,9 +1197,10 @@ function render(d) {
 
 // Resolution scenario — hardcoded EB/JS/JJB total cash flow ($) per year 2026-2032 (from PDF)
 const RESOLUTION_DATA = {
-  EB:  [519674, 901654, 988855, 1039611, 1150996, 1655153, 1788860],  // 2026-2032
-  JS:  [934678, 1235643, 1271830, 1336666,  950593, 1108761, 1218158],
-  JJB: [491367, 977757, 1104369, 1251277, 1801589, 2463914, 2707018],
+  EBITDA: [4000000, 5000000, 5250000, 5512500, 5788125, 6077531, 6381408],  // 2026-2032
+  EB:     [ 519674,  901654,  988855, 1039611, 1150996, 1655153, 1788860],
+  JS:     [ 934678, 1235643, 1271830, 1336666,  950593, 1108761, 1218158],
+  JJB:    [ 491367,  977757, 1104369, 1251277, 1801589, 2463914, 2707018],
 };
 
 async function fetchScenarioData(overrides) {
@@ -1247,9 +1248,10 @@ async function renderScenarioComparison(d, Y) {
           while (padded.length < displayed) padded.push(null);
           return `<tr><td>${label}</td>${padded.slice(0, displayed).map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
         };
-        st += renderRow('EB',  RESOLUTION_DATA.EB);
-        st += renderRow('JS',  RESOLUTION_DATA.JS);
-        st += renderRow('JJB', RESOLUTION_DATA.JJB);
+        st += renderRow('EBITDA', RESOLUTION_DATA.EBITDA);
+        st += renderRow('EB',     RESOLUTION_DATA.EB);
+        st += renderRow('JS',     RESOLUTION_DATA.JS);
+        st += renderRow('JJB',    RESOLUTION_DATA.JJB);
       } else {
         const ds = s.data;
         // Revenue & EBITDA
