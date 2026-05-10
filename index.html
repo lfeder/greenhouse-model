@@ -1240,15 +1240,12 @@ async function renderScenarioComparison(d, Y) {
       st += `<tr class="section-header"><td colspan="${Y.length-_DN+1}">${s.label}</td></tr>`;
       if (s.resolution) {
         // Resolution: only EB/JS/JJB, hardcoded values for 2026-2032; 2033 blank
-        const padTo = (arr) => {
-          // arr is 2026-2032 (7 vals). Need 2026-2033 (8 vals before slicing _DN)
-          return [...arr, null];
-        };
+        const displayed = Y.length - _DN;  // 8 visible cols (2026-2033)
         const fmt = v => v == null ? '—' : (v / 1e6).toFixed(2);
         const renderRow = (label, vals) => {
-          const padded = padTo(vals);
-          const trimmed = _DN ? padded.slice(0, -_DN) : padded;
-          return `<tr><td>${label}</td>${trimmed.map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
+          const padded = [...vals];
+          while (padded.length < displayed) padded.push(null);
+          return `<tr><td>${label}</td>${padded.slice(0, displayed).map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
         };
         st += renderRow('EB',  RESOLUTION_DATA.EB);
         st += renderRow('JS',  RESOLUTION_DATA.JS);
