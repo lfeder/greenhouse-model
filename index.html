@@ -316,8 +316,16 @@ function buildSidebar() {
     ${S('bankRate', {label:'Bank Rate',min:5,max:9,step:0.5,def:7,fmt:v=>v.toFixed(1)+'%'})}
     ${S('bankTerm', {label:'Bank Term',min:5,max:15,step:1,def:10,fmt:v=>v+' yr'})}
   </div>`;
+  // Compute derived net% for display under the slider
+  const _jjbCap = (lastData && lastData.jjb_equity) || 0;
+  const _val = settings.jjbBuyinValuation || 15000000;
+  const _rawNet = _val > 0 ? _jjbCap / (2 * _val) : 0;
+  const _netPct = Math.round(_rawNet / 0.0025) * 0.0025 * 100;
   h += `<div class="panel"><div class="panel-title">Equity Valuations</div>
-    ${S('jjbEquityBuyinPct', {label:'JJB Equity Buy-in',min:0,max:15,step:0.5,def:7.5,fmt:v=>v.toFixed(1)+'%'})}
+    ${S('jjbBuyinValuation', {label:'JJB Buy-in Valuation',min:5000000,max:25000000,step:1000000,def:15000000,fmt:FM})}
+    <div style="font-size:9px;color:var(--text-dim);margin-top:-4px;line-height:1.4">
+      → JJB net: ${_netPct.toFixed(2)}% · gross: ${(2*_netPct).toFixed(2)}% (JJB$ ${(_jjbCap/1e6).toFixed(2)}M)
+    </div>
     ${UI_TOGGLES.show3PValuation ? S('thirdPartyValuation', {label:'3P Valuation',min:20000000,max:40000000,step:5000000,def:30000000,fmt:FM}) : ''}
     ${UI_TOGGLES.showSbicAndTp ? `<div class="toggle-row">
       <input type="checkbox" id="chk-tpBuysJS" ${settings.thirdPartyBuysJS ? 'checked' : ''}
@@ -961,20 +969,13 @@ function render(d) {
       return -(v * 0.5) - (promote[i] || 0) * promShareJJB;
     });
 
-    // Expansion row — direct from JJB Equity Issued % (only 2027 nonzero).
-    // EB and JS dilution = -EB_pre/JS_pre × new_pct/100 (matches backend scale).
+    // Expansion row — JJB Equity Issued % is the net% (2027 only).
+    // Simplified split: JJB +net, EB -net×0.55, JS -net×0.45 (terminal 27.5:22.5).
     const equityIssued = lookup['JJB Equity Issued %'] || zeros;
     const denoise = v => Math.abs(v) < 0.05 ? 0 : v;
-    const expEB = equityIssued.map((v, i) => denoise(-(startEB[i] || 0) * v / 100));
-    const expJS = equityIssued.map((v, i) => {
-      const jsPre = (startJS[i] || 0) - (buyJS[i] || 0);
-      return denoise(-jsPre * v / 100);
-    });
-    const expJJB = equityIssued.map((v, i) => {
-      const ebPre = startEB[i] || 0;
-      const jsPre = (startJS[i] || 0) - (buyJS[i] || 0);
-      return denoise(v * (ebPre + jsPre) / 100);
-    });
+    const expEB  = equityIssued.map(v => denoise(-v * 0.55));
+    const expJS  = equityIssued.map(v => denoise(-v * 0.45));
+    const expJJB = equityIssued.map(v => denoise(v));
 
     const sections = {
       EB: [

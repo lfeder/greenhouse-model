@@ -66,7 +66,7 @@
   "costInflation": 3.5,
   "tBillRate": 4,
   "buyinValuation": 15000000,
-  "jjbEquityBuyinPct": 7.5,
+  "jjbBuyinValuation": 15000000,
   "ebExpansionGrantPct": 0,
   "ebExpansionGrantStartYear": 2027,
   "ebExpansionGrantEndYear": 2033,

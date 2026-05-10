@@ -117,20 +117,23 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
             buy = buyout_pct
         buyout_row.append(buy)
 
-        # 2. JJB equity buy-in (FIXED %, kicks in 2027 only)
-        #    Replaces the post-money valuation math. JJB simply receives
-        #    `jjbEquityBuyinPct` of equity; EB/JS/TP scale down pro-rata.
+        # 2. JJB equity buy-in (auto-computed from total JJB$ and buy-in valuation)
+        #    Net% = round(total_JJB$ / (2 × valuation) / 0.0025) × 0.0025
+        #    Gross issuance = 2 × Net (because JJB pre-share ≈ 50%)
+        #    Applied as simplified dilution (no scaling): JJB += net%,
+        #    EB -= 0.55 × net%, JS -= 0.45 × net% (terminal 27.5:22.5 split).
         jjb_amount = draws.get("jjb", 0)
         jjb_new_pct = 0
         if year == 2027 and is_expansion:
-            new_pct = settings.get("jjbEquityBuyinPct", 7.5)
-            if new_pct > 0:
-                scale = 1 - new_pct / 100
-                eb *= scale
-                js *= scale
-                tp *= scale
-                jjb = jjb * scale + new_pct
-                jjb_new_pct = new_pct
+            buyin_val = settings.get("jjbBuyinValuation", 15_000_000)
+            total_jjb_capital = sum(d.get("jjb", 0) for d in equity_draws.values())
+            if buyin_val > 0 and total_jjb_capital > 0:
+                raw_net = total_jjb_capital / (2 * buyin_val)
+                net_pct = round(raw_net / 0.0025) * 0.0025 * 100  # rounded 0.25%, as %
+                eb  -= net_pct * 0.55
+                js  -= net_pct * 0.45
+                jjb += net_pct
+                jjb_new_pct = net_pct
         jjb_capital_row.append(jjb_amount)
         jjb_equity_row.append(jjb_new_pct)
 
