@@ -918,9 +918,9 @@ function render(d) {
     const zeros = Array(yLen).fill(0);
     const neg = arr => (arr || zeros).map(v => -v);
 
-    // EB grant dilution on JS & JJB: pro-rata to (post-vesting) shares.
-    // PEDD splits 50/50 from JS+JJB; Promote splits pro-rata to remaining JS:JJB.
-    // For display we approximate with starting-share pro-rata of the combined total.
+    // EB grant dilution on JS & JJB — match backend model exactly:
+    //   PEDD splits 50/50 from JS and JJB (analysis.py:179-180)
+    //   Promote splits pro-rata to remaining JS:JJB shares (analysis.py:188-190)
     const pedd     = lookup['EB grant (PEDD)']  || zeros;
     const promote  = lookup['EB promote']       || zeros;
     const startJJB = lookup['Starting JJB %']   || zeros;
@@ -931,9 +931,16 @@ function render(d) {
     const endEB    = lookup['Ending EB %']      || zeros;
     const buyJS    = lookup['JJB buys from JS'] || zeros;
     const totGrant = pedd.map((v, i) => v + (promote[i] || 0));
-    const denom    = startJJB.map((v, i) => v + (startJS[i] || 0));
-    const ebGrantJS  = totGrant.map((v, i) => denom[i] > 0 ? -v * startJS[i]  / denom[i] : 0);
-    const ebGrantJJB = totGrant.map((v, i) => denom[i] > 0 ? -v * startJJB[i] / denom[i] : 0);
+    const ebGrantJS = pedd.map((v, i) => {
+      const promRemain = startJS[i] + startJJB[i];
+      const promShareJS = promRemain > 0 ? startJS[i] / promRemain : 0.5;
+      return -(v * 0.5) - (promote[i] || 0) * promShareJS;
+    });
+    const ebGrantJJB = pedd.map((v, i) => {
+      const promRemain = startJS[i] + startJJB[i];
+      const promShareJJB = promRemain > 0 ? startJJB[i] / promRemain : 0.5;
+      return -(v * 0.5) - (promote[i] || 0) * promShareJJB;
+    });
 
     // Expansion row = the plug that makes section add up exactly:
     // Ending = Starting + EB_grant + (Sale/Buy) + Expansion
