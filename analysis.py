@@ -375,10 +375,10 @@ def compute_partner_cash(model, ownership, tp_buys_js=False):
                         eq.append(0)
             rows["equity_buy_sell"] = eq
 
-        # Total (ex-tax: excludes tax distributions)
+        # Total (includes tax distributions — apples-to-apples with no-expansion total)
         total = []
         for i in range(N_YEARS):
-            t = rows["tier_1"][i] + rows["tier_2"][i]
+            t = rows["tax_dist"][i] + rows["tier_1"][i] + rows["tier_2"][i]
             if p == "EB": t += rows["tier_0"][i]
             if p in ("JS", "JJB"): t += rows["pedd"][i] + rows["equity_buy_sell"][i]
             total.append(t)
