@@ -121,6 +121,19 @@ function updateSetting(key, value) {
 
 function pName(p) { return p === 'TP' ? '3P' : p; }
 
+function setLender(name) {
+  const presets = { SBA: {ltv:20, term:25, rate:7}, JJB: {ltv:15, term:5, rate:9} };
+  const p = presets[name];
+  if (!p) return;
+  compute({
+    expansionLender: name,
+    financingPct: 100 - p.ltv,
+    bankTerm: p.term,
+    bankRate: p.rate,
+    sbicCap: 0,  // single-tranche: SBIC disabled
+  });
+}
+
 function updateFinancingOverride(sc, key, rawValue, kind) {
   let val = parseFloat(String(rawValue).replace(/[^0-9.\-]/g, ''));
   if (isNaN(val)) return;
@@ -254,6 +267,40 @@ function buildSidebar() {
 
   const FM = v => (v < 0 ? '−' : '') + (Math.abs(v) / 1e6).toFixed(2) + 'M';
   const FP = v => v + '%';
+  // Expansion Loan — single loan, lender preset + 3 individual toggles
+  const lenderPresets = {
+    SBA: {ltv: 20, term: 25, rate: 7},
+    JJB: {ltv: 15, term:  5, rate: 9},
+  };
+  const curLender = settings.expansionLender || 'SBA';
+  const curLtv  = 100 - (settings.financingPct || 80);   // LTV here = equity %
+  const curTerm = settings.bankTerm || 25;
+  const curRate = settings.bankRate || 7;
+  const tBtn = (label, isActive, onclick) =>
+    `<button class="btn" style="${isActive?'background:var(--accent);color:#000;':''}font-size:10px;padding:3px 8px;flex:1" onclick="${onclick}">${label}</button>`;
+  h += `<div class="panel"><div class="panel-title">Expansion Loan</div>
+    <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">LENDER</div>
+    <div style="display:flex;gap:4px;margin-bottom:6px">
+      ${tBtn('SBA', curLender==='SBA', "setLender('SBA')")}
+      ${tBtn('JJB', curLender==='JJB', "setLender('JJB')")}
+    </div>
+    <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">EQUITY %</div>
+    <div style="display:flex;gap:4px;margin-bottom:6px">
+      ${tBtn('15%', curLtv===15, "updateSetting('financingPct',85)")}
+      ${tBtn('20%', curLtv===20, "updateSetting('financingPct',80)")}
+    </div>
+    <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">TERM</div>
+    <div style="display:flex;gap:4px;margin-bottom:6px">
+      ${tBtn('5 yr',  curTerm===5,  "updateSetting('bankTerm',5)")}
+      ${tBtn('25 yr', curTerm===25, "updateSetting('bankTerm',25)")}
+    </div>
+    <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">RATE</div>
+    <div style="display:flex;gap:4px">
+      ${tBtn('7%', curRate===7, "updateSetting('bankRate',7)")}
+      ${tBtn('9%', curRate===9, "updateSetting('bankRate',9)")}
+    </div>
+  </div>`;
+
   if (UI_TOGGLES.showBankLoanPanel)
   h += `<div class="panel"><div class="panel-title">Bank Loan</div>
     ${S('financingPct', {label:'Bank LTV',min:50,max:80,step:5,def:70,fmt:FP})}

@@ -38,8 +38,13 @@
 // Table helpers loaded from utils.js
 
 async function load() {
-  const r = await fetch('/api/compute', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+  const [r, sr_] = await Promise.all([
+    fetch('/api/compute', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}),
+    fetch('/api/settings'),
+  ]);
   const d = await r.json();
+  const settings = await sr_.json();
+  d.settings = settings;
   const Y = d.years;
 
   // Existing loans
@@ -59,21 +64,30 @@ async function load() {
   el += '</tbody>';
   document.getElementById('existLoansTable').innerHTML = el;
 
-  // Expansion loans — per crop detail
+  // Expansion loan — single consolidated loan (sum of per-crop tranches)
   let xl = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   if (d.expansion_loan_detail) {
-    const order = d.expansion_loan_order || Object.keys(d.expansion_loan_detail);
-    for (const name of order) {
-      const det = d.expansion_loan_detail[name];
-      if (det && det.loan_amt > 0) {
-        xl += sr(name + ' (' + fCM(det.loan_amt) + 'M @ ' + (det.rate*100).toFixed(0) + '%, ' + det.term + 'yr)', Y);
-        xl += tr('Interest', det.interest.map(v => -v));
-        xl += tr('Principal', det.principal.map(v => -v));
-        xl += tr('Balance', det.balance);
+    let totalAmt = 0, rate = 0, term = 0;
+    const interest = Y.map(() => 0);
+    const principal = Y.map(() => 0);
+    const balance = Y.map(() => 0);
+    for (const det of Object.values(d.expansion_loan_detail)) {
+      if (!det || !(det.loan_amt > 0)) continue;
+      totalAmt += det.loan_amt;
+      rate = det.rate; term = det.term;  // shared across tranches
+      for (let i = 0; i < Y.length; i++) {
+        interest[i]  += det.interest[i]  || 0;
+        principal[i] += det.principal[i] || 0;
+        balance[i]   += det.balance[i]   || 0;
       }
     }
+    const lender = (d.settings && d.settings.expansionLender) || 'Expansion';
+    xl += sr(lender + ' Loan (' + fCM(totalAmt) + 'M @ ' + (rate*100).toFixed(0) + '%, ' + term + 'yr)', Y);
+    xl += tr('Interest', interest.map(v => -v));
+    xl += tr('Principal', principal.map(v => -v));
+    xl += tr('Balance', balance);
   }
-  xl += sr('Expansion Totals', Y);
+  xl += sr('Totals', Y);
   xl += tr('Total Interest', d.expansion_int.map(v => -v));
   xl += tr('Total Principal', d.expansion_prin.map(v => -v));
   xl += tr('Total DS', d.expansion_ds.map(v => -v), fCM, 'subtotal-row');
