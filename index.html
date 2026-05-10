@@ -80,6 +80,11 @@
       <div id="taxBody" style="display:none"><div style="overflow-x:auto"><table class="fin-table" id="taxTable"></table></div></div>
     </div>
 
+    <div class="panel">
+      <div class="panel-title">Scenario Comparison ($M)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="scenComparisonTable"></table></div>
+    </div>
+
   </div>
 </div>
 
@@ -177,12 +182,12 @@ function loadScenario(id) {
 // Packhouse held at $4M/ac, varied by acres → $0/$1M/$2M tiers.
 const BUILD_PRESETS = {
   'NONE':   {label:'No Expansion',    newKAcres:0,   newJAcres:0,   newEAcres:0,   packhouseAcres:0,    packhouseCostPerAc:4000000, housingPods:0},
-  '3-NO':   {label:'3 blk · No PH',   newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0,    packhouseCostPerAc:4000000},
-  '3-SHED': {label:'3 blk · Shed',    newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0.25, packhouseCostPerAc:4000000},
-  '3-FULL': {label:'3 blk · Full PH', newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0.5,  packhouseCostPerAc:4000000},
-  '4-NO':   {label:'4 blk · No PH',   newKAcres:1.4, newJAcres:1.4, newEAcres:2.8, packhouseAcres:0,    packhouseCostPerAc:4000000},
-  '4-SHED': {label:'4 blk · Shed',    newKAcres:1.4, newJAcres:1.4, newEAcres:2.8, packhouseAcres:0.25, packhouseCostPerAc:4000000},
-  '4-FULL': {label:'4 blk · Full PH', newKAcres:1.4, newJAcres:1.4, newEAcres:2.8, packhouseAcres:0.5,  packhouseCostPerAc:4000000},
+  '3-NO':   {label:'3 blk · No PH',   newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0,    packhouseCostPerAc:4000000, housingPods:2},
+  '3-SHED': {label:'3 blk · Shed',    newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0.25, packhouseCostPerAc:4000000, housingPods:2},
+  '3-FULL': {label:'3 blk · Full PH', newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0.5,  packhouseCostPerAc:4000000, housingPods:2},
+  '4-NO':   {label:'4 blk · No PH',   newKAcres:1.4, newJAcres:1.4, newEAcres:2.8, packhouseAcres:0,    packhouseCostPerAc:4000000, housingPods:2},
+  '4-SHED': {label:'4 blk · Shed',    newKAcres:1.4, newJAcres:1.4, newEAcres:2.8, packhouseAcres:0.25, packhouseCostPerAc:4000000, housingPods:2},
+  '4-FULL': {label:'4 blk · Full PH', newKAcres:1.4, newJAcres:1.4, newEAcres:2.8, packhouseAcres:0.5,  packhouseCostPerAc:4000000, housingPods:2},
 };
 let activePreset = null;
 function detectActivePreset() {
@@ -208,9 +213,9 @@ function loadBuildPreset(id) {
     newKAcres: p.newKAcres, newJAcres: p.newJAcres, newEAcres: p.newEAcres,
     newLAcres: 0, newTAcres: 0,
     packhouseAcres: p.packhouseAcres, packhouseCostPerAc: p.packhouseCostPerAc,
+    housingPods: p.housingPods !== undefined ? p.housingPods : 2,
     debug: false,
   };
-  if (p.housingPods !== undefined) overrides.housingPods = p.housingPods;
   compute(overrides);
 }
 
@@ -1186,6 +1191,98 @@ function render(d) {
   ).join('')}</tr>`;
   tx += '</tbody>';
   document.getElementById('taxTable').innerHTML = tx;
+
+  renderScenarioComparison(d, Y);
+}
+
+// Resolution scenario — hardcoded EB/JS/JJB total cash flow ($) per year 2026-2032 (from PDF)
+const RESOLUTION_DATA = {
+  EB:  [519674, 901654, 988855, 1039611, 1150996, 1655153, 1788860],  // 2026-2032
+  JS:  [934678, 1235643, 1271830, 1336666,  950593, 1108761, 1218158],
+  JJB: [491367, 977757, 1104369, 1251277, 1801589, 2463914, 2707018],
+};
+
+async function fetchScenarioData(overrides) {
+  const body = JSON.stringify({...settings, ...overrides});
+  const r = await fetch('/api/compute', {method:'POST', headers:{'Content-Type':'application/json'}, body});
+  return r.json();
+}
+
+let _scenComparisonInflight = false;
+async function renderScenarioComparison(d, Y) {
+  if (_scenComparisonInflight) return;
+  _scenComparisonInflight = true;
+  try {
+    const presetOverrides = (id) => {
+      const p = BUILD_PRESETS[id];
+      return {
+        newKAcres: p.newKAcres, newJAcres: p.newJAcres, newEAcres: p.newEAcres,
+        newLAcres: 0, newTAcres: 0,
+        packhouseAcres: p.packhouseAcres, packhouseCostPerAc: p.packhouseCostPerAc,
+        housingPods: p.housingPods,
+        debug: false,
+      };
+    };
+    const [d3, d4] = await Promise.all([
+      fetchScenarioData(presetOverrides('3-NO')),
+      fetchScenarioData(presetOverrides('4-FULL')),
+    ]);
+
+    const scenarios = [
+      {label: 'Resolution',         resolution: true},
+      {label: 'No Expansion',       data: d, useNoExp: true},
+      {label: '3 blk · No PH',      data: d3},
+      {label: '4 blk · Full PH',    data: d4},
+    ];
+
+    let st = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+    for (const s of scenarios) {
+      st += `<tr class="section-header"><td colspan="${Y.length-_DN+1}">${s.label}</td></tr>`;
+      if (s.resolution) {
+        // Resolution: only EB/JS/JJB, hardcoded values for 2026-2032; 2033 blank
+        const padTo = (arr) => {
+          // arr is 2026-2032 (7 vals). Need 2026-2033 (8 vals before slicing _DN)
+          return [...arr, null];
+        };
+        const fmt = v => v == null ? '—' : (v / 1e6).toFixed(2);
+        const renderRow = (label, vals) => {
+          const padded = padTo(vals);
+          const trimmed = _DN ? padded.slice(0, -_DN) : padded;
+          return `<tr><td>${label}</td>${trimmed.map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
+        };
+        st += renderRow('EB',  RESOLUTION_DATA.EB);
+        st += renderRow('JS',  RESOLUTION_DATA.JS);
+        st += renderRow('JJB', RESOLUTION_DATA.JJB);
+      } else {
+        const ds = s.data;
+        // Revenue & EBITDA
+        if (s.useNoExp) {
+          // Use no-exp data from the same response
+          const ne = ds.partners_no_exp && ds.partners_no_exp._waterfall;
+          if (ne) {
+            st += tr('Revenue', ne.rev || ds.rev.map(() => 0), fCM);
+            st += tr('EBITDA', ne.op_inc, fCM);
+          }
+          // Per-partner total = partners_no_exp[p]
+          for (const p of ['EB', 'JS', 'JJB']) {
+            const arr = ds.partners_no_exp && ds.partners_no_exp[p];
+            if (arr) st += tr(p, arr, fCM);
+          }
+        } else {
+          st += tr('Revenue', ds.rev, fCM);
+          st += tr('EBITDA', ds.op_inc, fCM);
+          for (const p of ['EB', 'JS', 'JJB']) {
+            const pd = ds.partners && ds.partners[p];
+            if (pd) st += tr(p, pd.total, fCM);
+          }
+        }
+      }
+    }
+    st += '</tbody>';
+    document.getElementById('scenComparisonTable').innerHTML = st;
+  } finally {
+    _scenComparisonInflight = false;
+  }
 }
 
 

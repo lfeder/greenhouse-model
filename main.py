@@ -291,6 +291,7 @@ def run_everything(s):
         partners_no_exp["_op_inc_terminal"] = result_ne["op_inc"][-1]
         partners_no_exp["_ownership"] = {"JJB": own_ne[-1]["JJB"], "EB": own_ne[-1]["EB"], "JS": own_ne[-1]["JS"], "SBIC": own_ne[-1].get("SBIC", 0), "TP": own_ne[-1].get("TP", 0)}
         partners_no_exp["_waterfall"] = {
+            "rev": rev_ne,
             "op_inc": result_ne["op_inc"],
             "loan_total_ds": result_ne["loans"]["total_ds"],
             "expansion_ds": [0.0] * N_YEARS,
