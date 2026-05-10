@@ -767,7 +767,7 @@ function render(d) {
   rt += sr('Revenue', Y);
   if (d.rev_rows) {
     const existRows = d.rev_rows.filter(([k]) => k.startsWith('Existing'));
-    const newRows = d.rev_rows.filter(([k]) => !k.startsWith('Existing'));
+    const newRows = d.rev_rows.filter(([k]) => !k.startsWith('Existing') && !/Tomato|Lettuce/.test(k));
     const sumRows = (rows) => Y.map((_, i) => rows.reduce((s, [, data]) => s + (data[i] || 0), 0));
     const toggleHdr = (label, cls) => `<tr class="section-header" style="cursor:pointer" onclick="document.querySelectorAll('.${cls}').forEach(r=>r.style.display=r.style.display==='none'?'':'none')"><td colspan="${Y.length - _DN + 1}">${label} <span style="font-size:8px;color:var(--text-dim)">▼</span></td></tr>`;
     if (existRows.length) {
