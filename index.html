@@ -51,10 +51,19 @@
     </div>
 
     <div class="panel">
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('ownershipBody').style.display=document.getElementById('ownershipBody').style.display==='none'?'':'none'">Ownership <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div id="ownershipBody">
+        <div style="overflow-x:auto"><table class="fin-table" id="ownershipTable"></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('distBody').style.display=document.getElementById('distBody').style.display==='none'?'':'none'">Distributions ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
       <div id="distBody">
-        <div style="overflow-x:auto"><table class="fin-table" id="ownershipTable"></table></div>
-        <div style="overflow-x:auto;margin-top:8px"><table class="fin-table" id="distTable"></table></div>
+        <div style="font-size:10px;color:var(--text-muted);margin:4px 0 2px">Waterfall — No Expansion</div>
+        <div style="overflow-x:auto"><table class="fin-table" id="distTableNoExp"></table></div>
+        <div style="font-size:10px;color:var(--text-muted);margin:12px 0 2px">Waterfall — With Expansion</div>
+        <div style="overflow-x:auto"><table class="fin-table" id="distTable"></table></div>
       </div>
     </div>
 
@@ -1044,28 +1053,31 @@ function render(d) {
     }
     return t;
   });
-  let dt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-  dt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
-  dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Existing DS</a></td>${sl(d.loan_total_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
-  dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Expansion DS</a></td>${sl(d.expansion_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
-  dt += `<tr><td>DSCR</td>${sl(d.op_inc.map((oi, i) => { const ds = d.loan_total_ds[i] + d.expansion_ds[i]; return ds > 0 ? (oi / ds).toFixed(1) + 'x' : '—'; })).map(v => `<td>${v}</td>`).join('')}</tr>`;
-  const crPct = settings.capexReservePct ?? 2;
-  dt += `<tr><td>Capex Reserve <input type="number" value="${crPct}" min="0" max="10" step="0.5" style="width:36px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right" onchange="updateSetting('capexReservePct',Number(this.value))">%</td>${sl(d.capex_res).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
-  dt += tr('Distributable Cash', d.distrib_cash, fCM, 'total-row-table');
-  dt += sr('Waterfall', Y);
-  dt += `<tr><td>Tax</td>${sl(d.tax_cash).map((v, i) =>
-    `<td title="${cashTips[i].replace(/"/g,'&quot;')}" style="cursor:help">${fCM(-v)}</td>`
-  ).join('')}</tr>`;
-  dt += tr('Tier 0 (EB)', d.tier0_actual.map(v => -v), fCM);
-  dt += `<tr><td>Tier 1 (Partners)</td>${sl(d.tier1_actual).map((v, i) => {
-    const short = d.tier1_shortfall[i] > 50;
-    return `<td${short ? ' style="color:var(--yellow)"' : ''}>${fCM(-v)}${short ? ' *' : ''}</td>`;
-  }).join('')}</tr>`;
-  dt += tr('PE/DD Repayment', d.pedd_payments.map(v => -v), fCM);
-  dt += tr('Tier 2 (Pro-Rata)', d.tier2.map(v => -v), fCM);
-  if (d.tier1_shortfall.some(v => v > 50)) dt += tr('T1 Shortfall → DD', d.tier1_shortfall.map(v => -v), fCM);
-  dt += '</tbody>';
-  document.getElementById('distTable').innerHTML = dt;
+  const buildWaterfall = (src, isNoExp) => {
+    let t = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+    t += tr('Operating Income', src.op_inc, fCM, 'subtotal-row');
+    t += `<tr><td>Existing DS</td>${sl(src.loan_total_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+    if (!isNoExp) t += `<tr><td>Expansion DS</td>${sl(src.expansion_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+    t += `<tr><td>DSCR</td>${sl(src.op_inc.map((oi, i) => { const ds = src.loan_total_ds[i] + (src.expansion_ds[i] || 0); return ds > 0 ? (oi / ds).toFixed(1) + 'x' : '—'; })).map(v => `<td>${v}</td>`).join('')}</tr>`;
+    t += `<tr><td>Capex Reserve</td>${sl(src.capex_res).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+    t += tr('Distributable Cash', src.distrib_cash, fCM, 'total-row-table');
+    t += sr('Waterfall', Y);
+    t += tr('Tax', src.tax_cash.map(v => -v), fCM);
+    t += tr('Tier 0 (EB)', src.tier0_actual.map(v => -v), fCM);
+    t += `<tr><td>Tier 1 (Partners)</td>${sl(src.tier1_actual).map((v, i) => {
+      const short = (src.tier1_shortfall[i] || 0) > 50;
+      return `<td${short ? ' style="color:var(--yellow)"' : ''}>${fCM(-v)}${short ? ' *' : ''}</td>`;
+    }).join('')}</tr>`;
+    t += tr('PE/DD Repayment', src.pedd_payments.map(v => -v), fCM);
+    t += tr('Tier 2 (Pro-Rata)', src.tier2.map(v => -v), fCM);
+    if (src.tier1_shortfall.some(v => v > 50)) t += tr('T1 Shortfall → DD', src.tier1_shortfall.map(v => -v), fCM);
+    t += '</tbody>';
+    return t;
+  };
+  document.getElementById('distTable').innerHTML = buildWaterfall(d, false);
+  if (d.partners_no_exp && d.partners_no_exp._waterfall) {
+    document.getElementById('distTableNoExp').innerHTML = buildWaterfall(d.partners_no_exp._waterfall, true);
+  }
 
   // Partner cash
   let pt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;

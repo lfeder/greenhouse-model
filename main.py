@@ -274,6 +274,19 @@ def run_everything(s):
         partners_no_exp = {p: partners_ne[p]["total"] for p in ["EB", "JS", "JJB", "SBIC", "TP"]}
         partners_no_exp["_op_inc_terminal"] = result_ne["op_inc"][-1]
         partners_no_exp["_ownership"] = {"JJB": own_ne[-1]["JJB"], "EB": own_ne[-1]["EB"], "JS": own_ne[-1]["JS"], "SBIC": own_ne[-1].get("SBIC", 0), "TP": own_ne[-1].get("TP", 0)}
+        partners_no_exp["_waterfall"] = {
+            "op_inc": result_ne["op_inc"],
+            "loan_total_ds": result_ne["loans"]["total_ds"],
+            "expansion_ds": [0.0] * N_YEARS,
+            "capex_res": result_ne["capex_res"],
+            "distrib_cash": result_ne["distrib_cash"],
+            "tax_cash": result_ne["tax_cash"],
+            "tier0_actual": result_ne["tier0_actual"],
+            "tier1_actual": result_ne["tier1_actual"],
+            "pedd_payments": result_ne["pedd_payments"],
+            "tier2": result_ne["tier2"],
+            "tier1_shortfall": result_ne["tier1_shortfall"],
+        }
 
         # JJB bridge loan: fund shortfalls, repay from surpluses
         guarantee = {}
