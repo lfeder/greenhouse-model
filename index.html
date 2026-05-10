@@ -71,7 +71,7 @@
       <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('partnerBody').style.display=document.getElementById('partnerBody').style.display==='none'?'':'none'">Partner Cash & Valuations ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
       <div id="partnerBody">
         <div style="overflow-x:auto"><table class="fin-table" id="partnerTable"></table></div>
-        <div style="overflow-x:auto;margin-top:8px"><table class="fin-table" id="valuationTable"></table></div>
+        <div id="valuationTableWrap" style="overflow-x:auto;margin-top:8px"><table class="fin-table" id="valuationTable"></table></div>
       </div>
     </div>
 
@@ -106,6 +106,7 @@ const UI_TOGGLES = {
   show3PValuation:    false,  // sidebar: 3P Valuation slider (within Equity Valuations)
   showScenarioComparison: false,  // main: Scenario Comparison ('33) panel
   showSbicAndTp:      false,  // global: SBIC and 3P (TP) rows in all tables + KPI subtitle
+  showValuationTable: false,  // main: P/E Multiple / Business Value table under Partner Cash
 };
 const VISIBLE_PARTNERS = UI_TOGGLES.showSbicAndTp ? ['EB','JS','JJB','SBIC','TP'] : ['EB','JS','JJB'];
 
@@ -1107,6 +1108,11 @@ function render(d) {
   document.getElementById('partnerTable').innerHTML = pt;
 
   // Valuation
+  const valWrap = document.getElementById('valuationTableWrap');
+  if (valWrap) valWrap.style.display = UI_TOGGLES.showValuationTable ? '' : 'none';
+  if (!UI_TOGGLES.showValuationTable) {
+    document.getElementById('valuationTable').innerHTML = '';
+  } else {
   const peOpts = [3,4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
   const hasNoExp = d.partners_no_exp && d.partners_no_exp._op_inc_terminal;
   const noExpCol = hasNoExp ? '<th>No Exp</th>' : '';
@@ -1142,6 +1148,7 @@ function render(d) {
     noExpSel.value = settings.noExpPE || 8;
     noExpSel.onchange = () => updateSetting('noExpPE', Number(noExpSel.value));
   }
+  }  // end if showValuationTable
 
   // Tax detail
   let tx = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
