@@ -35,7 +35,7 @@
   <div style="min-width:0">
     <div class="kpi-grid" id="kpiGrid"></div>
 
-    <div class="panel chart-panel">
+    <div class="panel chart-panel" id="chartPanel">
       <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('chartBody').style.display=document.getElementById('chartBody').style.display==='none'?'':'none'">Revenue Chart <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
       <div id="chartBody"><div style="position:relative;height:255px"><canvas id="chart"></canvas></div></div>
     </div>
@@ -68,6 +68,7 @@ const UI_TOGGLES = {
   showTomatoRows:     false,  // gantt: T (build) + T_BUY rows
   showLettuceRow:     false,  // gantt: L (lettuce) row
   showLandRow:        false,  // gantt: LAND row
+  showChartPanel:     false,  // main: Revenue Chart panel
 };
 
 // --- API ---
@@ -647,7 +648,9 @@ function render(d) {
   ].map(([l, v, s]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div><div class="kpi-sub">${s}</div></div>`).join('');
 
   // Chart — stacked revenue bars by crop
-  renderChart(d);
+  const chartPanel = document.getElementById('chartPanel');
+  if (chartPanel) chartPanel.style.display = UI_TOGGLES.showChartPanel ? '' : 'none';
+  if (UI_TOGGLES.showChartPanel) renderChart(d);
 
   // Revenue table — per-crop rows, no expense detail
   let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
