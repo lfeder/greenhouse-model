@@ -636,8 +636,19 @@ function render(d) {
   }
   rt += sr('Revenue', Y);
   if (d.rev_rows) {
-    for (const [name, data] of d.rev_rows) {
-      rt += tr(name, data, fCM);
+    const existRows = d.rev_rows.filter(([k]) => k.startsWith('Existing'));
+    const newRows = d.rev_rows.filter(([k]) => !k.startsWith('Existing'));
+    const sumRows = (rows) => Y.map((_, i) => rows.reduce((s, [, data]) => s + (data[i] || 0), 0));
+    const toggleHdr = (label, cls) => `<tr class="section-header" style="cursor:pointer" onclick="document.querySelectorAll('.${cls}').forEach(r=>r.style.display=r.style.display==='none'?'':'none')"><td colspan="${Y.length - _DN + 1}">${label} <span style="font-size:8px;color:var(--text-dim)">▼</span></td></tr>`;
+    if (existRows.length) {
+      rt += tr('Existing Revenue', sumRows(existRows), fCM);
+      rt += toggleHdr('  ↳ detail', 'rev-exist-detail');
+      for (const [name, data] of existRows) rt += tr(name, data, fCM, 'rev-exist-detail" style="display:none');
+    }
+    if (newRows.length) {
+      rt += tr('New Revenue', sumRows(newRows), fCM);
+      rt += toggleHdr('  ↳ detail', 'rev-new-detail');
+      for (const [name, data] of newRows) rt += tr(name, data, fCM, 'rev-new-detail" style="display:none');
     }
   }
   rt += tr('Total Revenue', d.rev, fCM, 'subtotal-row');
