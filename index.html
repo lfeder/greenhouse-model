@@ -946,25 +946,23 @@ function render(d) {
     const endEB    = lookup['Ending EB %']      || zeros;
     const buyJS    = lookup['JJB buys from JS'] || zeros;
     const totGrant = pedd.map((v, i) => v + (promote[i] || 0));
-    const ebGrantJS = pedd.map((v, i) => {
-      const promRemain = startJS[i] + startJJB[i];
-      const promShareJS = promRemain > 0 ? startJS[i] / promRemain : 0.5;
-      return -(v * 0.5) - (promote[i] || 0) * promShareJS;
-    });
-    const ebGrantJJB = pedd.map((v, i) => {
-      const promRemain = startJS[i] + startJJB[i];
-      const promShareJJB = promRemain > 0 ? startJJB[i] / promRemain : 0.5;
-      return -(v * 0.5) - (promote[i] || 0) * promShareJJB;
-    });
+    // Split EB grant dilution between JS and JJB using TERMINAL (last-year)
+    // ending shares — applied as a constant ratio across all years, so
+    // dilution allocation reflects steady-state ownership not year-1 values.
+    const lastIdx = endJS.length - 1;
+    const termJS  = endJS[lastIdx]  || 0;
+    const termJJB = endJJB[lastIdx] || 0;
+    const tDenom  = termJS + termJJB;
+    const shareJS  = tDenom > 0 ? termJS  / tDenom : 0.5;
+    const shareJJB = tDenom > 0 ? termJJB / tDenom : 0.5;
+    const ebGrantJS  = totGrant.map(v => -v * shareJS);
+    const ebGrantJJB = totGrant.map(v => -v * shareJJB);
 
     // Expansion row = the plug that makes section add up exactly:
     // Ending = Starting + EB_grant + (Sale/Buy) + Expansion
-    // Inputs are pre-rounded to 1 decimal by backend, so clamp |v|<0.15 to 0
-    // (noise floor) to avoid spurious ±0.1 in years with no expansion event.
-    const denoise = v => Math.abs(v) < 0.15 ? 0 : v;
-    const expEB  = endEB.map((v, i)  => denoise(v - startEB[i]  - totGrant[i]));
-    const expJS  = endJS.map((v, i)  => denoise(v - startJS[i]  - ebGrantJS[i]  - (-buyJS[i])));
-    const expJJB = endJJB.map((v, i) => denoise(v - startJJB[i] - ebGrantJJB[i] - buyJS[i]));
+    const expEB  = endEB.map((v, i)  => v - startEB[i]  - totGrant[i]);
+    const expJS  = endJS.map((v, i)  => v - startJS[i]  - ebGrantJS[i]  - (-buyJS[i]));
+    const expJJB = endJJB.map((v, i) => v - startJJB[i] - ebGrantJJB[i] - buyJS[i]);
 
     const sections = {
       EB: [
