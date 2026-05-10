@@ -910,7 +910,24 @@ function render(d) {
          style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
     ot += `</tbody><tbody id="ownershipDetail" style="display:none">`;
     ot += `<tr><td colspan="${Y.length-_DN+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
+    // Reorder ownership_detail rows by partner: EB, JS, JJB, SBIC, TP. Hidden partners filtered.
+    const partnerOrder = ['EB','JS','JJB','SBIC','TP'];
+    const groups = new Map(partnerOrder.map(p => [p, []]));
+    const other = [];
     for (const row of d.ownership_detail) {
+      const label = row[0];
+      if (label.includes('Capital')) continue;  // shown above as 'JJB Equity In'
+      // longest match first so 'JJB' isn't shadowed by 'JS'
+      const p = ['JJB','SBIC','TP','EB','JS'].find(p => label.includes(p));
+      if (p) groups.get(p).push(row); else other.push(row);
+    }
+    const ordered = [];
+    for (const p of partnerOrder) {
+      if (!VISIBLE_PARTNERS.includes(p)) continue;
+      ordered.push(...groups.get(p));
+    }
+    ordered.push(...other);
+    for (const row of ordered) {
       const label = row[0];
       const vals = _DN ? row.slice(1, -_DN) : row.slice(1);
       const isDollar = label.includes('($)');
