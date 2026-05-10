@@ -317,7 +317,7 @@ function buildSidebar() {
     ${S('bankTerm', {label:'Bank Term',min:5,max:15,step:1,def:10,fmt:v=>v+' yr'})}
   </div>`;
   h += `<div class="panel"><div class="panel-title">Equity Valuations</div>
-    ${S('buyinValuation', {label:'JJB Buy-in Valuation',min:10000000,max:20000000,step:2500000,def:15000000,fmt:FM})}
+    ${S('jjbEquityBuyinPct', {label:'JJB Equity Buy-in',min:0,max:15,step:0.5,def:7.5,fmt:v=>v.toFixed(1)+'%'})}
     ${UI_TOGGLES.show3PValuation ? S('thirdPartyValuation', {label:'3P Valuation',min:20000000,max:40000000,step:5000000,def:30000000,fmt:FM}) : ''}
     ${UI_TOGGLES.showSbicAndTp ? `<div class="toggle-row">
       <input type="checkbox" id="chk-tpBuysJS" ${settings.thirdPartyBuysJS ? 'checked' : ''}
@@ -946,39 +946,35 @@ function render(d) {
     const endEB    = lookup['Ending EB %']      || zeros;
     const buyJS    = lookup['JJB buys from JS'] || zeros;
     const totGrant = pedd.map((v, i) => v + (promote[i] || 0));
-    // Split EB grant dilution between JS and JJB using TERMINAL (last-year)
-    // ending shares — applied as a constant ratio across all years, so
-    // dilution allocation reflects steady-state ownership not year-1 values.
     const lastIdx = endJS.length - 1;
-    const termJS  = endJS[lastIdx]  || 0;
-    const termJJB = endJJB[lastIdx] || 0;
-    const tDenom  = termJS + termJJB;
-    const shareJS  = tDenom > 0 ? termJS  / tDenom : 0.5;
-    const shareJJB = tDenom > 0 ? termJJB / tDenom : 0.5;
-    const ebGrantJS  = totGrant.map(v => -v * shareJS);
-    const ebGrantJJB = totGrant.map(v => -v * shareJJB);
+    // Match backend exactly:
+    //   PEDD splits 50/50 between JS and JJB
+    //   Promote splits pro-rata to current JS:JJB shares (post-PEDD)
+    const ebGrantJS = pedd.map((v, i) => {
+      const promRemain = (startJS[i] || 0) + (startJJB[i] || 0);
+      const promShareJS = promRemain > 0 ? (startJS[i] || 0) / promRemain : 0.5;
+      return -(v * 0.5) - (promote[i] || 0) * promShareJS;
+    });
+    const ebGrantJJB = pedd.map((v, i) => {
+      const promRemain = (startJS[i] || 0) + (startJJB[i] || 0);
+      const promShareJJB = promRemain > 0 ? (startJJB[i] || 0) / promRemain : 0.5;
+      return -(v * 0.5) - (promote[i] || 0) * promShareJJB;
+    });
 
-    // Expansion row — only non-zero in years where JJB issues new equity.
-    // JJB Expansion = JJB Equity Issued (the cap raise event).
-    // EB+JS take the full dilution split by terminal EB:JS ratio.
+    // Expansion row — direct from JJB Equity Issued % (only 2027 nonzero).
+    // EB and JS dilution = -EB_pre/JS_pre × new_pct/100 (matches backend scale).
     const equityIssued = lookup['JJB Equity Issued %'] || zeros;
-    const termEBval = endEB[lastIdx] || 0;
-    const termJSval = endJS[lastIdx] || 0;
-    const ebjsDenom = termEBval + termJSval;
-    const ebDilShare = ebjsDenom > 0 ? termEBval / ebjsDenom : 0.5;
-    const jsDilShare = ebjsDenom > 0 ? termJSval / ebjsDenom : 0.5;
     const denoise = v => Math.abs(v) < 0.05 ? 0 : v;
-    // JJB gain from cap raise = equityIssued × (eb_pre + js_pre)/100, where _pre
-    // is post-vesting state in that year. Dilution to EB+JS sums to same magnitude.
-    // Split between EB/JS by terminal ratio so steady-state ownership drives split.
-    const dilMag = equityIssued.map((v, i) => {
+    const expEB = equityIssued.map((v, i) => denoise(-(startEB[i] || 0) * v / 100));
+    const expJS = equityIssued.map((v, i) => {
+      const jsPre = (startJS[i] || 0) - (buyJS[i] || 0);
+      return denoise(-jsPre * v / 100);
+    });
+    const expJJB = equityIssued.map((v, i) => {
       const ebPre = startEB[i] || 0;
       const jsPre = (startJS[i] || 0) - (buyJS[i] || 0);
-      return v * (ebPre + jsPre) / 100;
+      return denoise(v * (ebPre + jsPre) / 100);
     });
-    const expEB  = dilMag.map(v => denoise(-v * ebDilShare));
-    const expJS  = dilMag.map(v => denoise(-v * jsDilShare));
-    const expJJB = dilMag.map(v => denoise(v));
 
     const sections = {
       EB: [

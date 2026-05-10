@@ -117,19 +117,20 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
             buy = buyout_pct
         buyout_row.append(buy)
 
-        # 2. JJB equity investment at buyinValuation
-        #    SBIC has anti-dilution protection — not scaled
+        # 2. JJB equity buy-in (FIXED %, kicks in 2027 only)
+        #    Replaces the post-money valuation math. JJB simply receives
+        #    `jjbEquityBuyinPct` of equity; EB/JS/TP scale down pro-rata.
         jjb_amount = draws.get("jjb", 0)
         jjb_new_pct = 0
-        if jjb_amount > 0 and buyin_val > 0:
-            post_money = buyin_val + jjb_amount
-            new_pct = jjb_amount / post_money * 100
-            scale = 1 - new_pct / 100
-            eb *= scale
-            js *= scale
-            tp *= scale
-            jjb = jjb * scale + new_pct
-            jjb_new_pct = new_pct
+        if year == 2027 and is_expansion:
+            new_pct = settings.get("jjbEquityBuyinPct", 7.5)
+            if new_pct > 0:
+                scale = 1 - new_pct / 100
+                eb *= scale
+                js *= scale
+                tp *= scale
+                jjb = jjb * scale + new_pct
+                jjb_new_pct = new_pct
         jjb_capital_row.append(jjb_amount)
         jjb_equity_row.append(jjb_new_pct)
 
