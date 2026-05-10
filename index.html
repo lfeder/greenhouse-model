@@ -130,7 +130,8 @@ function setLender(name) {
     financingPct: 100 - p.ltv,
     bankTerm: p.term,
     bankRate: p.rate,
-    sbicCap: 0,  // single-tranche: SBIC disabled
+    sbicCap: 0,            // disabled — single lender tranche
+    bankLoanCap: 1e9,      // disabled — lender funds full LTV regardless of cap
   });
 }
 
@@ -1051,6 +1052,10 @@ function render(d) {
 // --- INIT ---
 async function refresh() {
   await loadSettings();
+  if (!settings.expansionLender) {
+    setLender('SBA');  // default, also disables bankLoanCap + sbicCap
+    return;
+  }
   buildSidebar();
   await compute();
 }
