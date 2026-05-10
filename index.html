@@ -641,7 +641,7 @@ function renderGantt(d) {
     } else if (!isInfra) {
       const rampKey = lk + 'RampYears';
       const curRamp = settings[rampKey];
-      let rOpts = [0,1,2,3].map(v => `<option value="${v}" ${v===curRamp?'selected':''}>${v}yr</option>`).join('');
+      let rOpts = [0,1,2,3,4].map(v => `<option value="${v}" ${v===curRamp?'selected':''}>${v}yr</option>`).join('');
       rampHtml = `<div class="gantt-cell"><select class="gantt-select gantt-ctrl" data-key="${rampKey}">${rOpts}</select></div>`;
     } else {
       rampHtml = `<div class="gantt-cell-muted">–</div>`;
@@ -718,7 +718,7 @@ function renderGantt(d) {
         <div style="${hR}">IRR</div>
         <div style="${hR}">Unlev</div>
         <div style="${hC}">Start</div>
-        <div style="${hC}" title="Production ramp after build completes.&#10;0yr: 100% from day one&#10;1yr: 70% → 100%&#10;2yr: 50% → 85% → 100%&#10;3yr: 40% → 65% → 85% → 100%">Ramp</div>
+        <div style="${hC}" title="Production ramp after build completes (linear: prod_yr / (ramp_years + 1)).&#10;0yr: 100%&#10;1yr: 50% → 100%&#10;2yr: 33% → 67% → 100%&#10;3yr: 25% → 50% → 75% → 100%&#10;4yr: 20% → 40% → 60% → 80% → 100%">Ramp</div>
         <div></div><div class="gantt-timeline-header">${yearHdr}</div>
       </div>
       ${rows}
