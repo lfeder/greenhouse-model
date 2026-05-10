@@ -25,13 +25,14 @@ from analysis import (
 # P&L assembly
 # ============================================================
 
-def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None, startup_exp=None, new_crop_op_inc=None):
+def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None, startup_exp=None, new_crop_op_inc=None, expansion_prin=None):
     """Assemble P&L from rev/exp arrays. Returns all intermediate values."""
     s = settings
     loans = compute_loan_schedules()
     dep = compute_depreciation(dep_crops or [], s)
     t_bill_rate = s["tBillRate"] / 100
     expansion_int = expansion_int or [0] * N_YEARS
+    expansion_prin = expansion_prin or [0] * N_YEARS
     startup_exp = startup_exp or [0] * N_YEARS
     new_crop_op_inc = new_crop_op_inc or [0] * N_YEARS
 
@@ -59,8 +60,12 @@ def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None, startup_exp=
         tax_detail.append(td)
 
     tax_cash, tax_cash_detail = calc_tax_cash_timing(tax_liab)
-    # Add JJB startup capital back (capped at op_inc drag — see jjb_startup_line above)
-    distrib_cash = [o - ds - cr + sc for o, ds, cr, sc in zip(op_inc, loans["total_ds"], capex_res, jjb_startup_line)]
+    # Distrib cash = op_inc - existing_DS - expansion_DS - capex_res + JJB startup add-back
+    expansion_ds_local = [expansion_int[i] + expansion_prin[i] for i in range(N_YEARS)]
+    distrib_cash = [
+        o - ds - eds - cr + sc
+        for o, ds, eds, cr, sc in zip(op_inc, loans["total_ds"], expansion_ds_local, capex_res, jjb_startup_line)
+    ]
 
     # Waterfall
     wf = run_waterfall(distrib_cash, tax_cash, t_bill_rate)
@@ -216,7 +221,7 @@ def _run_scenario(s):
     rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres, startup_exp, new_crop_op_inc = build_rev_exp(s)
     allocate_capital_stack(crop_data, s)
     crop_irrs, total_irr, total_unlev, expansion_int, expansion_prin, expansion_loan_detail = compute_crop_irrs(crop_data, s)
-    result = run_pnl(rev, exp, s, dep_crops, expansion_int, startup_exp, new_crop_op_inc)
+    result = run_pnl(rev, exp, s, dep_crops, expansion_int, startup_exp, new_crop_op_inc, expansion_prin)
     result["startup_exp"] = startup_exp
     equity_draws = build_equity_draws(crop_data)
     year_pe = s["yearPE"]
@@ -247,7 +252,7 @@ def run_everything(s):
     # Compute expansion DS BEFORE full model so interest is included in taxable income
     crop_irrs, total_irr, total_unlev, expansion_int, expansion_prin, expansion_loan_detail = compute_crop_irrs(crop_data, s)
 
-    result = run_pnl(rev, exp, s, dep_crops, expansion_int, startup_exp, new_crop_op_inc)
+    result = run_pnl(rev, exp, s, dep_crops, expansion_int, startup_exp, new_crop_op_inc, expansion_prin)
     result["startup_exp"] = startup_exp
     kpis = compute_kpis(s, crop_data, s["debug"])
 
