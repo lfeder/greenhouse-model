@@ -64,27 +64,22 @@ async function load() {
   el += '</tbody>';
   document.getElementById('existLoansTable').innerHTML = el;
 
-  // Expansion loan — single consolidated loan (sum of per-crop tranches)
+  // Expansion loan — single consolidated loan from chosen lender (SBA or JJB).
+  // Excludes Tomato (Buy) — that's a separate hard-asset acquisition loan.
   let xl = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   if (d.expansion_loan_detail) {
-    let totalAmt = 0, rate = 0, term = 0;
-    const interest = Y.map(() => 0);
-    const principal = Y.map(() => 0);
+    const totalAmt = d.bank_total || 0;
+    const rate = settings.bankRate || 7;
+    const term = settings.bankTerm || 25;
     const balance = Y.map(() => 0);
-    for (const det of Object.values(d.expansion_loan_detail)) {
-      if (!det || !(det.loan_amt > 0)) continue;
-      totalAmt += det.loan_amt;
-      rate = det.rate; term = det.term;  // shared across tranches
-      for (let i = 0; i < Y.length; i++) {
-        interest[i]  += det.interest[i]  || 0;
-        principal[i] += det.principal[i] || 0;
-        balance[i]   += det.balance[i]   || 0;
-      }
+    for (const [name, det] of Object.entries(d.expansion_loan_detail)) {
+      if (!det || name.includes('(Buy)')) continue;
+      for (let i = 0; i < Y.length; i++) balance[i] += det.balance[i] || 0;
     }
-    const lender = (d.settings && d.settings.expansionLender) || 'Expansion';
-    xl += sr(lender + ' Loan (' + fCM(totalAmt) + 'M @ ' + (rate*100).toFixed(0) + '%, ' + term + 'yr)', Y);
-    xl += tr('Interest', interest.map(v => -v));
-    xl += tr('Principal', principal.map(v => -v));
+    const lender = settings.expansionLender || 'Expansion';
+    xl += sr(lender + ' Loan (' + fCM(totalAmt) + 'M @ ' + rate.toFixed(0) + '%, ' + term + 'yr)', Y);
+    xl += tr('Interest', d.expansion_int.map(v => -v));
+    xl += tr('Principal', d.expansion_prin.map(v => -v));
     xl += tr('Balance', balance);
   }
   xl += sr('Totals', Y);
