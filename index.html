@@ -1053,8 +1053,25 @@ function render(d) {
 
 
 // --- INIT ---
+function applyToggleOverrides() {
+  // Mutate in-memory settings to zero out hidden categories.
+  // Backend hardcodes T_BUY's 6 acres, so we neutralize via rev/cost.
+  if (!UI_TOGGLES.showTomatoRows) {
+    settings.newTAcres = 0;
+    settings.tomatoBuildRevPerAc = 0;
+    settings.tomatoBuyRevPerAc = 0;
+    settings.tomatoPurchasePrice = 0;
+    settings.tomatoHardAssets = 0;
+    settings.tomatoCostPerAc = 0;
+  }
+  if (!UI_TOGGLES.showLettuceRow) {
+    settings.newLAcres = 0;
+  }
+}
+
 async function refresh() {
   await loadSettings();
+  applyToggleOverrides();
   if (!settings.expansionLender) {
     setLender('SBA');  // default, also disables bankLoanCap + sbicCap
     return;
