@@ -45,7 +45,7 @@
       <div id="revExpBody"><div style="overflow-x:auto"><table class="fin-table" id="revExpTable"></table></div></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="scenarioPanel">
       <div class="panel-title">Scenario Comparison ('33)</div>
       <div style="overflow-x:auto"><table class="fin-table" id="scenarioTable"></table></div>
     </div>
@@ -93,6 +93,9 @@ const UI_TOGGLES = {
   showLettuceRow:     false,  // gantt: L (lettuce) row
   showLandRow:        false,  // gantt: LAND row
   showChartPanel:     false,  // main: Revenue Chart panel
+  showBankLoanPanel:  false,  // sidebar: Bank Loan
+  show3PValuation:    false,  // sidebar: 3P Valuation slider (within Equity Valuations)
+  showScenarioComparison: false,  // main: Scenario Comparison ('33) panel
 };
 
 // --- API ---
@@ -251,6 +254,7 @@ function buildSidebar() {
 
   const FM = v => (v < 0 ? '−' : '') + (Math.abs(v) / 1e6).toFixed(2) + 'M';
   const FP = v => v + '%';
+  if (UI_TOGGLES.showBankLoanPanel)
   h += `<div class="panel"><div class="panel-title">Bank Loan</div>
     ${S('financingPct', {label:'Bank LTV',min:50,max:80,step:5,def:70,fmt:FP})}
     ${S('bankLoanCap', {label:'Bank Loan Cap',min:7500000,max:17500000,step:1250000,def:12500000,fmt:FM})}
@@ -259,7 +263,7 @@ function buildSidebar() {
   </div>`;
   h += `<div class="panel"><div class="panel-title">Equity Valuations</div>
     ${S('buyinValuation', {label:'JJB Buy-in Valuation',min:10000000,max:20000000,step:2500000,def:15000000,fmt:FM})}
-    ${S('thirdPartyValuation', {label:'3P Valuation',min:20000000,max:40000000,step:5000000,def:30000000,fmt:FM})}
+    ${UI_TOGGLES.show3PValuation ? S('thirdPartyValuation', {label:'3P Valuation',min:20000000,max:40000000,step:5000000,def:30000000,fmt:FM}) : ''}
     <div class="toggle-row">
       <input type="checkbox" id="chk-tpBuysJS" ${settings.thirdPartyBuysJS ? 'checked' : ''}
         onchange="updateSetting('thirdPartyBuysJS', this.checked)">
@@ -771,7 +775,9 @@ function render(d) {
   // === MERGED FROM PARTNERS PAGE ===
 
   // Scenario comparison table
-  if (d.scenario_summary) {
+  const scenarioPanel = document.getElementById('scenarioPanel');
+  if (scenarioPanel) scenarioPanel.style.display = UI_TOGGLES.showScenarioComparison ? '' : 'none';
+  if (UI_TOGGLES.showScenarioComparison && d.scenario_summary) {
     const sc = d.scenario_summary;
     const scKeys = ['A1','A2','A3','A4','D'];
     const scLabels = {A1:'A1', A2:'A2', A3:'A3', A4:'A4', D:'D'};
