@@ -59,6 +59,17 @@ let settings = {};
 let lastData = null;
 let chart = null;
 
+// --- UI TOGGLES ---
+// Flip false→true to restore hidden controls/rows. All wiring preserved.
+const UI_TOGGLES = {
+  showScenarioPanel:  false,  // sidebar: A/B/C/D load + save buttons
+  showLettuceSliders: false,  // sidebar: lettuceLbs + lettucePrice
+  showTomatoBuyPanel: false,  // sidebar: tomatoHardAssets
+  showTomatoRows:     false,  // gantt: T (build) + T_BUY rows
+  showLettuceRow:     false,  // gantt: L (lettuce) row
+  showLandRow:        false,  // gantt: LAND row
+};
+
 // --- API ---
 async function loadSettings() {
   const r = await fetch('/api/settings');
@@ -167,25 +178,27 @@ function buildSidebar() {
       60k sqft blocks (1K · 1J · ${activePreset && activePreset.startsWith('4') ? '2E' : '1E'}). Lettuce/tomato zeroed.
     </div>
   </div>`;
-  h += `<div class="panel"><div class="panel-title">Scenario</div>
-    <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;margin-bottom:4px">LOAD</div>
-    <div style="display:flex;gap:6px">
-      <button class="btn" onclick="loadScenario('A')">A</button>
-      <button class="btn" onclick="loadScenario('B')">B</button>
-      <button class="btn" onclick="loadScenario('C')">C</button>
-      <button class="btn" onclick="loadScenario('D')">D</button>
-    </div>
-    <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;margin:10px 0 4px">SAVE CURRENT TO</div>
-    <div style="display:flex;gap:6px">
-      <button class="btn" onclick="saveScenario('A')">A</button>
-      <button class="btn" onclick="saveScenario('B')">B</button>
-      <button class="btn" onclick="saveScenario('C')">C</button>
-    </div>
-  </div>`;
+  if (UI_TOGGLES.showScenarioPanel) {
+    h += `<div class="panel"><div class="panel-title">Scenario</div>
+      <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;margin-bottom:4px">LOAD</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn" onclick="loadScenario('A')">A</button>
+        <button class="btn" onclick="loadScenario('B')">B</button>
+        <button class="btn" onclick="loadScenario('C')">C</button>
+        <button class="btn" onclick="loadScenario('D')">D</button>
+      </div>
+      <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;margin:10px 0 4px">SAVE CURRENT TO</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn" onclick="saveScenario('A')">A</button>
+        <button class="btn" onclick="saveScenario('B')">B</button>
+        <button class="btn" onclick="saveScenario('C')">C</button>
+      </div>
+    </div>`;
+  }
   h += `<div class="panel"><div class="panel-title">Revenue Adjustments</div>
     ${S('englishPricePerLb', {label:"English '27 $/lb",min:3,max:3.5,step:0.125,def:3,fmt:v=>'$'+v.toFixed(2)})}
-    ${S('lettuceLbs', {label:'Lettuce lb/yr (2028)',min:500000,max:1300000,step:100000,def:700000,fmt:v=>(v/1e3).toFixed(0)+'K'})}
-    ${S('lettucePrice', {label:'Lettuce Price / lb',min:6,max:8,step:0.5,def:7,fmt:v=>'$'+v.toFixed(2)})}
+    ${UI_TOGGLES.showLettuceSliders ? S('lettuceLbs', {label:'Lettuce lb/yr (2028)',min:500000,max:1300000,step:100000,def:700000,fmt:v=>(v/1e3).toFixed(0)+'K'}) : ''}
+    ${UI_TOGGLES.showLettuceSliders ? S('lettucePrice', {label:'Lettuce Price / lb',min:6,max:8,step:0.5,def:7,fmt:v=>'$'+v.toFixed(2)}) : ''}
   </div>`;
 
   h += `<div class="panel"><div class="panel-title">Inflation</div>
@@ -193,6 +206,7 @@ function buildSidebar() {
     ${S('costInflation', {label:'Cost Escalation',min:3,max:5,step:0.5,def:3,fmt:v=>v.toFixed(1)+'%/yr'})}
   </div>`;
 
+  if (UI_TOGGLES.showTomatoBuyPanel)
   h += `<div class="panel"><div class="panel-title">Tomato (Buy)</div>
     ${S('tomatoHardAssets', {label:'Hard Asset Value',min:2000000,max:10000000,step:1000000,def:5000000,fmt:v=>(v/1e6).toFixed(2)+'M'})}
   </div>`;
@@ -312,6 +326,11 @@ function renderGantt(d) {
   const gd = d.gantt_data || [];
   if (!gd.length) { document.getElementById('ganttPanel').innerHTML = ''; return; }
 
+  const HIDDEN_KEYS = new Set();
+  if (!UI_TOGGLES.showTomatoRows) { HIDDEN_KEYS.add('T'); HIDDEN_KEYS.add('T_BUY'); }
+  if (!UI_TOGGLES.showLettuceRow) HIDDEN_KEYS.add('L');
+  if (!UI_TOGGLES.showLandRow)    HIDDEN_KEYS.add('LAND');
+
   // Year headers
   const years = [];
   for (let y = 2027; y <= 2033; y++) years.push(y);
@@ -337,6 +356,7 @@ function renderGantt(d) {
     const isInfra = item.is_infra;
     const isBuy = item.is_buy || false;
     const key = item.key;
+    if (HIDDEN_KEYS.has(key)) continue;
     const lk = key.toLowerCase();
 
     // 1. Label
