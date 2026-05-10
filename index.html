@@ -594,10 +594,15 @@ function renderGantt(d) {
         <div class="gantt-cell gantt-right" style="color:var(--green)">${Math.round(d.total_unlev)}%</div>
         <div class="gantt-cell"></div><div class="gantt-cell"></div><div></div><div></div>
       </div>
+      <div class="gantt-row" title="3 months of working capital prefunded as equity one quarter before production (1.5 months for Tomato Buy)">
+        <div class="gantt-label"><div class="gantt-crop-name" style="color:var(--text-muted)">Startup Capital</div></div>
+        <div class="gantt-cell">–</div><div class="gantt-cell">–</div><div class="gantt-cell">–</div>
+        <div class="gantt-cell">–</div><div class="gantt-cell">–</div><div class="gantt-cell">–</div>
+        <div class="gantt-cell gantt-right" style="color:var(--text-muted)">${((d.startup_capital||0)/1e6).toFixed(2)}</div>
+        <div class="gantt-cell"></div><div class="gantt-cell"></div>
+        <div class="gantt-cell"></div><div class="gantt-cell"></div><div></div><div></div>
+      </div>
       ${tbuyRow}
-    </div>
-    <div style="padding:6px 12px;font-size:11px;color:var(--muted);opacity:0.8">
-      * Each crop includes 3 months of startup capital prefunded as equity one quarter before production (1.5 months for Tomato Buy).
     </div>`;
 
   // Bind all controls (inputs and selects)
