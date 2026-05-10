@@ -1084,22 +1084,23 @@ function render(d) {
     document.getElementById('distTableNoExp').innerHTML = buildWaterfall(d.partners_no_exp._waterfall, true);
   }
 
-  // Partner cash
+  // Partner cash — clickable header collapses detail rows for that partner
   let pt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   for (const p of VISIBLE_PARTNERS) {
     const pd = d.partners[p];
     if (!pd) continue;
-    pt += sr(pName(p), Y);
-    pt += tr('Tax Dist', pd.tax_dist, fCM);
-    if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCM);
-    pt += tr('Tier 1', pd.tier_1, fCM);
-    if (pd.pedd) pt += tr('PE/DD', pd.pedd, fCM);
-    pt += tr('Tier 2', pd.tier_2, fCM);
-    if (pd.equity_buy_sell) pt += tr('Equity Buy/Sell', pd.equity_buy_sell, fCM);
+    const cls = `pcd-${p}`;  // partner cash detail class
+    pt += `<tr class="section-header" style="cursor:pointer" onclick="document.querySelectorAll('.${cls}').forEach(r=>r.style.display=r.style.display==='none'?'':'none')"><td colspan="${Y.length-_DN+1}">${pName(p)} <span style="font-size:8px;color:var(--text-dim)">▼</span></td></tr>`;
+    pt += tr('Tax Dist', pd.tax_dist, fCM, `${cls}" style="display:none`);
+    if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCM, `${cls}" style="display:none`);
+    pt += tr('Tier 1', pd.tier_1, fCM, `${cls}" style="display:none`);
+    if (pd.pedd) pt += tr('PE/DD', pd.pedd, fCM, `${cls}" style="display:none`);
+    pt += tr('Tier 2', pd.tier_2, fCM, `${cls}" style="display:none`);
+    if (pd.equity_buy_sell) pt += tr('Equity Buy/Sell', pd.equity_buy_sell, fCM, `${cls}" style="display:none`);
     const gt = d.partners_no_exp && d.partners_no_exp.guarantee;
     if (gt && gt[p] && gt[p].balance.some(v => v > 50)) {
       const net = gt[p].advance.map((v, i) => v - gt[p].repay[i]);
-      pt += tr('Bridge (net)', net, fCM);
+      pt += tr('Bridge (net)', net, fCM, `${cls}" style="display:none`);
     }
     pt += tr('Total ' + pName(p), pd.total, fCM, 'subtotal-row');
     if (d.partners_no_exp && d.partners_no_exp[p]) {
