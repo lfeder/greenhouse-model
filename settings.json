@@ -28,13 +28,13 @@
   "lettuceMrgnPct": 65,
   "kStartQ": 20271,
   "kBuildMonths": 12,
-  "kRampYears": 3,
+  "kRampYears": 1,
   "jStartQ": 20271,
   "jBuildMonths": 12,
-  "jRampYears": 2,
+  "jRampYears": 1,
   "eStartQ": 20271,
   "eBuildMonths": 12,
-  "eRampYears": 4,
+  "eRampYears": 2,
   "tStartQ": 20281,
   "tBuildMonths": 12,
   "tRampYears": 2,
@@ -144,4 +144,5 @@
   },
   "financingMode": "sbic",
   "jjbEquityCap": 10000000,
-  "expansionLender": "SBA"}
+  "expansionLender": "SBA"
+}

@@ -34,12 +34,28 @@ def serve_html(name):
 
 
 def load_settings():
-    with open(SETTINGS_PATH) as f:
-        return json.load(f)
+    # Robust to trailing junk like stray `}` from past corruption
+    raw = SETTINGS_PATH.read_text(encoding="utf-8-sig")
+    raw = raw.lstrip("﻿").strip()
+    # Trim anything after the matching closing brace
+    depth = 0
+    end = -1
+    for i, ch in enumerate(raw):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    if end >= 0:
+        raw = raw[:end + 1]
+    return json.loads(raw)
 
 def save_settings(s):
-    with open(SETTINGS_PATH, "w") as f:
-        json.dump(s, f, indent=2)
+    # Binary mode + explicit \n to avoid Windows CRLF translation quirks
+    data = json.dumps(s, indent=2) + "\n"
+    SETTINGS_PATH.write_bytes(data.encode("utf-8"))
 
 
 @app.route("/")
