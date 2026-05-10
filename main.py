@@ -306,26 +306,46 @@ def run_everything(s):
             "tier1_shortfall": result_ne["tier1_shortfall"],
         }
 
-        # JJB bridge loan: fund shortfalls, repay from surpluses
+        # JJB bridge loan: fund cumulative shortfalls, repay from cumulative surpluses
+        # Compares CUMULATIVE received-to-date (not year-by-year). If a partner is
+        # ahead on cumulative basis, the bridge does not kick in for a single
+        # weak year. JJB's total reflects the offsetting funding obligation.
         guarantee = {}
         for p in ["EB", "JS"]:
             advance = [0.0] * N_YEARS
             repay = [0.0] * N_YEARS
             balance = [0.0] * N_YEARS
-            bal = 0.0
+            cum_noexp = 0.0
+            cum_with = 0.0
+            prev_bal = 0.0
             for i in range(N_YEARS):
-                gap = partners_no_exp[p][i] - partners[p]["total"][i]
-                if gap > 0:
-                    advance[i] = gap
-                    bal += gap
-                elif gap < 0 and bal > 0:
-                    repay[i] = min(-gap, bal)
-                    bal -= repay[i]
-                balance[i] = bal
+                cum_noexp += partners_no_exp[p][i]
+                cum_with  += partners[p]["total"][i]
+                target_bal = max(0.0, cum_noexp - cum_with)
+                delta = target_bal - prev_bal
+                if delta > 0:
+                    advance[i] = delta
+                elif delta < 0:
+                    repay[i] = -delta
+                balance[i] = target_bal
+                prev_bal = target_bal
             guarantee[p] = {"advance": advance, "repay": repay, "balance": balance}
             # Add bridge net (advance - repay) into partner total
             for i in range(N_YEARS):
                 partners[p]["total"][i] += advance[i] - repay[i]
+
+        # JJB is funding the bridge — mirror with reversed conventions:
+        #   "advance" here = cash JJB receives (= EB+JS repays)
+        #   "repay"   here = cash JJB pays out (= EB+JS advances)
+        # So net = advance - repay is negative when JJB is funding.
+        guarantee["JJB"] = {
+            "advance": [guarantee["EB"]["repay"][i] + guarantee["JS"]["repay"][i] for i in range(N_YEARS)],
+            "repay":   [guarantee["EB"]["advance"][i] + guarantee["JS"]["advance"][i] for i in range(N_YEARS)],
+            "balance": [guarantee["EB"]["balance"][i] + guarantee["JS"]["balance"][i] for i in range(N_YEARS)],
+        }
+        for i in range(N_YEARS):
+            partners["JJB"]["total"][i] += guarantee["JJB"]["advance"][i] - guarantee["JJB"]["repay"][i]
+
         partners_no_exp["guarantee"] = guarantee
         partners_no_exp["guarantee_total"] = sum(
             guarantee["EB"]["advance"]) + sum(guarantee["JS"]["advance"])
