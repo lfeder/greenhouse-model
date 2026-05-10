@@ -332,13 +332,13 @@ def allocate_capital_stack(crop_data, s):
 
     build_crops = [c for c in crop_data if not c.get("is_buy")]
     total_capex = sum(c["capex"] for c in build_crops)
-    total_startup = sum(c.get("startup_capital", 0) for c in build_crops)
-    lendable_base = total_capex + total_startup
+    # JJB equity covers only the capex gap. Startup is added separately
+    # via build_equity_draws (was double-counted in lendable_base).
 
     total_bank = min(total_capex * bank_ltv, bank_cap)
     total_sbic = max(0, s.get("sbicCap", 0) or 0)
     total_3p = max(0, s.get("tpEquityCap", 0) or 0)
-    total_jjb = lendable_base - total_bank - total_sbic - total_3p
+    total_jjb = total_capex - total_bank - total_sbic - total_3p
 
     # Distribute pro-rata per crop by capex
     for crop in build_crops:
