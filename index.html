@@ -96,7 +96,9 @@ const UI_TOGGLES = {
   showBankLoanPanel:  false,  // sidebar: Bank Loan
   show3PValuation:    false,  // sidebar: 3P Valuation slider (within Equity Valuations)
   showScenarioComparison: false,  // main: Scenario Comparison ('33) panel
+  showSbicAndTp:      false,  // global: SBIC and 3P (TP) rows in all tables + KPI subtitle
 };
+const VISIBLE_PARTNERS = UI_TOGGLES.showSbicAndTp ? ['EB','JS','JJB','SBIC','TP'] : ['EB','JS','JJB'];
 
 // --- API ---
 async function loadSettings() {
@@ -302,11 +304,11 @@ function buildSidebar() {
   h += `<div class="panel"><div class="panel-title">Equity Valuations</div>
     ${S('buyinValuation', {label:'JJB Buy-in Valuation',min:10000000,max:20000000,step:2500000,def:15000000,fmt:FM})}
     ${UI_TOGGLES.show3PValuation ? S('thirdPartyValuation', {label:'3P Valuation',min:20000000,max:40000000,step:5000000,def:30000000,fmt:FM}) : ''}
-    <div class="toggle-row">
+    ${UI_TOGGLES.showSbicAndTp ? `<div class="toggle-row">
       <input type="checkbox" id="chk-tpBuysJS" ${settings.thirdPartyBuysJS ? 'checked' : ''}
         onchange="updateSetting('thirdPartyBuysJS', this.checked)">
       <label for="chk-tpBuysJS">3P buys out JS</label>
-    </div>
+    </div>` : ''}
   </div>`;
   h += `<div class="panel"><div class="panel-title">EB Promote (from JS & JJB)</div>
     ${S('ebExpansionGrantPct', {label:'Annual %',min:0,max:1,step:0.25,def:0.5,fmt:v=>v.toFixed(2)+'%'})}
@@ -751,7 +753,7 @@ function render(d) {
   const lastDebt = combinedDS[lastIdx];
   document.getElementById('kpiGrid').innerHTML = [
     ['$ Uses', fK(totalUses), `crop: ${fK(d.total_capex)}<br>infra: ${fK(d.shared_capex)}${startupCap > 0 ? '<br>startup: ' + fK(startupCap) : ''}`],
-    ['$ Sources', fK(totalSources), `bank: ${fK(bankTotal)}${sbicTotal > 0 ? '<br>SBIC ln: ' + fK(sbicTotal) : ''}${tpEquity > 0 ? '<br>3P eq: ' + fK(tpEquity) : ''}<br>JJB eq: ${fK(jjbEquity)}${bridgeLoan > 0 ? '<br>bridge: ' + fK(bridgeLoan) : ''}`],
+    ['$ Sources', fK(totalSources), `bank: ${fK(bankTotal)}${UI_TOGGLES.showSbicAndTp && sbicTotal > 0 ? '<br>SBIC ln: ' + fK(sbicTotal) : ''}${UI_TOGGLES.showSbicAndTp && tpEquity > 0 ? '<br>3P eq: ' + fK(tpEquity) : ''}<br>JJB eq: ${fK(jjbEquity)}${bridgeLoan > 0 ? '<br>bridge: ' + fK(bridgeLoan) : ''}`],
     ['Steady Rev', fK(steadyRev), `year ${Y[lastIdx]}`],
     ['Steady Op Inc', fK(steadyOpInc), `${((steadyOpInc / steadyRev * 100) || 0).toFixed(1)}% margin`],
     ['Debt Svc', fK(peakDebt), `peak yr<br>${fK(lastDebt)} in '${String(Y[lastIdx]).slice(2)}`],
@@ -841,19 +843,21 @@ function render(d) {
       onchange="updateFinancingOverride('${k}','${field}',this.value)"
       style="${editStyle}"></td>`;
     st += scRow('Bank', s => fCM(s.bank_total));
-    st += `<tr><td>SBIC Loan</td>${scKeys.map(k => {
-      if (k === 'D') return `<td>${fCM(sc[k].sbic_loan)}</td>`;
-      return mkEdit(k, 'sbicCap', sc[k].sbic_loan);
-    }).join('')}</tr>`;
-    st += `<tr><td>3P Equity</td>${scKeys.map(k => {
-      if (k === 'D') return `<td>${fCM(sc[k].tp_equity)}</td>`;
-      return mkEdit(k, 'tpEquityCap', sc[k].tp_equity);
-    }).join('')}</tr>`;
+    if (UI_TOGGLES.showSbicAndTp) {
+      st += `<tr><td>SBIC Loan</td>${scKeys.map(k => {
+        if (k === 'D') return `<td>${fCM(sc[k].sbic_loan)}</td>`;
+        return mkEdit(k, 'sbicCap', sc[k].sbic_loan);
+      }).join('')}</tr>`;
+      st += `<tr><td>3P Equity</td>${scKeys.map(k => {
+        if (k === 'D') return `<td>${fCM(sc[k].tp_equity)}</td>`;
+        return mkEdit(k, 'tpEquityCap', sc[k].tp_equity);
+      }).join('')}</tr>`;
+    }
     st += scRow('JJB Equity', s => fCM(s.jjb_equity));
     st += scRow('Total Sources', s => fCM(s.bank_total + s.sbic_loan + s.tp_equity + s.jjb_equity), 'subtotal-row');
     st += scRow('JJB Bridge Loan', s => fCM(s.bridge_total));
     st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Ownership</td></tr>`;
-    for (const p of ['EB','JS','JJB','SBIC','TP']) {
+    for (const p of VISIBLE_PARTNERS) {
       if (p === 'SBIC') {
         st += `<tr><td>SBIC%</td>${scKeys.map(k => {
           if (k === 'D') return `<td>${(sc[k].own_SBIC || 0).toFixed(1)}%</td>`;
@@ -871,10 +875,10 @@ function render(d) {
     st += scRow('EBITDA', s => fCM(s.op_inc));
     st += scRow('Multiple', s => s.multiple + 'x');
     st += scRowX('Biz Value (\'33)', s => s.biz_val, D.biz_val, 'subtotal-row');
-    for (const p of ['EB','JS','JJB','SBIC','TP']) {
+    for (const p of VISIBLE_PARTNERS) {
       st += scRowX(pName(p), s => s[p+'_val'], D[p+'_val']);
     }
-    for (const p of ['EB','JS','JJB','SBIC','TP']) {
+    for (const p of VISIBLE_PARTNERS) {
       st += `<tr class="section-header"><td colspan="${scKeys.length+1}">${pName(p)}</td></tr>`;
       st += scRow('Ownership', s => s[p+'_pct'].toFixed(1) + '%');
       st += scRowX('Avg Dist', s => s[p+'_dist'], D[p+'_dist']);
@@ -888,8 +892,7 @@ function render(d) {
     document.getElementById('scenarioTable').innerHTML = st;
   }
 
-  // Ownership table — SBIC/TP hidden in this panel per UI request
-  const distPartners = ['EB', 'JS', 'JJB'];
+  // Ownership table — uses VISIBLE_PARTNERS so SBIC/TP only appear when toggle on
   let ot = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   if (d.ownership_detail) {
     const capRow = d.ownership_detail.find(r => r[0].includes('Capital'));
@@ -898,7 +901,7 @@ function render(d) {
       ot += `<tr><td>JJB Equity In</td>${vals.map(v => `<td>${v > 0 ? fCM(v) : '—'}</td>`).join('')}</tr>`;
     }
   }
-  for (const p of distPartners) {
+  for (const p of VISIBLE_PARTNERS) {
     ot += `<tr><td>${pName(p)}</td>${sl(d.ownership).map(o => `<td>${(o[p] || 0).toFixed(1)}%</td>`).join('')}</tr>`;
   }
   if (d.ownership_detail) {
@@ -962,7 +965,7 @@ function render(d) {
 
   // Partner cash
   let pt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-  for (const p of ['EB', 'JS', 'JJB', 'SBIC', 'TP']) {
+  for (const p of VISIBLE_PARTNERS) {
     const pd = d.partners[p];
     if (!pd) continue;
     pt += sr(pName(p), Y);
@@ -1002,7 +1005,7 @@ function render(d) {
   const noExpBiz = hasNoExp ? d.partners_no_exp._op_inc_terminal * noExpPE : 0;
   const noExpOwn = hasNoExp ? d.partners_no_exp._ownership : {};
   vt += `<tr><td>Business Value</td>${bizVals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpBiz)}</td>` : ''}</tr>`;
-  for (const p of ['EB', 'JS', 'JJB', 'SBIC', 'TP']) {
+  for (const p of VISIBLE_PARTNERS) {
     const vals = DY.map((_, i) => (d.ownership[i][p] || 0) / 100 * bizVals[i]);
     const noExpVal = hasNoExp ? (noExpOwn[p] || 0) / 100 * noExpBiz : 0;
     vt += `<tr><td>${pName(p)}</td>${vals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpVal)}</td>` : ''}</tr>`;
