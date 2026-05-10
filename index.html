@@ -798,7 +798,10 @@ function render(d) {
     const totalDebt = Y.map((_, i) => {
       let bal = 0;
       for (const sched of Object.values(d.loan_data)) bal += sched[i].end_bal;
-      for (const det of Object.values(d.expansion_loan_detail)) bal += (det.balance[i] || 0);
+      for (const [name, det] of Object.entries(d.expansion_loan_detail)) {
+        if (name.includes('(Buy)')) continue;
+        bal += (det.balance[i] || 0);
+      }
       return bal;
     });
     rt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Total Debt</a></td>${sl(totalDebt).map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`;
