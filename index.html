@@ -1061,6 +1061,9 @@ function render(d) {
     if (!isNoExp) t += `<tr><td>Expansion DS</td>${sl(src.expansion_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
     t += `<tr><td>DSCR</td>${sl(src.op_inc.map((oi, i) => { const ds = src.loan_total_ds[i] + (src.expansion_ds[i] || 0); return ds > 0 ? (oi / ds).toFixed(1) + 'x' : '—'; })).map(v => `<td>${v}</td>`).join('')}</tr>`;
     t += `<tr><td>Capex Reserve</td>${sl(src.capex_res).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+    if (src.startup_exp && src.startup_exp.some(v => v > 0)) {
+      t += `<tr><td>JJB Startup Capital</td>${sl(src.startup_exp).map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`;
+    }
     t += tr('Distributable Cash', src.distrib_cash, fCM, 'total-row-table');
     t += sr('Waterfall', Y);
     t += tr('Tax', src.tax_cash.map(v => -v), fCM);

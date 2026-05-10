@@ -317,7 +317,7 @@ def build_rev_exp(s):
             if y >= end_year:
                 total_acres[i] += crop["acres"]
 
-    return rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres
+    return rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres, startup_exp
 
 
 def allocate_capital_stack(crop_data, s):

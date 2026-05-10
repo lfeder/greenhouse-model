@@ -25,13 +25,14 @@ from analysis import (
 # P&L assembly
 # ============================================================
 
-def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None):
+def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None, startup_exp=None):
     """Assemble P&L from rev/exp arrays. Returns all intermediate values."""
     s = settings
     loans = compute_loan_schedules()
     dep = compute_depreciation(dep_crops or [], s)
     t_bill_rate = s["tBillRate"] / 100
     expansion_int = expansion_int or [0] * N_YEARS
+    startup_exp = startup_exp or [0] * N_YEARS
 
     op_inc = [r - e for r, e in zip(rev, exp)]
     capex_res_pct = s["capexReservePct"] / 100
@@ -52,7 +53,9 @@ def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None):
         tax_detail.append(td)
 
     tax_cash, tax_cash_detail = calc_tax_cash_timing(tax_liab)
-    distrib_cash = [o - ds - cr for o, ds, cr in zip(op_inc, loans["total_ds"], capex_res)]
+    # Add JJB startup capital back: hits op_inc as expense (real cost), but
+    # JJB funds it via equity injection — so add back for cash distribution.
+    distrib_cash = [o - ds - cr + sc for o, ds, cr, sc in zip(op_inc, loans["total_ds"], capex_res, startup_exp)]
 
     # Waterfall
     wf = run_waterfall(distrib_cash, tax_cash, t_bill_rate)
@@ -185,8 +188,8 @@ def compute_scenario_summary(base_settings):
         if not s.get("debug"):
             s_noexp = dict(s)
             s_noexp["debug"] = True
-            rev_ne, exp_ne, _, _, _, _, _ = build_rev_exp(s_noexp)
-            result_ne = run_pnl(rev_ne, exp_ne, s_noexp, [])
+            rev_ne, exp_ne, _, _, _, _, _, startup_ne = build_rev_exp(s_noexp)
+            result_ne = run_pnl(rev_ne, exp_ne, s_noexp, [], startup_exp=startup_ne)
             own_ne, _ = compute_ownership(s_noexp, result_ne["cum_pedd_by_year"])
             partners_ne = compute_partner_cash({**result_ne, "tax_cash_dist": result_ne["tax_cash"]}, own_ne)
             for p in ["EB", "JS"]:
@@ -204,10 +207,11 @@ def compute_scenario_summary(base_settings):
 
 def _run_scenario(s):
     """Lightweight scenario run — returns just what summary needs."""
-    rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres = build_rev_exp(s)
+    rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres, startup_exp = build_rev_exp(s)
     allocate_capital_stack(crop_data, s)
     crop_irrs, total_irr, total_unlev, expansion_int, expansion_prin, expansion_loan_detail = compute_crop_irrs(crop_data, s)
-    result = run_pnl(rev, exp, s, dep_crops, expansion_int)
+    result = run_pnl(rev, exp, s, dep_crops, expansion_int, startup_exp)
+    result["startup_exp"] = startup_exp
     equity_draws = build_equity_draws(crop_data)
     year_pe = s["yearPE"]
     biz_values = [result["op_inc"][i] * int(year_pe.get(str(YEARS[i]), 8)) for i in range(N_YEARS)]
@@ -229,7 +233,7 @@ def _run_scenario(s):
 
 def run_everything(s):
     """Single entry point: settings → all computed data for HTML."""
-    rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres = build_rev_exp(s)
+    rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres, startup_exp = build_rev_exp(s)
 
     # Allocate capital stack before computing IRRs
     allocate_capital_stack(crop_data, s)
@@ -237,7 +241,8 @@ def run_everything(s):
     # Compute expansion DS BEFORE full model so interest is included in taxable income
     crop_irrs, total_irr, total_unlev, expansion_int, expansion_prin, expansion_loan_detail = compute_crop_irrs(crop_data, s)
 
-    result = run_pnl(rev, exp, s, dep_crops, expansion_int)
+    result = run_pnl(rev, exp, s, dep_crops, expansion_int, startup_exp)
+    result["startup_exp"] = startup_exp
     kpis = compute_kpis(s, crop_data, s["debug"])
 
     # Compute equity draws per year for ownership dilution
@@ -266,8 +271,8 @@ def run_everything(s):
     if not s["debug"]:
         s_noexp = dict(s)
         s_noexp["debug"] = True
-        rev_ne, exp_ne, _, _, _, _, _ = build_rev_exp(s_noexp)
-        result_ne = run_pnl(rev_ne, exp_ne, s_noexp, [])
+        rev_ne, exp_ne, _, _, _, _, _, startup_ne = build_rev_exp(s_noexp)
+        result_ne = run_pnl(rev_ne, exp_ne, s_noexp, [], startup_exp=startup_ne)
         # Use base ownership (no dilution) for no-expansion
         own_ne, _ = compute_ownership(s_noexp, result_ne["cum_pedd_by_year"], {}, [0]*N_YEARS)
         partners_ne = compute_partner_cash({**result_ne, "tax_cash_dist": result_ne["tax_cash"]}, own_ne)
@@ -279,6 +284,7 @@ def run_everything(s):
             "loan_total_ds": result_ne["loans"]["total_ds"],
             "expansion_ds": [0.0] * N_YEARS,
             "capex_res": result_ne["capex_res"],
+            "startup_exp": startup_ne,
             "distrib_cash": result_ne["distrib_cash"],
             "tax_cash": result_ne["tax_cash"],
             "tier0_actual": result_ne["tier0_actual"],
