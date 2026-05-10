@@ -883,7 +883,8 @@ function render(d) {
     document.getElementById('scenarioTable').innerHTML = st;
   }
 
-  // Ownership table
+  // Ownership table — SBIC/TP hidden in this panel per UI request
+  const distPartners = ['EB', 'JS', 'JJB'];
   let ot = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   if (d.ownership_detail) {
     const capRow = d.ownership_detail.find(r => r[0].includes('Capital'));
@@ -892,7 +893,7 @@ function render(d) {
       ot += `<tr><td>JJB Equity In</td>${vals.map(v => `<td>${v > 0 ? fCM(v) : '—'}</td>`).join('')}</tr>`;
     }
   }
-  for (const p of ['EB', 'JS', 'JJB', 'SBIC', 'TP']) {
+  for (const p of distPartners) {
     ot += `<tr><td>${pName(p)}</td>${sl(d.ownership).map(o => `<td>${(o[p] || 0).toFixed(1)}%</td>`).join('')}</tr>`;
   }
   if (d.ownership_detail) {
