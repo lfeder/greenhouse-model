@@ -937,9 +937,12 @@ function render(d) {
 
     // Expansion row = the plug that makes section add up exactly:
     // Ending = Starting + EB_grant + (Sale/Buy) + Expansion
-    const expEB  = endEB.map((v, i)  => v - startEB[i]  - totGrant[i]);
-    const expJS  = endJS.map((v, i)  => v - startJS[i]  - ebGrantJS[i]  - (-buyJS[i]));
-    const expJJB = endJJB.map((v, i) => v - startJJB[i] - ebGrantJJB[i] - buyJS[i]);
+    // Inputs are pre-rounded to 1 decimal by backend, so clamp |v|<0.15 to 0
+    // (noise floor) to avoid spurious ±0.1 in years with no expansion event.
+    const denoise = v => Math.abs(v) < 0.15 ? 0 : v;
+    const expEB  = endEB.map((v, i)  => denoise(v - startEB[i]  - totGrant[i]));
+    const expJS  = endJS.map((v, i)  => denoise(v - startJS[i]  - ebGrantJS[i]  - (-buyJS[i])));
+    const expJJB = endJJB.map((v, i) => denoise(v - startJJB[i] - ebGrantJJB[i] - buyJS[i]));
 
     const sections = {
       EB: [
