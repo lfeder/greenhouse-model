@@ -902,7 +902,7 @@ function render(d) {
     }
   }
   for (const p of VISIBLE_PARTNERS) {
-    ot += `<tr><td>${pName(p)}</td>${sl(d.ownership).map(o => `<td>${(o[p] || 0).toFixed(1)}%</td>`).join('')}</tr>`;
+    ot += `<tr><td>${pName(p)}</td>${sl(d.ownership).map(o => `<td style="text-align:right">${(o[p] || 0).toFixed(1)}</td>`).join('')}</tr>`;
   }
   if (d.ownership_detail) {
     ot += `<tr><td colspan="${Y.length-_DN+1}" style="padding-top:4px">
