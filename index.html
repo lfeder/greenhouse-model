@@ -924,7 +924,7 @@ function render(d) {
       <a href="#" onclick="document.getElementById('ownershipDetail').style.display=document.getElementById('ownershipDetail').style.display==='none'?'':'none';return false"
          style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
     ot += `</tbody><tbody id="ownershipDetail" style="display:none">`;
-    ot += `<tr><td colspan="${Y.length-_DN+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">PE/DD repaid: ${fK(d.cum_pedd)} (cash flow only — no equity grant)</td></tr>`;
+    ot += `<tr><td colspan="${Y.length-_DN+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)} (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
 
     // Build a label→row lookup, then emit normalized per-partner sections
     const lookup = {};
@@ -969,6 +969,7 @@ function render(d) {
     const sections = {
       EB: [
         ['Starting',  lookup['Starting EB %']],
+        ['EB grant',  lookup['EB grant (PEDD)']],
         ['Promote',   lookup['EB promote']],
         ['Expansion', expEB],
         ['Ending',    lookup['Ending EB %']],

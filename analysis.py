@@ -170,9 +170,16 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
             sbic_kicker_granted = True
         sbic_row.append(sbic_grant)
 
-        # 5. EB grant (PEDD) — REMOVED. PEDD is a cash flow to JS+JJB only,
-        # not an equity event. Row kept (zeros) to preserve display layout.
-        pedd_grant_row.append(0)
+        # 5. EB grant (PEDD)
+        cum_pedd = cum_pedd_by_year[i] if i < len(cum_pedd_by_year) else 0
+        target_grant = min(EB_GRANT_PEDD["max_pct"], int(cum_pedd / 500_000) * EB_GRANT_PEDD["per_500k"])
+        new_grant = target_grant - pedd_grant_earned
+        if new_grant > 0:
+            eb += new_grant
+            js -= new_grant * 0.5   # 50% from JS
+            jjb -= new_grant * 0.5  # 50% from JJB
+            pedd_grant_earned = target_grant
+        pedd_grant_row.append(new_grant)
 
         # 6. EB grant (expansion promote)
         exp_g = 0
