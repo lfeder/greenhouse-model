@@ -909,32 +909,60 @@ function render(d) {
       <a href="#" onclick="document.getElementById('ownershipDetail').style.display=document.getElementById('ownershipDetail').style.display==='none'?'':'none';return false"
          style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
     ot += `</tbody><tbody id="ownershipDetail" style="display:none">`;
-    ot += `<tr><td colspan="${Y.length-_DN+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
-    // Reorder ownership_detail rows by partner: EB, JS, JJB, SBIC, TP. Hidden partners filtered.
-    const partnerOrder = ['EB','JS','JJB','SBIC','TP'];
-    const groups = new Map(partnerOrder.map(p => [p, []]));
-    const other = [];
-    for (const row of d.ownership_detail) {
-      const label = row[0];
-      if (label.includes('Capital')) continue;  // shown above as 'JJB Equity In'
-      // longest match first so 'JJB' isn't shadowed by 'JS'
-      const p = ['JJB','SBIC','TP','EB','JS'].find(p => label.includes(p));
-      if (p) groups.get(p).push(row); else other.push(row);
+    ot += `<tr><td colspan="${Y.length-_DN+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)} (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
+
+    // Build a label→row lookup, then emit normalized per-partner sections
+    const lookup = {};
+    for (const row of d.ownership_detail) lookup[row[0]] = row.slice(1);
+    const yLen = (lookup['Starting EB %'] || Y).length;
+    const zeros = Array(yLen).fill(0);
+    const neg = arr => (arr || zeros).map(v => -v);
+
+    const sections = {
+      EB: [
+        ['Starting',  lookup['Starting EB %']],
+        ['EB grant',  lookup['EB grant (PEDD)']],
+        ['Promote',   lookup['EB promote']],
+        ['Expansion', zeros],
+        ['Ending',    lookup['Ending EB %']],
+      ],
+      JS: [
+        ['Starting',  lookup['Starting JS %']],
+        ['EB grant',  zeros],
+        ['JJB sale',  neg(lookup['JJB buys from JS'])],
+        ['Expansion', zeros],
+        ['Ending',    lookup['Ending JS %']],
+      ],
+      JJB: [
+        ['Starting',  lookup['Starting JJB %']],
+        ['EB grant',  zeros],
+        ['JS buy',    lookup['JJB buys from JS']],
+        ['Expansion', lookup['JJB Equity Issued %']],
+        ['Ending',    lookup['Ending JJB %']],
+      ],
+    };
+    if (UI_TOGGLES.showSbicAndTp) {
+      sections.SBIC = [
+        ['Starting', lookup['Starting SBIC %']],
+        ['Kicker',   lookup['SBIC Kicker %']],
+        ['Ending',   lookup['Ending SBIC %']],
+      ];
+      sections.TP = [
+        ['Starting',  lookup['Starting 3P %']],
+        ['Issued',    lookup['3P Equity Issued %']],
+        ['Ending',    lookup['Ending 3P %']],
+      ];
     }
-    const ordered = [];
-    for (const p of partnerOrder) {
-      if (!VISIBLE_PARTNERS.includes(p)) continue;
-      ordered.push(...groups.get(p));
-    }
-    ordered.push(...other);
-    for (const row of ordered) {
-      const label = row[0];
-      const vals = _DN ? row.slice(1, -_DN) : row.slice(1);
-      const isDollar = label.includes('($)');
-      ot += `<tr><td>${label}</td>${vals.map(v => {
-        if (isDollar) return `<td>${v > 0 ? fCM(v) : '—'}</td>`;
-        return `<td>${typeof v === 'number' ? v.toFixed(1) + '%' : v}</td>`;
-      }).join('')}</tr>`;
+
+    const numCol = (v) => `<td style="text-align:right">${typeof v === 'number' ? v.toFixed(1) : (v || '0.0')}</td>`;
+    for (const p of ['EB','JS','JJB','SBIC','TP']) {
+      if (!VISIBLE_PARTNERS.includes(p) || !sections[p]) continue;
+      ot += `<tr class="section-header"><td colspan="${Y.length-_DN+1}">${pName(p)}</td></tr>`;
+      for (const [label, vals] of sections[p]) {
+        const arr = vals || zeros;
+        const rendered = _DN ? arr.slice(0, -_DN) : arr;
+        ot += `<tr><td>${label}</td>${rendered.map(numCol).join('')}</tr>`;
+      }
     }
   }
   ot += '</tbody>';
