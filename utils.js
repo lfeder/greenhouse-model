@@ -84,7 +84,6 @@ function initTheme() {
 function buildNav(activePage) {
   const pages = [
     {href: 'index.html', label: 'Expansion'},
-    {href: 'partners.html', label: 'Partners'},
     {href: 'debt.html', label: 'Debt'},
     {href: 'depreciation.html', label: 'Depreciation'},
     {href: 'employees.html', label: 'Employees'},

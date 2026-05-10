@@ -45,7 +45,31 @@
       <div id="revExpBody"><div style="overflow-x:auto"><table class="fin-table" id="revExpTable"></table></div></div>
     </div>
 
+    <div class="panel">
+      <div class="panel-title">Scenario Comparison ('33)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="scenarioTable"></table></div>
+    </div>
 
+    <div class="panel">
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('distBody').style.display=document.getElementById('distBody').style.display==='none'?'':'none'">Distributions ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div id="distBody">
+        <div style="overflow-x:auto"><table class="fin-table" id="ownershipTable"></table></div>
+        <div style="overflow-x:auto;margin-top:8px"><table class="fin-table" id="distTable"></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('partnerBody').style.display=document.getElementById('partnerBody').style.display==='none'?'':'none'">Partner Cash & Valuations ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div id="partnerBody">
+        <div style="overflow-x:auto"><table class="fin-table" id="partnerTable"></table></div>
+        <div style="overflow-x:auto;margin-top:8px"><table class="fin-table" id="valuationTable"></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('taxBody').style.display=document.getElementById('taxBody').style.display==='none'?'':'none'">Taxable Income ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div id="taxBody" style="display:none"><div style="overflow-x:auto"><table class="fin-table" id="taxTable"></table></div></div>
+    </div>
 
   </div>
 </div>
@@ -90,6 +114,24 @@ async function compute(partial) {
 function updateSetting(key, value) {
   settings[key] = value;
   compute({[key]: value});
+}
+
+function pName(p) { return p === 'TP' ? '3P' : p; }
+
+function updateFinancingOverride(sc, key, rawValue, kind) {
+  let val = parseFloat(String(rawValue).replace(/[^0-9.\-]/g, ''));
+  if (isNaN(val)) return;
+  if (kind === 'pct') {
+    // raw percentage, no scaling
+  } else {
+    if (/M/i.test(rawValue)) val *= 1e6;
+    else if (/K/i.test(rawValue)) val *= 1e3;
+    else val *= 1e6;
+  }
+  if (!settings.financing_overrides) settings.financing_overrides = {};
+  if (!settings.financing_overrides[sc]) settings.financing_overrides[sc] = {};
+  settings.financing_overrides[sc][key] = val;
+  compute({financing_overrides: settings.financing_overrides});
 }
 
 function loadScenario(id) {
@@ -207,6 +249,28 @@ function buildSidebar() {
     ${S('costInflation', {label:'Cost Escalation',min:3,max:5,step:0.5,def:3,fmt:v=>v.toFixed(1)+'%/yr'})}
   </div>`;
 
+  const FM = v => (v < 0 ? '−' : '') + (Math.abs(v) / 1e6).toFixed(2) + 'M';
+  const FP = v => v + '%';
+  h += `<div class="panel"><div class="panel-title">Bank Loan</div>
+    ${S('financingPct', {label:'Bank LTV',min:50,max:80,step:5,def:70,fmt:FP})}
+    ${S('bankLoanCap', {label:'Bank Loan Cap',min:7500000,max:17500000,step:1250000,def:12500000,fmt:FM})}
+    ${S('bankRate', {label:'Bank Rate',min:5,max:9,step:0.5,def:7,fmt:v=>v.toFixed(1)+'%'})}
+    ${S('bankTerm', {label:'Bank Term',min:5,max:15,step:1,def:10,fmt:v=>v+' yr'})}
+  </div>`;
+  h += `<div class="panel"><div class="panel-title">Equity Valuations</div>
+    ${S('buyinValuation', {label:'JJB Buy-in Valuation',min:10000000,max:20000000,step:2500000,def:15000000,fmt:FM})}
+    ${S('thirdPartyValuation', {label:'3P Valuation',min:20000000,max:40000000,step:5000000,def:30000000,fmt:FM})}
+    <div class="toggle-row">
+      <input type="checkbox" id="chk-tpBuysJS" ${settings.thirdPartyBuysJS ? 'checked' : ''}
+        onchange="updateSetting('thirdPartyBuysJS', this.checked)">
+      <label for="chk-tpBuysJS">3P buys out JS</label>
+    </div>
+  </div>`;
+  h += `<div class="panel"><div class="panel-title">EB Promote (from JS & JJB)</div>
+    ${S('ebExpansionGrantPct', {label:'Annual %',min:0,max:1,step:0.25,def:0.5,fmt:v=>v.toFixed(2)+'%'})}
+    ${S('ebExpansionGrantStartYear', {label:'Start Year',min:2026,max:2032,step:1,def:2027,fmt:v=>''+v})}
+    ${S('ebExpansionGrantEndYear', {label:'End Year',min:2028,max:2035,step:1,def:2035,fmt:v=>''+v})}
+  </div>`;
   if (UI_TOGGLES.showTomatoBuyPanel)
   h += `<div class="panel"><div class="panel-title">Tomato (Buy)</div>
     ${S('tomatoHardAssets', {label:'Hard Asset Value',min:2000000,max:10000000,step:1000000,def:5000000,fmt:v=>(v/1e6).toFixed(2)+'M'})}
@@ -704,7 +768,244 @@ function render(d) {
   rt += '</tbody>';
   document.getElementById('revExpTable').innerHTML = rt;
 
+  // === MERGED FROM PARTNERS PAGE ===
 
+  // Scenario comparison table
+  if (d.scenario_summary) {
+    const sc = d.scenario_summary;
+    const scKeys = ['A1','A2','A3','A4','D'];
+    const scLabels = {A1:'A1', A2:'A2', A3:'A3', A4:'A4', D:'D'};
+    const scHdr = scKeys.map(k => '<th>' + scLabels[k] + '</th>').join('');
+    const scRow = (label, fn, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${scKeys.map(k => `<td>${fn(sc[k])}</td>`).join('')}</tr>`;
+    const D = sc['D'];
+    const scRowX = (label, valFn, dVal, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${scKeys.map(k => {
+      const v = valFn(sc[k]);
+      const mult = dVal > 0 && k !== 'D' ? ` <span style="color:var(--text-dim);font-size:9px">(${(v/dVal).toFixed(1)}x)</span>` : '';
+      return `<td>${fCM(v)}${mult}</td>`;
+    }).join('')}</tr>`;
+    let st = `<thead><tr><th></th>${scHdr}</tr></thead><tbody>`;
+    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Capital Stack</td></tr>`;
+    st += scRow('Total Uses', s => fCM(s.total_uses), 'subtotal-row');
+    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Sources</td></tr>`;
+    const ov = settings.financing_overrides || {};
+    const editStyle = 'width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right';
+    const mkEdit = (k, field, val) => `<td><input type="text" class="sc-edit" value="${fCM(val)}"
+      onchange="updateFinancingOverride('${k}','${field}',this.value)"
+      style="${editStyle}"></td>`;
+    st += scRow('Bank', s => fCM(s.bank_total));
+    st += `<tr><td>SBIC Loan</td>${scKeys.map(k => {
+      if (k === 'D') return `<td>${fCM(sc[k].sbic_loan)}</td>`;
+      return mkEdit(k, 'sbicCap', sc[k].sbic_loan);
+    }).join('')}</tr>`;
+    st += `<tr><td>3P Equity</td>${scKeys.map(k => {
+      if (k === 'D') return `<td>${fCM(sc[k].tp_equity)}</td>`;
+      return mkEdit(k, 'tpEquityCap', sc[k].tp_equity);
+    }).join('')}</tr>`;
+    st += scRow('JJB Equity', s => fCM(s.jjb_equity));
+    st += scRow('Total Sources', s => fCM(s.bank_total + s.sbic_loan + s.tp_equity + s.jjb_equity), 'subtotal-row');
+    st += scRow('JJB Bridge Loan', s => fCM(s.bridge_total));
+    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Ownership</td></tr>`;
+    for (const p of ['EB','JS','JJB','SBIC','TP']) {
+      if (p === 'SBIC') {
+        st += `<tr><td>SBIC%</td>${scKeys.map(k => {
+          if (k === 'D') return `<td>${(sc[k].own_SBIC || 0).toFixed(1)}%</td>`;
+          const cur = (ov[k] && ov[k].sbicEquityPct !== undefined) ? ov[k].sbicEquityPct : (sc[k].own_SBIC || 0);
+          return `<td><input type="text" class="sc-edit" value="${Number(cur).toFixed(1)}"
+            onchange="updateFinancingOverride('${k}','sbicEquityPct',this.value,'pct')"
+            style="${editStyle}"></td>`;
+        }).join('')}</tr>`;
+      } else {
+        st += scRow(pName(p) + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
+      }
+    }
+    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Valuation</td></tr>`;
+    st += scRow('Revenue', s => fCM(s.rev));
+    st += scRow('EBITDA', s => fCM(s.op_inc));
+    st += scRow('Multiple', s => s.multiple + 'x');
+    st += scRowX('Biz Value (\'33)', s => s.biz_val, D.biz_val, 'subtotal-row');
+    for (const p of ['EB','JS','JJB','SBIC','TP']) {
+      st += scRowX(pName(p), s => s[p+'_val'], D[p+'_val']);
+    }
+    for (const p of ['EB','JS','JJB','SBIC','TP']) {
+      st += `<tr class="section-header"><td colspan="${scKeys.length+1}">${pName(p)}</td></tr>`;
+      st += scRow('Ownership', s => s[p+'_pct'].toFixed(1) + '%');
+      st += scRowX('Avg Dist', s => s[p+'_dist'], D[p+'_dist']);
+      st += scRowX('Equity Value', s => s[p+'_val'], D[p+'_val']);
+      if (p === 'SBIC') {
+        st += scRow('Implied Valuation', s => s.sbic_implied_val > 0 ? fCM(s.sbic_implied_val) : '—');
+        st += scRow('IRR', s => s.sbic_irr ? s.sbic_irr + '%' : '—');
+      }
+    }
+    st += '</tbody>';
+    document.getElementById('scenarioTable').innerHTML = st;
+  }
+
+  // Ownership table
+  let ot = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  if (d.ownership_detail) {
+    const capRow = d.ownership_detail.find(r => r[0].includes('Capital'));
+    if (capRow) {
+      const vals = _DN ? capRow.slice(1, -_DN) : capRow.slice(1);
+      ot += `<tr><td>JJB Equity In</td>${vals.map(v => `<td>${v > 0 ? fCM(v) : '—'}</td>`).join('')}</tr>`;
+    }
+  }
+  for (const p of ['EB', 'JS', 'JJB', 'SBIC', 'TP']) {
+    ot += `<tr><td>${pName(p)}</td>${sl(d.ownership).map(o => `<td>${(o[p] || 0).toFixed(1)}%</td>`).join('')}</tr>`;
+  }
+  if (d.ownership_detail) {
+    ot += `<tr><td colspan="${Y.length-_DN+1}" style="padding-top:4px">
+      <a href="#" onclick="document.getElementById('ownershipDetail').style.display=document.getElementById('ownershipDetail').style.display==='none'?'':'none';return false"
+         style="color:var(--accent);font-size:9px;text-decoration:none">show/hide detail</a></td></tr>`;
+    ot += `</tbody><tbody id="ownershipDetail" style="display:none">`;
+    ot += `<tr><td colspan="${Y.length-_DN+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)}% (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
+    for (const row of d.ownership_detail) {
+      const label = row[0];
+      const vals = _DN ? row.slice(1, -_DN) : row.slice(1);
+      const isDollar = label.includes('($)');
+      ot += `<tr><td>${label}</td>${vals.map(v => {
+        if (isDollar) return `<td>${v > 0 ? fCM(v) : '—'}</td>`;
+        return `<td>${typeof v === 'number' ? v.toFixed(1) + '%' : v}</td>`;
+      }).join('')}</tr>`;
+    }
+  }
+  ot += '</tbody>';
+  document.getElementById('ownershipTable').innerHTML = ot;
+
+  // Distribution waterfall
+  const cashTips = Y.map((y, i) => {
+    const cd = d.tax_cash_detail[i];
+    let t = y + ' TAX CASH DIST\n';
+    if (cd.note) { t += cd.note; }
+    else if (cd.final_prior !== undefined) {
+      t += '4/15: prior final = ' + fK(cd.final_prior) + '\n';
+      t += cd.n_quarters + ' x Q est = ' + fK(cd.q_est) + '\n';
+      t += 'Total: ' + fK(cd.total);
+    } else {
+      t += 'Q4 prior est: ' + fK(cd.q4_prior_est) + '\n';
+      t += 'Settlement: ' + fK(cd.settlement) + '\n';
+      t += 'Q1-Q3 est: ' + fK(cd.cur_est_3q) + '\n';
+      t += 'Total: ' + fK(cd.total);
+    }
+    return t;
+  });
+  let dt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  dt += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
+  dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Existing DS</a></td>${sl(d.loan_total_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+  dt += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Expansion DS</a></td>${sl(d.expansion_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+  dt += `<tr><td>DSCR</td>${sl(d.op_inc.map((oi, i) => { const ds = d.loan_total_ds[i] + d.expansion_ds[i]; return ds > 0 ? (oi / ds).toFixed(1) + 'x' : '—'; })).map(v => `<td>${v}</td>`).join('')}</tr>`;
+  const crPct = settings.capexReservePct ?? 2;
+  dt += `<tr><td>Capex Reserve <input type="number" value="${crPct}" min="0" max="10" step="0.5" style="width:36px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right" onchange="updateSetting('capexReservePct',Number(this.value))">%</td>${sl(d.capex_res).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+  dt += tr('Distributable Cash', d.distrib_cash, fCM, 'total-row-table');
+  dt += sr('Waterfall', Y);
+  dt += `<tr><td>Tax</td>${sl(d.tax_cash).map((v, i) =>
+    `<td title="${cashTips[i].replace(/"/g,'&quot;')}" style="cursor:help">${fCM(-v)}</td>`
+  ).join('')}</tr>`;
+  dt += tr('Tier 0 (EB)', d.tier0_actual.map(v => -v), fCM);
+  dt += `<tr><td>Tier 1 (Partners)</td>${sl(d.tier1_actual).map((v, i) => {
+    const short = d.tier1_shortfall[i] > 50;
+    return `<td${short ? ' style="color:var(--yellow)"' : ''}>${fCM(-v)}${short ? ' *' : ''}</td>`;
+  }).join('')}</tr>`;
+  dt += tr('PE/DD Repayment', d.pedd_payments.map(v => -v), fCM);
+  dt += tr('Tier 2 (Pro-Rata)', d.tier2.map(v => -v), fCM);
+  if (d.tier1_shortfall.some(v => v > 50)) dt += tr('T1 Shortfall → DD', d.tier1_shortfall.map(v => -v), fCM);
+  dt += '</tbody>';
+  document.getElementById('distTable').innerHTML = dt;
+
+  // Partner cash
+  let pt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  for (const p of ['EB', 'JS', 'JJB', 'SBIC', 'TP']) {
+    const pd = d.partners[p];
+    if (!pd) continue;
+    pt += sr(pName(p), Y);
+    pt += tr('Tax Dist', pd.tax_dist, fCM);
+    if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCM);
+    pt += tr('Tier 1', pd.tier_1, fCM);
+    if (pd.pedd) pt += tr('PE/DD', pd.pedd, fCM);
+    pt += tr('Tier 2', pd.tier_2, fCM);
+    if (pd.equity_buy_sell) pt += tr('Equity Buy/Sell', pd.equity_buy_sell, fCM);
+    const gt = d.partners_no_exp && d.partners_no_exp.guarantee;
+    if (gt && gt[p] && gt[p].balance.some(v => v > 50)) {
+      const net = gt[p].advance.map((v, i) => v - gt[p].repay[i]);
+      pt += tr('Bridge (net)', net, fCM);
+    }
+    pt += tr('Total ' + pName(p), pd.total, fCM, 'subtotal-row');
+    if (d.partners_no_exp && d.partners_no_exp[p]) {
+      pt += tr('No Expansion', d.partners_no_exp[p], fCM);
+      const diff = pd.total.map((v, i) => v - d.partners_no_exp[p][i]);
+      pt += tr('Expansion Impact', diff, fCM);
+    }
+  }
+  pt += '</tbody>';
+  document.getElementById('partnerTable').innerHTML = pt;
+
+  // Valuation
+  const peOpts = [3,4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
+  const hasNoExp = d.partners_no_exp && d.partners_no_exp._op_inc_terminal;
+  const noExpCol = hasNoExp ? '<th>No Exp</th>' : '';
+  let vt = `<thead><tr><th></th>${yh(Y)}${noExpCol}</tr></thead><tbody>`;
+  const DY = sl(Y);
+  vt += `<tr><td style="color:var(--text-muted)">P/E Multiple</td>${DY.map(y =>
+    `<td><select data-year="${y}" class="pe-sel" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>`
+  ).join('')}${hasNoExp ? `<td><select id="noExpPE" class="pe-sel-noexp" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>` : ''}</tr>`;
+  const yearPE = settings.yearPE || {};
+  const bizVals = DY.map((y, i) => d.op_inc[i] * (yearPE[String(y)] || 8));
+  const noExpPE = settings.noExpPE || 8;
+  const noExpBiz = hasNoExp ? d.partners_no_exp._op_inc_terminal * noExpPE : 0;
+  const noExpOwn = hasNoExp ? d.partners_no_exp._ownership : {};
+  vt += `<tr><td>Business Value</td>${bizVals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpBiz)}</td>` : ''}</tr>`;
+  for (const p of ['EB', 'JS', 'JJB', 'SBIC', 'TP']) {
+    const vals = DY.map((_, i) => (d.ownership[i][p] || 0) / 100 * bizVals[i]);
+    const noExpVal = hasNoExp ? (noExpOwn[p] || 0) / 100 * noExpBiz : 0;
+    vt += `<tr><td>${pName(p)}</td>${vals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpVal)}</td>` : ''}</tr>`;
+  }
+  vt += '</tbody>';
+  document.getElementById('valuationTable').innerHTML = vt;
+  document.querySelectorAll('.pe-sel').forEach(sel => {
+    const y = sel.dataset.year;
+    sel.value = (settings.yearPE || {})[y] || 8;
+    sel.onchange = () => {
+      if (!settings.yearPE) settings.yearPE = {};
+      settings.yearPE[y] = Number(sel.value);
+      updateSetting('yearPE', settings.yearPE);
+    };
+  });
+  const noExpSel = document.getElementById('noExpPE');
+  if (noExpSel) {
+    noExpSel.value = settings.noExpPE || 8;
+    noExpSel.onchange = () => updateSetting('noExpPE', Number(noExpSel.value));
+  }
+
+  // Tax detail
+  let tx = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  tx += tr('Operating Income', d.op_inc, fCM, 'subtotal-row');
+  const totalInt = d.total_interest || d.loan_total_int;
+  tx += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Total Interest</a></td>${sl(totalInt).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+  tx += tr('Taxable Income', d.taxable_inc, fCM);
+  tx += sr('Federal', Y);
+  tx += tr('Bonus Depreciation', d.dep.fed.map(v => -v), fCM);
+  const fedTaxable = Y.map((_, i) => d.tax_detail[i].fed_taxable);
+  tx += tr('Fed Taxable', fedTaxable, fCM, 'subtotal-row');
+  tx += tr('EB Share', d.tax_detail.map(td => td.eb_fed), fCM);
+  tx += tr('NOL Used', d.tax_detail.map(td => -td.nol_used), fCM);
+  tx += tr('NOL Generated', d.tax_detail.map(td => td.nol_generated), fCM);
+  tx += tr('NOL Balance', d.tax_detail.map(td => td.nol_remaining), fCM);
+  tx += tr('EB Net Taxable', d.tax_detail.map(td => td.eb_net_fed), fCM);
+  tx += tr('Fed Tax (EB)', d.tax_detail.map(td => -td.fed_tax), fCM);
+  tx += tr('Fed Tax (entity)', d.tax_detail.map(td => -td.fed_dist), fCM);
+  tx += sr('Hawaii', Y);
+  tx += tr('State Depreciation', d.dep.state.map(v => -v), fCM);
+  const hiTaxable = Y.map((_, i) => d.tax_detail[i].hi_taxable);
+  tx += tr('HI Taxable', hiTaxable, fCM, 'subtotal-row');
+  tx += tr('EB HI Taxable', d.tax_detail.map(td => td.eb_hi), fCM);
+  tx += tr('HI Tax (EB)', d.tax_detail.map(td => -td.hi_tax), fCM);
+  tx += tr('HI Tax (entity)', d.tax_detail.map(td => -td.hi_dist), fCM);
+  tx += sr('Total', Y);
+  tx += tr('Tax Liability', d.tax_liab, fCM, 'subtotal-row');
+  tx += `<tr class="total-row-table"><td>Tax Cash Dist</td>${sl(d.tax_cash).map((v, i) =>
+    `<td title="${cashTips[i].replace(/"/g,'&quot;')}" style="cursor:help">${fCM(-v)}</td>`
+  ).join('')}</tr>`;
+  tx += '</tbody>';
+  document.getElementById('taxTable').innerHTML = tx;
 }
 
 
