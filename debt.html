@@ -57,9 +57,16 @@ async function load() {
       el += tr('Balance', sched.map(s => s.end_bal));
     }
   }
+  // Existing balance per year (sum of end_bal across all existing loans)
+  const existBal = Y.map((_, i) => {
+    let b = 0;
+    if (d.loan_data) for (const sched of Object.values(d.loan_data)) b += sched[i].end_bal || 0;
+    return b;
+  });
   el += sr('Totals', Y);
   el += tr('Total Interest', d.loan_total_int.map(v => -v));
   el += tr('Total Principal', d.loan_total_prin.map(v => -v));
+  el += tr('Total Balance', existBal);
   el += tr('Total DS', d.loan_total_ds.map(v => -v), fCM, 'subtotal-row');
   el += '</tbody>';
   document.getElementById('existLoansTable').innerHTML = el;
@@ -82,10 +89,23 @@ async function load() {
     xl += tr('Principal', d.expansion_prin.map(v => -v));
     xl += tr('Balance', balance);
   }
-  xl += sr('Totals', Y);
-  xl += tr('Total Interest', d.expansion_int.map(v => -v));
-  xl += tr('Total Principal', d.expansion_prin.map(v => -v));
-  xl += tr('Total DS', d.expansion_ds.map(v => -v), fCM, 'subtotal-row');
+  // Combined totals: existing + expansion (sans T_BUY, already excluded above)
+  const expBal = Y.map(() => 0);
+  if (d.expansion_loan_detail) {
+    for (const [name, det] of Object.entries(d.expansion_loan_detail)) {
+      if (!det || name.includes('(Buy)')) continue;
+      for (let i = 0; i < Y.length; i++) expBal[i] += det.balance[i] || 0;
+    }
+  }
+  const totInt  = Y.map((_, i) => d.loan_total_int[i] + d.expansion_int[i]);
+  const totPrin = Y.map((_, i) => d.loan_total_prin[i] + d.expansion_prin[i]);
+  const totDS   = Y.map((_, i) => d.loan_total_ds[i] + d.expansion_ds[i]);
+  const totBal  = Y.map((_, i) => existBal[i] + expBal[i]);
+  xl += sr('Totals (Existing + Expansion)', Y);
+  xl += tr('Total Interest', totInt.map(v => -v));
+  xl += tr('Total Principal', totPrin.map(v => -v));
+  xl += tr('Total Balance', totBal);
+  xl += tr('Total DS', totDS.map(v => -v), fCM, 'subtotal-row');
   xl += '</tbody>';
   document.getElementById('expansionLoansTable').innerHTML = xl;
 
