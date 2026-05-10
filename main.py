@@ -53,7 +53,9 @@ def run_pnl(rev, exp, settings, dep_crops=None, expansion_int=None, startup_exp=
         tax_detail.append(td)
 
     tax_cash, tax_cash_detail = calc_tax_cash_timing(tax_liab)
-    distrib_cash = [o - ds - cr for o, ds, cr in zip(op_inc, loans["total_ds"], capex_res)]
+    # Add JJB startup capital back: hits op_inc as real expense, but JJB funds
+    # it via equity injection — display as positive cashflow before distrib_cash.
+    distrib_cash = [o - ds - cr + sc for o, ds, cr, sc in zip(op_inc, loans["total_ds"], capex_res, startup_exp)]
 
     # Waterfall
     wf = run_waterfall(distrib_cash, tax_cash, t_bill_rate)
