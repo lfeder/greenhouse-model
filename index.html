@@ -918,36 +918,49 @@ function render(d) {
     const zeros = Array(yLen).fill(0);
     const neg = arr => (arr || zeros).map(v => -v);
 
-    // Compute EB grant dilution on JS & JJB pro-rata to their starting shares
+    // EB grant dilution on JS & JJB: pro-rata to (post-vesting) shares.
+    // PEDD splits 50/50 from JS+JJB; Promote splits pro-rata to remaining JS:JJB.
+    // For display we approximate with starting-share pro-rata of the combined total.
     const pedd     = lookup['EB grant (PEDD)']  || zeros;
     const promote  = lookup['EB promote']       || zeros;
     const startJJB = lookup['Starting JJB %']   || zeros;
     const startJS  = lookup['Starting JS %']    || zeros;
+    const startEB  = lookup['Starting EB %']    || zeros;
+    const endJJB   = lookup['Ending JJB %']     || zeros;
+    const endJS    = lookup['Ending JS %']      || zeros;
+    const endEB    = lookup['Ending EB %']      || zeros;
+    const buyJS    = lookup['JJB buys from JS'] || zeros;
     const totGrant = pedd.map((v, i) => v + (promote[i] || 0));
     const denom    = startJJB.map((v, i) => v + (startJS[i] || 0));
     const ebGrantJS  = totGrant.map((v, i) => denom[i] > 0 ? -v * startJS[i]  / denom[i] : 0);
     const ebGrantJJB = totGrant.map((v, i) => denom[i] > 0 ? -v * startJJB[i] / denom[i] : 0);
+
+    // Expansion row = the plug that makes section add up exactly:
+    // Ending = Starting + EB_grant + (Sale/Buy) + Expansion
+    const expEB  = endEB.map((v, i)  => v - startEB[i]  - totGrant[i]);
+    const expJS  = endJS.map((v, i)  => v - startJS[i]  - ebGrantJS[i]  - (-buyJS[i]));
+    const expJJB = endJJB.map((v, i) => v - startJJB[i] - ebGrantJJB[i] - buyJS[i]);
 
     const sections = {
       EB: [
         ['Starting',  lookup['Starting EB %']],
         ['EB grant',  lookup['EB grant (PEDD)']],
         ['Promote',   lookup['EB promote']],
-        ['Expansion', zeros],
+        ['Expansion', expEB],
         ['Ending',    lookup['Ending EB %']],
       ],
       JS: [
         ['Starting',  lookup['Starting JS %']],
         ['EB grant',  ebGrantJS],
-        ['JJB sale',  neg(lookup['JJB buys from JS'])],
-        ['Expansion', zeros],
+        ['JJB sale',  neg(buyJS)],
+        ['Expansion', expJS],
         ['Ending',    lookup['Ending JS %']],
       ],
       JJB: [
         ['Starting',  lookup['Starting JJB %']],
         ['EB grant',  ebGrantJJB],
-        ['JS buy',    lookup['JJB buys from JS']],
-        ['Expansion', lookup['JJB Equity Issued %']],
+        ['JS buy',    buyJS],
+        ['Expansion', expJJB],
         ['Ending',    lookup['Ending JJB %']],
       ],
     };
