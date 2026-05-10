@@ -918,6 +918,16 @@ function render(d) {
     const zeros = Array(yLen).fill(0);
     const neg = arr => (arr || zeros).map(v => -v);
 
+    // Compute EB grant dilution on JS & JJB pro-rata to their starting shares
+    const pedd     = lookup['EB grant (PEDD)']  || zeros;
+    const promote  = lookup['EB promote']       || zeros;
+    const startJJB = lookup['Starting JJB %']   || zeros;
+    const startJS  = lookup['Starting JS %']    || zeros;
+    const totGrant = pedd.map((v, i) => v + (promote[i] || 0));
+    const denom    = startJJB.map((v, i) => v + (startJS[i] || 0));
+    const ebGrantJS  = totGrant.map((v, i) => denom[i] > 0 ? -v * startJS[i]  / denom[i] : 0);
+    const ebGrantJJB = totGrant.map((v, i) => denom[i] > 0 ? -v * startJJB[i] / denom[i] : 0);
+
     const sections = {
       EB: [
         ['Starting',  lookup['Starting EB %']],
@@ -928,14 +938,14 @@ function render(d) {
       ],
       JS: [
         ['Starting',  lookup['Starting JS %']],
-        ['EB grant',  zeros],
+        ['EB grant',  ebGrantJS],
         ['JJB sale',  neg(lookup['JJB buys from JS'])],
         ['Expansion', zeros],
         ['Ending',    lookup['Ending JS %']],
       ],
       JJB: [
         ['Starting',  lookup['Starting JJB %']],
-        ['EB grant',  zeros],
+        ['EB grant',  ebGrantJJB],
         ['JS buy',    lookup['JJB buys from JS']],
         ['Expansion', lookup['JJB Equity Issued %']],
         ['Ending',    lookup['Ending JJB %']],
