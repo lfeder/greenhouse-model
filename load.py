@@ -241,20 +241,10 @@ def build_rev_exp(s):
             rev_rows.append([crop["label"], cr]); exp_rows.append([crop["label"], ce])
             dep_crops.append({"end_year": crop["end_year"], "capex": crop["capex"], "label": crop["label"]})
 
-    # Startup capital: 3 months of expenses (at 100%) prefunded one quarter before production
+    # Startup capital: prefunded as JJB equity injection only — does NOT hit P&L.
+    # Tracked for capital-stack purposes via crop["startup_capital"] which feeds
+    # equity_draws in compute_ownership.
     startup_exp = [0.0] * N_YEARS
-    for crop in crop_data:
-        if crop.get("is_buy"):
-            continue
-        sc = crop.get("startup_capital", 0)
-        sc_yr = crop.get("startup_year")
-        if sc and sc_yr and sc_yr in YEARS:
-            n = sc_yr - 2026
-            startup_exp[YEARS.index(sc_yr)] += sc * (1 + ci / 100) ** n
-    if any(v != 0 for v in startup_exp):
-        for i in range(N_YEARS):
-            exp[i] += startup_exp[i]
-        exp_rows.append(["Startup Capital", startup_exp])
 
     # Shared infrastructure: Land, Packhouse, Housing
     if not debug and crop_data:
