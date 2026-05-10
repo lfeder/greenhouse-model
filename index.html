@@ -958,22 +958,23 @@ function render(d) {
     const ebGrantJS  = totGrant.map(v => -v * shareJS);
     const ebGrantJJB = totGrant.map(v => -v * shareJJB);
 
-    // Expansion row:
-    //   JJB = plug (its actual gain from cap raise)
-    //   EB & JS = redistribute their combined dilution by TERMINAL EB:JS ratio
-    //   so the ratio reflects steady-state ownership, not year-1 values.
-    const expEBraw = endEB.map((v, i) => v - startEB[i] - totGrant[i]);
-    const expJSraw = endJS.map((v, i) => v - startJS[i] - ebGrantJS[i] - (-buyJS[i]));
-    const totEBJSdil = expEBraw.map((v, i) => v + expJSraw[i]);
+    // Expansion row — only non-zero in years where JJB issues new equity.
+    // JJB Expansion = JJB Equity Issued (the cap raise event).
+    // EB+JS take the full dilution split by terminal EB:JS ratio.
+    const equityIssued = lookup['JJB Equity Issued %'] || zeros;
     const termEBval = endEB[lastIdx] || 0;
     const termJSval = endJS[lastIdx] || 0;
     const ebjsDenom = termEBval + termJSval;
     const ebDilShare = ebjsDenom > 0 ? termEBval / ebjsDenom : 0.5;
     const jsDilShare = ebjsDenom > 0 ? termJSval / ebjsDenom : 0.5;
     const denoise = v => Math.abs(v) < 0.05 ? 0 : v;
-    const expEB  = totEBJSdil.map(v => denoise(v * ebDilShare));
-    const expJS  = totEBJSdil.map(v => denoise(v * jsDilShare));
-    const expJJB = endJJB.map((v, i) => denoise(v - startJJB[i] - ebGrantJJB[i] - buyJS[i]));
+    // Total EB+JS dilution in an issuance year ≈ equityIssued × (1 - jjb_terminal/100).
+    // JJB gain = same magnitude (equity raise gain to JJB). Net sum across all = 0.
+    const termJJBval = endJJB[lastIdx] || 0;
+    const dilMag = equityIssued.map(v => v * (1 - termJJBval / 100));
+    const expEB  = dilMag.map(v => denoise(-v * ebDilShare));
+    const expJS  = dilMag.map(v => denoise(-v * jsDilShare));
+    const expJJB = dilMag.map(v => denoise(v));
 
     const sections = {
       EB: [
