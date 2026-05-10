@@ -233,11 +233,13 @@ def build_rev_exp(s):
     # New crops — K, J, E, L, then T (matching CROP_DEFS order, TB excluded from table)
     crop_data = [] if debug else build_crops(s)
     dep_crops = []
+    new_crop_op_inc = [0.0] * N_YEARS  # per-year sum of (rev - exp) from new crops only
     for crop in crop_data:
         cr, ce = ramp_crop_rev_exp(crop["base_rev"], crop["base_exp"], crop["end_q"], crop["ramp_years"], ri, ci)
         if not crop.get("is_buy"):
             for i in range(N_YEARS):
                 rev[i] += cr[i]; exp[i] += ce[i]
+                new_crop_op_inc[i] += cr[i] - ce[i]
             rev_rows.append([crop["label"], cr]); exp_rows.append([crop["label"], ce])
             dep_crops.append({"end_year": crop["end_year"], "capex": crop["capex"], "label": crop["label"]})
 
@@ -319,7 +321,7 @@ def build_rev_exp(s):
             if y >= end_year:
                 total_acres[i] += crop["acres"]
 
-    return rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres, startup_exp
+    return rev, exp, rev_rows, exp_rows, crop_data, dep_crops, total_acres, startup_exp, new_crop_op_inc
 
 
 def allocate_capital_stack(crop_data, s):
