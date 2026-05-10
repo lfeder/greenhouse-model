@@ -164,6 +164,7 @@ function loadScenario(id) {
 // Build presets — small-build planner. Block size: 60k sqft ≈ 1.4 ac.
 // Packhouse held at $4M/ac, varied by acres → $0/$1M/$2M tiers.
 const BUILD_PRESETS = {
+  'NONE':   {label:'No Expansion',    newKAcres:0,   newJAcres:0,   newEAcres:0,   packhouseAcres:0,    packhouseCostPerAc:4000000, housingPods:0},
   '3-NO':   {label:'3 blk · No PH',   newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0,    packhouseCostPerAc:4000000},
   '3-SHED': {label:'3 blk · Shed',    newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0.25, packhouseCostPerAc:4000000},
   '3-FULL': {label:'3 blk · Full PH', newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0.5,  packhouseCostPerAc:4000000},
@@ -176,12 +177,14 @@ function loadBuildPreset(id) {
   const p = BUILD_PRESETS[id];
   if (!p) return;
   activePreset = id;
-  compute({
+  const overrides = {
     newKAcres: p.newKAcres, newJAcres: p.newJAcres, newEAcres: p.newEAcres,
     newLAcres: 0, newTAcres: 0,
     packhouseAcres: p.packhouseAcres, packhouseCostPerAc: p.packhouseCostPerAc,
     debug: false,
-  });
+  };
+  if (p.housingPods !== undefined) overrides.housingPods = p.housingPods;
+  compute(overrides);
 }
 
 // Expansion keys to save per scenario (excludes financing params)
@@ -230,6 +233,7 @@ function buildSidebar() {
     return `<button class="btn" style="${style};font-size:9px;padding:3px 4px" onclick="loadBuildPreset('${id}')">${p.label}</button>`;
   };
   h += `<div class="panel"><div class="panel-title">Build Preset</div>
+    <div style="display:grid;grid-template-columns:1fr;gap:4px;margin-bottom:4px">${presetBtn('NONE')}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
       ${presetBtn('3-NO')}${presetBtn('3-SHED')}${presetBtn('3-FULL')}
       ${presetBtn('4-NO')}${presetBtn('4-SHED')}${presetBtn('4-FULL')}
