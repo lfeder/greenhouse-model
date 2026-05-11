@@ -3,9 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Greenhouse Expansion Planner v2</title>
+<title>Greenhouse Expansion Planner</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -35,19 +34,9 @@
   <div style="min-width:0">
     <div class="kpi-grid" id="kpiGrid"></div>
 
-    <div class="panel chart-panel" id="chartPanel">
-      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('chartBody').style.display=document.getElementById('chartBody').style.display==='none'?'':'none'">Revenue Chart <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
-      <div id="chartBody"><div style="position:relative;height:255px"><canvas id="chart"></canvas></div></div>
-    </div>
-
     <div class="panel">
       <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('revExpBody').style.display=document.getElementById('revExpBody').style.display==='none'?'':'none'">Revenue & Expense ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
       <div id="revExpBody"><div style="overflow-x:auto"><table class="fin-table" id="revExpTable"></table></div></div>
-    </div>
-
-    <div class="panel" id="scenarioPanel">
-      <div class="panel-title">Scenario Comparison ('33)</div>
-      <div style="overflow-x:auto"><table class="fin-table" id="scenarioTable"></table></div>
     </div>
 
     <div class="panel">
@@ -68,10 +57,9 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('partnerBody').style.display=document.getElementById('partnerBody').style.display==='none'?'':'none'">Partner Cash & Valuations ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('partnerBody').style.display=document.getElementById('partnerBody').style.display==='none'?'':'none'">Partner Cash ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
       <div id="partnerBody">
         <div style="overflow-x:auto"><table class="fin-table" id="partnerTable"></table></div>
-        <div id="valuationTableWrap" style="overflow-x:auto;margin-top:8px"><table class="fin-table" id="valuationTable"></table></div>
       </div>
     </div>
 
@@ -105,27 +93,10 @@
 // ZERO MATH — display only. All computation via /api/compute.
 // ============================================================
 
+const PARTNERS = ['EB', 'JS', 'JJB'];
+
 let settings = {};
 let lastData = null;
-let chart = null;
-
-// --- UI TOGGLES ---
-// Flip false→true to restore hidden controls/rows. All wiring preserved.
-const UI_TOGGLES = {
-  showScenarioPanel:  false,  // sidebar: A/B/C/D load + save buttons
-  showLettuceSliders: false,  // sidebar: lettuceLbs + lettucePrice
-  showTomatoBuyPanel: false,  // sidebar: tomatoHardAssets
-  showTomatoRows:     false,  // gantt: T (build) + T_BUY rows
-  showLettuceRow:     false,  // gantt: L (lettuce) row
-  showLandRow:        false,  // gantt: LAND row
-  showChartPanel:     false,  // main: Revenue Chart panel
-  showBankLoanPanel:  false,  // sidebar: Bank Loan
-  show3PValuation:    false,  // sidebar: 3P Valuation slider (within Equity Valuations)
-  showScenarioComparison: false,  // main: Scenario Comparison ('33) panel
-  showSbicAndTp:      false,  // global: SBIC and 3P (TP) rows in all tables + KPI subtitle
-  showValuationTable: false,  // main: P/E Multiple / Business Value table under Partner Cash
-};
-const VISIBLE_PARTNERS = UI_TOGGLES.showSbicAndTp ? ['EB','JS','JJB','SBIC','TP'] : ['EB','JS','JJB'];
 
 // --- API ---
 async function loadSettings() {
@@ -149,8 +120,6 @@ function updateSetting(key, value) {
   compute({[key]: value});
 }
 
-function pName(p) { return p === 'TP' ? '3P' : p; }
-
 function setLender(name) {
   const presets = { SBA: {ltv:20, term:25, rate:7}, JJB: {ltv:15, term:5, rate:9} };
   const p = presets[name];
@@ -160,39 +129,12 @@ function setLender(name) {
     financingPct: 100 - p.ltv,
     bankTerm: p.term,
     bankRate: p.rate,
-    sbicCap: 0,            // disabled — single lender tranche
-    bankLoanCap: 1e9,      // disabled — lender funds full LTV regardless of cap
+    sbicCap: 0,            // single-tranche
+    bankLoanCap: 1e9,      // disabled
   });
 }
 
-function updateFinancingOverride(sc, key, rawValue, kind) {
-  let val = parseFloat(String(rawValue).replace(/[^0-9.\-]/g, ''));
-  if (isNaN(val)) return;
-  if (kind === 'pct') {
-    // raw percentage, no scaling
-  } else {
-    if (/M/i.test(rawValue)) val *= 1e6;
-    else if (/K/i.test(rawValue)) val *= 1e3;
-    else val *= 1e6;
-  }
-  if (!settings.financing_overrides) settings.financing_overrides = {};
-  if (!settings.financing_overrides[sc]) settings.financing_overrides[sc] = {};
-  settings.financing_overrides[sc][key] = val;
-  compute({financing_overrides: settings.financing_overrides});
-}
-
-function loadScenario(id) {
-  if (id === 'D') {
-    compute({debug: true});
-  } else {
-    const es = settings.expansion_scenarios || {};
-    const exp = es[id] || {};
-    compute({...exp, debug: false});
-  }
-}
-
-// Build presets — small-build planner. Block size: 60k sqft ≈ 1.4 ac.
-// Packhouse held at $4M/ac, varied by acres → $0/$1M/$2M tiers.
+// --- BUILD PRESETS ---
 const BUILD_PRESETS = {
   'NONE':   {label:'No Expansion',    newKAcres:0,   newJAcres:0,   newEAcres:0,   packhouseAcres:0,    packhouseCostPerAc:4000000, housingPods:0},
   '3-NO':   {label:'3 blk · No PH',   newKAcres:1.4, newJAcres:1.4, newEAcres:1.4, packhouseAcres:0,    packhouseCostPerAc:4000000, housingPods:2},
@@ -212,7 +154,7 @@ function detectActivePreset() {
         eq(settings.newLAcres, 0) &&
         eq(settings.newTAcres, 0) &&
         eq(settings.packhouseAcres, p.packhouseAcres) &&
-        (p.housingPods === undefined || eq(settings.housingPods, p.housingPods))) {
+        eq(settings.housingPods, p.housingPods)) {
       return id;
     }
   }
@@ -222,50 +164,14 @@ function loadBuildPreset(id) {
   const p = BUILD_PRESETS[id];
   if (!p) return;
   activePreset = id;
-  const overrides = {
+  compute({
     newKAcres: p.newKAcres, newJAcres: p.newJAcres, newEAcres: p.newEAcres,
     newLAcres: 0, newTAcres: 0,
     packhouseAcres: p.packhouseAcres, packhouseCostPerAc: p.packhouseCostPerAc,
-    housingPods: p.housingPods !== undefined ? p.housingPods : 2,
+    housingPods: p.housingPods,
     debug: false,
-  };
-  compute(overrides);
-}
-
-// Expansion keys to save per scenario (excludes financing params)
-const SAVE_KEYS = [
-  'newKAcres','newJAcres','newEAcres','newTAcres','newLAcres',
-  'englishPricePerLb','tomatoBuildRevPerAc','tomatoBuyRevPerAc',
-  'lettuceLbs','lettucePrice',
-  'cucumberCostPerAc','tomatoCostPerAc','lettuceCostPerAc',
-  'landCostPerAc','packhouseAcres','packhouseCostPerAc',
-  'housingPods','housingCostPerPod','landAcres',
-  'tomatoPurchasePrice','tomatoHardAssets',
-  'keikiMrgnPct','japaneseMrgnPct','englishMrgnPct','tomatoMrgnPct','tomatoBuyMrgnPct','lettuceMrgnPct',
-  'kStartQ','kBuildMonths','kRampYears',
-  'jStartQ','jBuildMonths','jRampYears',
-  'eStartQ','eBuildMonths','eRampYears',
-  'tStartQ','tBuildMonths','tRampYears',
-  'tbStartQ','tbBuildMonths','tbRampYears',
-  'lStartQ','lBuildMonths','lRampYears',
-  'packStartQ','packBuildMonths','landStartQ',
-  'housingStartQ','housingBuildMonths',
-];
-
-async function saveScenario(id) {
-  if (!['A','B','C'].includes(id)) return;
-  const overrides = {};
-  for (const k of SAVE_KEYS) {
-    if (settings[k] !== undefined) overrides[k] = settings[k];
-  }
-  await fetch('/api/save_scenario', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({scenario: id, overrides}),
   });
-  compute();
 }
-
-// Formatters, sliders, table helpers loaded from utils.js
 
 // --- BUILD SIDEBAR ---
 function buildSidebar() {
@@ -287,27 +193,9 @@ function buildSidebar() {
       60k sqft blocks (1K · 1J · ${activePreset && activePreset.startsWith('4') ? '2E' : '1E'}). Lettuce/tomato zeroed.
     </div>
   </div>`;
-  if (UI_TOGGLES.showScenarioPanel) {
-    h += `<div class="panel"><div class="panel-title">Scenario</div>
-      <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;margin-bottom:4px">LOAD</div>
-      <div style="display:flex;gap:6px">
-        <button class="btn" onclick="loadScenario('A')">A</button>
-        <button class="btn" onclick="loadScenario('B')">B</button>
-        <button class="btn" onclick="loadScenario('C')">C</button>
-        <button class="btn" onclick="loadScenario('D')">D</button>
-      </div>
-      <div style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;margin:10px 0 4px">SAVE CURRENT TO</div>
-      <div style="display:flex;gap:6px">
-        <button class="btn" onclick="saveScenario('A')">A</button>
-        <button class="btn" onclick="saveScenario('B')">B</button>
-        <button class="btn" onclick="saveScenario('C')">C</button>
-      </div>
-    </div>`;
-  }
+
   h += `<div class="panel"><div class="panel-title">Revenue Adjustments</div>
     ${S('englishPricePerLb', {label:"English '27 $/lb",min:3,max:3.5,step:0.125,def:3,fmt:v=>'$'+v.toFixed(2)})}
-    ${UI_TOGGLES.showLettuceSliders ? S('lettuceLbs', {label:'Lettuce lb/yr (2028)',min:500000,max:1300000,step:100000,def:700000,fmt:v=>(v/1e3).toFixed(0)+'K'}) : ''}
-    ${UI_TOGGLES.showLettuceSliders ? S('lettucePrice', {label:'Lettuce Price / lb',min:6,max:8,step:0.5,def:7,fmt:v=>'$'+v.toFixed(2)}) : ''}
   </div>`;
 
   h += `<div class="panel"><div class="panel-title">Inflation</div>
@@ -316,7 +204,7 @@ function buildSidebar() {
   </div>`;
 
   const FM = v => (v < 0 ? '−' : '') + (Math.abs(v) / 1e6).toFixed(2) + 'M';
-  const FP = v => v + '%';
+
   // Expansion Loan — lender (SBA/JJB) + equity %. Term & rate derived from lender.
   const curLender = settings.expansionLender || 'SBA';
   const curLtv = 100 - (settings.financingPct || 80);  // here LTV = equity %
@@ -337,13 +225,6 @@ function buildSidebar() {
     </div>
   </div>`;
 
-  if (UI_TOGGLES.showBankLoanPanel)
-  h += `<div class="panel"><div class="panel-title">Bank Loan</div>
-    ${S('financingPct', {label:'Bank LTV',min:50,max:80,step:5,def:70,fmt:FP})}
-    ${S('bankLoanCap', {label:'Bank Loan Cap',min:7500000,max:17500000,step:1250000,def:12500000,fmt:FM})}
-    ${S('bankRate', {label:'Bank Rate',min:5,max:9,step:0.5,def:7,fmt:v=>v.toFixed(1)+'%'})}
-    ${S('bankTerm', {label:'Bank Term',min:5,max:15,step:1,def:10,fmt:v=>v+' yr'})}
-  </div>`;
   // Compute derived net% for display under the slider
   const _jjbCap = (lastData && lastData.jjb_equity) || 0;
   const _val = settings.jjbBuyinValuation || 15000000;
@@ -354,142 +235,50 @@ function buildSidebar() {
     <div style="font-size:9px;color:var(--text-dim);margin-top:-4px;line-height:1.4">
       → JJB net: ${_netPct.toFixed(2)}% · gross: ${(2*_netPct).toFixed(2)}% (JJB$ ${(_jjbCap/1e6).toFixed(2)}M)
     </div>
-    ${UI_TOGGLES.show3PValuation ? S('thirdPartyValuation', {label:'3P Valuation',min:20000000,max:40000000,step:5000000,def:30000000,fmt:FM}) : ''}
-    ${UI_TOGGLES.showSbicAndTp ? `<div class="toggle-row">
-      <input type="checkbox" id="chk-tpBuysJS" ${settings.thirdPartyBuysJS ? 'checked' : ''}
-        onchange="updateSetting('thirdPartyBuysJS', this.checked)">
-      <label for="chk-tpBuysJS">3P buys out JS</label>
-    </div>` : ''}
   </div>`;
+
   h += `<div class="panel"><div class="panel-title">EB Promote (from JS & JJB)</div>
     ${S('ebExpansionGrantPct', {label:'Annual %',min:0,max:1,step:0.25,def:0.5,fmt:v=>v.toFixed(2)+'%'})}
     ${S('ebExpansionGrantStartYear', {label:'Start Year',min:2026,max:2032,step:1,def:2027,fmt:v=>''+v})}
     ${S('ebExpansionGrantEndYear', {label:'End Year',min:2028,max:2035,step:1,def:2035,fmt:v=>''+v})}
   </div>`;
-  if (UI_TOGGLES.showTomatoBuyPanel)
-  h += `<div class="panel"><div class="panel-title">Tomato (Buy)</div>
-    ${S('tomatoHardAssets', {label:'Hard Asset Value',min:2000000,max:10000000,step:1000000,def:5000000,fmt:v=>(v/1e6).toFixed(2)+'M'})}
-  </div>`;
 
   document.getElementById('sidebar').innerHTML = h;
 }
 
-// --- CHART ---
-const CROP_COLORS = {
-  'Existing Keiki': '#4a8acc', 'Existing Japanese': '#4a8acc', 'Existing English': '#4a8acc', 'Existing Lettuce': '#4a8acc',
-  'Keiki': '#5a9e55', 'Japanese': '#66bb6a', 'English': '#4ac6c6',
-  'Tomato (Build)': '#e07050', 'Lettuce': '#cc8a4a',
-};
-function renderChart(d) {
-  const ctx = document.getElementById('chart').getContext('2d');
-  const chartYears = _DN ? d.years.slice(0, -_DN) : d.years;
-  const labels = chartYears.map(y => "'" + String(y).slice(2));
-  const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
-  const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
-
-  // Merge existing ops into one bar, keep new crops separate
-  const existRows = d.rev_rows.filter(([k]) => k.startsWith('Existing'));
-  const newRows = d.rev_rows.filter(([k]) => !k.startsWith('Existing'));
-  const existData = chartYears.map((_, i) => existRows.reduce((s, [, data]) => s + data[i], 0));
-
-  const datasets = [
-    { label: 'Existing Ops', data: existData, backgroundColor: '#4a8acc', borderRadius: 2 },
-    ...newRows.map(([k, data]) => ({
-      label: k, data: _DN ? data.slice(0, -_DN) : data, backgroundColor: CROP_COLORS[k] || '#888', borderRadius: 2,
-    })),
-  ];
-
-  if (chart) {
-    chart.data.labels = labels;
-    chart.data.datasets = datasets;
-    chart.update();
-    return;
-  }
-
-  chart = new Chart(ctx, {
-    type: 'bar',
-    data: { labels, datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          labels: { usePointStyle: true, pointStyle: 'circle', font: { family: 'DM Mono, monospace', size: 10 }, color: tickColor,
-            generateLabels: ch => { const orig = Chart.defaults.plugins.legend.labels.generateLabels(ch); orig.forEach(l => { if (l.hidden) l.fontColor = 'rgba(122,170,122,0.3)'; }); return orig; }
-          }
-        },
-        tooltip: {
-          backgroundColor: '#0a150a', borderColor: '#3a5a3a', borderWidth: 1,
-          bodyFont: { family: 'monospace', size: 11 }, titleFont: { family: 'monospace', size: 10 }, titleColor: '#5a9e55',
-          callbacks: { label: ctx => ctx.dataset.label + ': ' + fK(ctx.parsed.y) }
-        }
-      },
-      scales: {
-        x: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor }, grid: { display: false } },
-        y: { stacked: true, ticks: { font: { family: 'monospace', size: 11 }, color: tickColor, callback: v => { const abs = Math.abs(v); if (abs >= 1e6) return Math.round(abs/1e6)+'M'; if (abs >= 1e3) return Math.round(abs/1e3)+'K'; return v; } }, grid: { color: gridColor } }
-      }
-    }
-  });
-}
-
 // --- GANTT CHART ---
 const GANTT_COLS = 28;        // 7 years × 4 quarters (2027–2033)
+const HIDDEN_GANTT_KEYS = new Set(['T', 'T_BUY', 'L', 'LAND']);
 
-// +New dropdown options per crop/infra
 const NEW_OPTIONS = {
-  K:  {key:'newKAcres', opts:[0,1,2,3,4,5,6,7,8,9,10], fmt:v=>v.toFixed(1)},
-  J:  {key:'newJAcres', opts:[0,1,2,3,4,5,6,7,8,9,10], fmt:v=>v.toFixed(1)},
-  E:  {key:'newEAcres', opts:[0,1,2,3,4,5,6,7,8,9,10], fmt:v=>v.toFixed(1)},
-  T:  {key:'newTAcres', opts:[0,1,2,3,4,5,6,7,8,9,10], fmt:v=>v.toFixed(1)},
-  L:  {key:'newLAcres', opts:[0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5], fmt:v=>v.toFixed(1)},
-  LAND:  {key:'landAcres', opts:[0,2,4,6,8,10,12,14,16,18,20,25,30,35,40,45,50,60], fmt:v=>String(v)},
-  PACK:  {key:'packhouseAcres', opts:[0.2,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0,2.5,3.0,4.0,5.0], fmt:v=>v.toFixed(1)},
-  HOUSE: {key:'housingPods', opts:[1,2,3,4,5,6,7,8,9,10,12,14,16], fmt:v=>String(v)},
+  K:  {key:'newKAcres'},
+  J:  {key:'newJAcres'},
+  E:  {key:'newEAcres'},
+  PACK:  {key:'packhouseAcres'},
+  HOUSE: {key:'housingPods'},
 };
-
-// Margin% config per crop (margin = 100 - exp%)
 const MARGIN_OPTIONS = {
   K:  {key:'keikiMrgnPct'},
   J:  {key:'japaneseMrgnPct'},
   E:  {key:'englishMrgnPct'},
-  T:  {key:'tomatoMrgnPct'},
-  L:  {key:'lettuceMrgnPct'},
-  T_BUY: {key:'tomatoBuyMrgnPct'},
 };
-
-// Cost dropdown options per row
 const COST_OPTIONS = {
-  K:  {key:'cucumberCostPerAc', opts:[600000,800000,1000000,1200000,1400000], fmt:v=>(v/1e6).toFixed(1)},
-  J:  {key:'cucumberCostPerAc', opts:[600000,800000,1000000,1200000,1400000], fmt:v=>(v/1e6).toFixed(1)},
-  E:  {key:'cucumberCostPerAc', opts:[600000,800000,1000000,1200000,1400000], fmt:v=>(v/1e6).toFixed(1)},
-  T:  {key:'tomatoCostPerAc', opts:[1000000,1200000,1400000,1600000,1800000,2000000], fmt:v=>(v/1e6).toFixed(1)},
-  L:  {key:'lettuceCostPerAc', opts:[3000000,3500000,4000000,4500000,5000000], fmt:v=>(v/1e6).toFixed(1)},
-  LAND:  {key:'landCostPerAc', opts:[100000,110000,120000,130000,140000,150000], fmt:v=>(v/1e6).toFixed(2)},
-  PACK:  {key:'packhouseCostPerAc', opts:[2000000,3000000,4000000,5000000,6000000], fmt:v=>(v/1e6).toFixed(1)},
-  HOUSE: {key:'housingCostPerPod', opts:[300000,350000,400000,450000,500000,550000,600000], fmt:v=>(v/1e6).toFixed(2)},
-  T_BUY: {key:'tomatoPurchasePrice', opts:[1500000,1750000,2000000,2250000,2500000], fmt:v=>(v/1e6).toFixed(2)},
+  K:  {key:'cucumberCostPerAc'},
+  J:  {key:'cucumberCostPerAc'},
+  E:  {key:'cucumberCostPerAc'},
+  PACK:  {key:'packhouseCostPerAc'},
+  HOUSE: {key:'housingCostPerPod'},
 };
 
-// Tomato rev/ac dropdowns
-const TOMATO_BUILD_REV_OPTIONS = [1000000,1100000,1200000,1300000,1400000];
-const TOMATO_BUY_REV_OPTIONS = [1000000,1100000,1200000,1300000,1400000];
-
-// Start quarter options
 const Q_OPTIONS = [];
 for (let y = 2026; y <= 2033; y++) for (let q = 1; q <= 4; q++) Q_OPTIONS.push({val: y*10+q, label: `Q${q}'${String(y).slice(2)}`});
 
 function qToCol(q) { return (Math.floor(q / 10) - 2027) * 4 + (q % 10) - 1; }
-
 function fRevAc(v) { return (v/1e6).toFixed(2); }
 
 function renderGantt(d) {
   const gd = d.gantt_data || [];
   if (!gd.length) { document.getElementById('ganttPanel').innerHTML = ''; return; }
-
-  const HIDDEN_KEYS = new Set();
-  if (!UI_TOGGLES.showTomatoRows) { HIDDEN_KEYS.add('T'); HIDDEN_KEYS.add('T_BUY'); }
-  if (!UI_TOGGLES.showLettuceRow) HIDDEN_KEYS.add('L');
-  if (!UI_TOGGLES.showLandRow)    HIDDEN_KEYS.add('LAND');
 
   // Year headers
   const years = [];
@@ -503,52 +292,37 @@ function renderGantt(d) {
     qLines += `<div class="gantt-q-line" style="grid-column:${i+1};border-left:1px solid ${isYearBound ? 'var(--border)' : 'rgba(255,255,255,0.04)'}"></div>`;
   }
 
-  // Build IRR lookup from crop_irrs
   const irrMap = {};
-  for (const ci of (d.crop_irrs || [])) {
-    irrMap[ci.key] = ci;
-  }
+  for (const ci of (d.crop_irrs || [])) irrMap[ci.key] = ci;
 
   const totals = {old: 0, new: 0, cost: 0};
   let rows = '';
-  let tbuyRow = '';
   for (const item of gd) {
     const isInfra = item.is_infra;
-    const isBuy = item.is_buy || false;
     const key = item.key;
-    if (HIDDEN_KEYS.has(key)) continue;
+    if (HIDDEN_GANTT_KEYS.has(key)) continue;
+    if (item.is_buy) continue;
     const lk = key.toLowerCase();
 
-    // 1. Label
     const labelHtml = `<div class="gantt-crop-name">${item.label}</div>`;
 
-    // 2. Old units
-    let oldHtml;
-    if (isInfra) {
-      oldHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
-    } else {
-      const oldVal = item.acres_existing;
-      oldHtml = `<div class="gantt-cell gantt-right">${oldVal > 0 ? oldVal.toFixed(1) : '–'}</div>`;
-    }
+    // Old units
+    const oldHtml = isInfra
+      ? `<div class="gantt-cell-muted gantt-right">–</div>`
+      : `<div class="gantt-cell gantt-right">${item.acres_existing > 0 ? item.acres_existing.toFixed(1) : '–'}</div>`;
 
-    // 3. +New input
+    // +New input
     let newHtml = '';
-    if (isBuy) {
-      newHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
-    } else {
-      const no = NEW_OPTIONS[key];
-      if (no) {
-        const curVal = isInfra ? (item.units_new || 0) : (item.acres_new || 0);
-        newHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${curVal}" min="0" step="any" data-key="${no.key}"></div>`;
-      }
+    const no = NEW_OPTIONS[key];
+    if (no) {
+      const curVal = isInfra ? (item.units_new || 0) : (item.acres_new || 0);
+      newHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${curVal}" min="0" step="any" data-key="${no.key}"></div>`;
     }
 
-    // 4. Total
+    // Total
+    const newVal = isInfra ? (item.units_new || 0) : (item.acres_new || 0);
     let totalHtml;
-    const newVal = isBuy ? 0 : (isInfra ? (item.units_new || 0) : (item.acres_new || 0));
-    if (isBuy) {
-      totalHtml = `<div class="gantt-cell gantt-right">${(item.acres_existing || 0).toFixed(1)}</div>`;
-    } else if (isInfra) {
+    if (isInfra) {
       const fmtVal = (key === 'PACK') ? newVal.toFixed(1) : newVal;
       totalHtml = `<div class="gantt-cell gantt-right">${newVal > 0 ? fmtVal : '–'}</div>`;
     } else {
@@ -556,72 +330,43 @@ function renderGantt(d) {
       totalHtml = `<div class="gantt-cell gantt-right">${total > 0 ? total.toFixed(1) : '–'}</div>`;
     }
 
-    // 5. Rev/Ac
-    let revHtml;
-    if (isInfra) {
-      revHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
-    } else if (key === 'T') {
-      const cur = settings.tomatoBuildRevPerAc / 1e6;
-      revHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${cur.toFixed(2)}" min="0" step="any" data-key="tomatoBuildRevPerAc" data-scale="1e6"></div>`;
-    } else if (key === 'T_BUY') {
-      const cur = settings.tomatoBuyRevPerAc / 1e6;
-      revHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${cur.toFixed(2)}" min="0" step="any" data-key="tomatoBuyRevPerAc" data-scale="1e6"></div>`;
-    } else {
-      revHtml = `<div class="gantt-cell gantt-right">${fRevAc(item.rev_per_ac || 0)}</div>`;
-    }
+    // Rev/Ac
+    const revHtml = isInfra
+      ? `<div class="gantt-cell-muted gantt-right">–</div>`
+      : `<div class="gantt-cell gantt-right">${fRevAc(item.rev_per_ac || 0)}</div>`;
 
-    // 6. Margin% input (crops only; stored as exp% = 100 - margin)
-    let marginHtml;
+    // Margin% input
     const mo = MARGIN_OPTIONS[key];
-    if (mo) {
-      const curMargin = 100 - settings[mo.key];
-      marginHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${curMargin}" min="0" max="100" step="any" data-key="${mo.key}" data-invert="1"></div>`;
-    } else {
-      marginHtml = `<div class="gantt-cell-muted">–</div>`;
-    }
+    const marginHtml = mo
+      ? `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${100 - settings[mo.key]}" min="0" max="100" step="any" data-key="${mo.key}" data-invert="1"></div>`
+      : `<div class="gantt-cell-muted">–</div>`;
 
-    // 7. Cost/Ac input
-    let costHtml = '';
+    // Cost/Ac input
     const co = COST_OPTIONS[key];
-    if (co) {
-      const cur = settings[co.key] || 0;
-      costHtml = `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${co.fmt(cur)}" min="0" step="any" data-key="${co.key}" data-scale="1e6"></div>`;
-    }
+    const costHtml = co
+      ? `<div class="gantt-cell gantt-right"><input type="number" class="gantt-input gantt-ctrl" value="${((settings[co.key] || 0)/1e6).toFixed(2)}" min="0" step="any" data-key="${co.key}" data-scale="1e6"></div>`
+      : '';
 
-    // 8. Cost = New × Cost/Ac (for TB: 6ac × $/ac)
-    let costTotalHtml;
-    if (isBuy) {
-      const pp = (item.acres_existing || 6) * (settings[co.key] || 0);
-      costTotalHtml = `<div class="gantt-cell gantt-right">${(pp/1e6).toFixed(1)}</div>`;
-    } else {
-      const costPerUnit = co ? (settings[co.key] || 0) : 0;
-      const totalCost = newVal * costPerUnit;
-      if (totalCost > 0) {
-        costTotalHtml = `<div class="gantt-cell gantt-right">${(totalCost/1e6).toFixed(1)}</div>`;
-      } else {
-        costTotalHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
-      }
-    }
+    // Cost total
+    const costPerUnit = co ? (settings[co.key] || 0) : 0;
+    const totalCost = newVal * costPerUnit;
+    const costTotalHtml = totalCost > 0
+      ? `<div class="gantt-cell gantt-right">${(totalCost/1e6).toFixed(1)}</div>`
+      : `<div class="gantt-cell-muted gantt-right">–</div>`;
 
-    // Accumulate totals (exclude T_BUY)
-    if (!isBuy) {
-      if (!isInfra) {
-        totals.old += item.acres_existing || 0;
-        totals.new += item.acres_new || 0;
-      }
-      const co_ = COST_OPTIONS[key];
-      const cpu = co_ ? (settings[co_.key] || 0) : 0;
-      totals.cost += (isInfra ? (item.units_new || 0) : (item.acres_new || 0)) * cpu;
+    // Accumulate totals
+    if (!isInfra) {
+      totals.old += item.acres_existing || 0;
+      totals.new += item.acres_new || 0;
     }
+    totals.cost += newVal * costPerUnit;
 
-    // 9. IRR and Unlev with cashflow tooltip
+    // IRR
     let irrHtml, unlevHtml;
     const ci = irrMap[key];
     if (ci) {
-      const irrColor = isBuy ? 'var(--text-dim)' : 'var(--green)';
       const ud = ci.unlev_detail;
-      let tip = ci.label + '\n';
-      tip += '\n— LEVERED IRR: ' + ci.irr.toFixed(1) + '%\n';
+      let tip = ci.label + '\n\n— LEVERED IRR: ' + ci.irr.toFixed(1) + '%\n';
       tip += 'After debt service, equity outlay, startup capital.\n';
       tip += 'Equity: ' + fK(ci.equity) + '  (incl startup + infra share)\n';
       tip += 'Yearly cashflows (rev - exp - DS - equity):\n';
@@ -630,66 +375,53 @@ function renderGantt(d) {
         if (Math.abs(cf) > 50) tip += '  ' + d.years[yi] + ': ' + fK(cf) + '\n';
       }
       tip += '\n— UNLEVERED YIELD: ' + ci.unlev.toFixed(1) + '%\n';
-      tip += 'Steady-state op income / total capex (no debt, no startup).\n';
+      tip += 'Steady-state op income / total capex.\n';
       tip += 'Rev: ' + fK(ud.base_rev) + '  Exp: ' + fK(ud.base_exp) + '\n';
       tip += 'Op Inc: ' + fK(ud.op_inc) + '  CapEx: ' + fK(ud.capex);
       const esc = tip.replace(/"/g, '&quot;');
-      irrHtml = `<div class="gantt-cell gantt-right" style="color:${irrColor};cursor:help" title="${esc}">${Math.round(ci.irr)}%</div>`;
-      unlevHtml = `<div class="gantt-cell gantt-right" style="color:${irrColor};cursor:help" title="${esc}">${Math.round(ci.unlev)}%</div>`;
+      irrHtml = `<div class="gantt-cell gantt-right" style="color:var(--green);cursor:help" title="${esc}">${Math.round(ci.irr)}%</div>`;
+      unlevHtml = `<div class="gantt-cell gantt-right" style="color:var(--green);cursor:help" title="${esc}">${Math.round(ci.unlev)}%</div>`;
     } else {
       irrHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
       unlevHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
     }
 
-    // 10. Start Q dropdown
-    let startHtml;
-    if (isBuy) {
-      startHtml = `<div class="gantt-cell-muted">–</div>`;
-    } else {
-      const startQKey = lk === 'pack' ? 'packStartQ' : lk === 'house' ? 'housingStartQ' : lk === 'land' ? 'landStartQ' : lk + 'StartQ';
-      const curStartQ = settings[startQKey];
-      let startOpts = Q_OPTIONS.map(o => `<option value="${o.val}" ${o.val===curStartQ?'selected':''}>${o.label}</option>`).join('');
-      startHtml = `<div class="gantt-cell"><select class="gantt-select gantt-ctrl" data-key="${startQKey}">${startOpts}</select></div>`;
-    }
+    // Start Q dropdown
+    const startQKey = lk === 'pack' ? 'packStartQ' : lk === 'house' ? 'housingStartQ' : lk + 'StartQ';
+    const curStartQ = settings[startQKey];
+    const startOpts = Q_OPTIONS.map(o => `<option value="${o.val}" ${o.val===curStartQ?'selected':''}>${o.label}</option>`).join('');
+    const startHtml = `<div class="gantt-cell"><select class="gantt-select gantt-ctrl" data-key="${startQKey}">${startOpts}</select></div>`;
 
-    // 11. Ramp dropdown (crops only)
+    // Ramp (crops only)
     let rampHtml;
-    if (isBuy) {
-      rampHtml = `<div class="gantt-cell-muted">–</div>`;
-    } else if (!isInfra) {
+    if (!isInfra) {
       const rampKey = lk + 'RampYears';
       const curRamp = settings[rampKey];
-      let rOpts = [0,1,2,3,4].map(v => `<option value="${v}" ${v===curRamp?'selected':''}>${v}yr</option>`).join('');
+      const rOpts = [0,1,2,3,4].map(v => `<option value="${v}" ${v===curRamp?'selected':''}>${v}yr</option>`).join('');
       rampHtml = `<div class="gantt-cell"><select class="gantt-select gantt-ctrl" data-key="${rampKey}">${rOpts}</select></div>`;
     } else {
       rampHtml = `<div class="gantt-cell-muted">–</div>`;
     }
 
-    // 12. Timeline bars (skip for T_BUY)
-    let barsHtml;
-    if (isBuy) {
-      barsHtml = `<div></div>`;
-    } else {
-      const startCol = qToCol(item.start_q);
-      const endCol = qToCol(item.end_q);
-      const buildW = endCol - startCol;
-      const rampW = (item.ramp_years || 0) * 4;
-      const prodStart = endCol + rampW;
-      const prodW = GANTT_COLS - prodStart;
+    // Timeline bars
+    const startCol = qToCol(item.start_q);
+    const endCol = qToCol(item.end_q);
+    const buildW = endCol - startCol;
+    const rampW = (item.ramp_years || 0) * 4;
+    const prodStart = endCol + rampW;
+    const prodW = GANTT_COLS - prodStart;
 
-      barsHtml = `<div class="gantt-timeline">`;
-      barsHtml += qLines;
-      if (buildW > 0) {
-        barsHtml += `<div class="gantt-bar gantt-bar-build" style="grid-column:${startCol+1}/span ${Math.max(1, buildW)}" title="Build: ${Q_OPTIONS.find(o=>o.val===item.start_q)?.label||''} → ${Q_OPTIONS.find(o=>o.val===item.end_q)?.label||''}"></div>`;
-      }
-      if (rampW > 0 && !isInfra) {
-        barsHtml += `<div class="gantt-bar gantt-bar-ramp" style="grid-column:${endCol+1}/span ${rampW}"></div>`;
-      }
-      if (prodW > 0 && !isInfra) {
-        barsHtml += `<div class="gantt-bar gantt-bar-prod" style="grid-column:${prodStart+1}/span ${Math.max(1, prodW)}"></div>`;
-      }
-      barsHtml += '</div>';
+    let barsHtml = `<div class="gantt-timeline">${qLines}`;
+    if (buildW > 0) {
+      barsHtml += `<div class="gantt-bar gantt-bar-build" style="grid-column:${startCol+1}/span ${Math.max(1, buildW)}" title="Build: ${Q_OPTIONS.find(o=>o.val===item.start_q)?.label||''} → ${Q_OPTIONS.find(o=>o.val===item.end_q)?.label||''}"></div>`;
     }
+    if (rampW > 0 && !isInfra) {
+      barsHtml += `<div class="gantt-bar gantt-bar-ramp" style="grid-column:${endCol+1}/span ${rampW}"></div>`;
+    }
+    if (prodW > 0 && !isInfra) {
+      barsHtml += `<div class="gantt-bar gantt-bar-prod" style="grid-column:${prodStart+1}/span ${Math.max(1, prodW)}"></div>`;
+    }
+    barsHtml += '</div>';
 
     const rowHtml = `<div class="gantt-row" data-key="${key}">
       <div class="gantt-label">${labelHtml}</div>
@@ -699,11 +431,10 @@ function renderGantt(d) {
       ${startHtml}${rampHtml}
       <div></div>${barsHtml}
     </div>`;
-    // Hide rows with zero acres/units (except T_BUY)
-    if (isBuy) {
-      tbuyRow = rowHtml;
-    } else if (isInfra) {
-      if (newVal > 0 || key === 'LAND' || key === 'PACK') rows += rowHtml;
+
+    // Hide rows with zero acres/units (except PACK which always shows)
+    if (isInfra) {
+      if (newVal > 0 || key === 'PACK') rows += rowHtml;
     } else {
       if ((item.acres_existing || 0) + (item.acres_new || 0) > 0) rows += rowHtml;
     }
@@ -753,7 +484,7 @@ function renderGantt(d) {
         <div class="gantt-cell gantt-right" style="color:var(--green)">${Math.round(d.total_unlev)}%</div>
         <div class="gantt-cell"></div><div class="gantt-cell"></div><div></div><div></div>
       </div>
-      <div class="gantt-row" title="3 months of working capital prefunded as equity one quarter before production (1.5 months for Tomato Buy)">
+      <div class="gantt-row" title="3 months of working capital prefunded as equity one quarter before production">
         <div class="gantt-label"><div class="gantt-crop-name" style="color:var(--text-muted)">Startup Capital</div></div>
         <div class="gantt-cell">–</div><div class="gantt-cell">–</div><div class="gantt-cell">–</div>
         <div class="gantt-cell">–</div><div class="gantt-cell">–</div><div class="gantt-cell">–</div>
@@ -761,10 +492,8 @@ function renderGantt(d) {
         <div class="gantt-cell"></div><div class="gantt-cell"></div>
         <div class="gantt-cell"></div><div class="gantt-cell"></div><div></div><div></div>
       </div>
-      ${tbuyRow}
     </div>`;
 
-  // Bind all controls (inputs and selects)
   document.querySelectorAll('.gantt-ctrl').forEach(el => {
     el.onchange = () => {
       let val = Number(el.value);
@@ -776,7 +505,6 @@ function renderGantt(d) {
 }
 
 // --- RENDER ALL ---
-
 function render(d) {
   const sb = document.getElementById('sidebar');
   const sbScroll = sb ? sb.scrollTop : 0;
@@ -784,9 +512,9 @@ function render(d) {
   if (sb) sb.scrollTop = sbScroll;
   renderGantt(d);
   const Y = d.years;
-  _DN = 2;  // hide last N years from tables/chart
+  _DN = 2;  // hide last N years from tables
 
-  // KPIs — 6 cards matching v1
+  // KPIs
   const lastIdx = Y.length - 1 - _DN;
   const steadyRev = d.rev[lastIdx], steadyExp = d.exp[lastIdx];
   const steadyOpInc = steadyRev - steadyExp;
@@ -795,28 +523,21 @@ function render(d) {
   const bridgeLoan = d.partners_no_exp ? (d.partners_no_exp.guarantee_total || 0) : 0;
   const totalUses = capex + startupCap;
   const bankTotal = d.bank_total || 0;
-  const sbicTotal = d.sbic_total || 0;
-  const tpEquity = d.tp_equity || 0;
   const jjbEquity = d.jjb_equity || 0;
-  const totalSources = bankTotal + sbicTotal + tpEquity + jjbEquity;
+  const totalSources = bankTotal + jjbEquity;
   const combinedDS = d.loan_total_ds.map((v, i) => v + d.expansion_ds[i]);
   const peakDebt = Math.max(...combinedDS);
   const lastDebt = combinedDS[lastIdx];
   document.getElementById('kpiGrid').innerHTML = [
     ['$ Uses', fK(totalUses), `crop: ${fK(d.total_capex)}<br>infra: ${fK(d.shared_capex)}${startupCap > 0 ? '<br>startup: ' + fK(startupCap) : ''}`],
-    ['$ Sources', fK(totalSources), `bank: ${fK(bankTotal)}${UI_TOGGLES.showSbicAndTp && sbicTotal > 0 ? '<br>SBIC ln: ' + fK(sbicTotal) : ''}${UI_TOGGLES.showSbicAndTp && tpEquity > 0 ? '<br>3P eq: ' + fK(tpEquity) : ''}<br>JJB eq: ${fK(jjbEquity)}${bridgeLoan > 0 ? '<br>bridge: ' + fK(bridgeLoan) : ''}`],
+    ['$ Sources', fK(totalSources), `bank: ${fK(bankTotal)}<br>JJB eq: ${fK(jjbEquity)}${bridgeLoan > 0 ? '<br>bridge: ' + fK(bridgeLoan) : ''}`],
     ['Steady Rev', fK(steadyRev), `year ${Y[lastIdx]}`],
     ['Steady Op Inc', fK(steadyOpInc), `${((steadyOpInc / steadyRev * 100) || 0).toFixed(1)}% margin`],
     ['Debt Svc', fK(peakDebt), `peak yr<br>${fK(lastDebt)} in '${String(Y[lastIdx]).slice(2)}`],
     ['Total IRR', d.total_irr + '%', 'all new crops'],
   ].map(([l, v, s]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div><div class="kpi-sub">${s}</div></div>`).join('');
 
-  // Chart — stacked revenue bars by crop
-  const chartPanel = document.getElementById('chartPanel');
-  if (chartPanel) chartPanel.style.display = UI_TOGGLES.showChartPanel ? '' : 'none';
-  if (UI_TOGGLES.showChartPanel) renderChart(d);
-
-  // Revenue table — per-crop rows, no expense detail
+  // Revenue / Expense table
   let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   if (d.total_acres) {
     rt += `<tr><td style="color:var(--text-muted)">Total GH Acres</td>${sl(d.total_acres).map(v => `<td>${Math.round(v)}</td>`).join('')}</tr>`;
@@ -842,16 +563,12 @@ function render(d) {
   rt += tr('Total Revenue', d.rev, fCM, 'subtotal-row');
   rt += `<tr class="section-header" style="cursor:pointer" onclick="document.querySelectorAll('.exp-detail').forEach(r=>r.style.display=r.style.display==='none'?'':'none')"><td colspan="${Y.length - _DN + 1}">Expenses</td></tr>`;
   if (d.exp_rows) {
-    for (const [name, data] of d.exp_rows) {
-      rt += tr(name, data.map(v => -v), fCM, 'exp-detail');
-    }
+    for (const [name, data] of d.exp_rows) rt += tr(name, data.map(v => -v), fCM, 'exp-detail');
   }
   rt += tr('Total Expenses', d.exp.map(v => -v), fCM, 'subtotal-row');
   rt += tr('Operating Income', d.op_inc, fCM, 'total-row-table');
-  // Op margin row
   const opMargin = d.op_inc.map((v, i) => d.rev[i] > 0 ? (v / d.rev[i] * 100) : 0);
   rt += `<tr><td>Op Margin</td>${sl(opMargin).map(v => `<td>${Math.round(v)}%</td>`).join('')}</tr>`;
-  // Total debt outstanding
   if (d.loan_data && d.expansion_loan_detail) {
     const totalDebt = Y.map((_, i) => {
       let bal = 0;
@@ -867,83 +584,7 @@ function render(d) {
   rt += '</tbody>';
   document.getElementById('revExpTable').innerHTML = rt;
 
-  // === MERGED FROM PARTNERS PAGE ===
-
-  // Scenario comparison table
-  const scenarioPanel = document.getElementById('scenarioPanel');
-  if (scenarioPanel) scenarioPanel.style.display = UI_TOGGLES.showScenarioComparison ? '' : 'none';
-  if (UI_TOGGLES.showScenarioComparison && d.scenario_summary) {
-    const sc = d.scenario_summary;
-    const scKeys = ['A1','A2','A3','A4','D'];
-    const scLabels = {A1:'A1', A2:'A2', A3:'A3', A4:'A4', D:'D'};
-    const scHdr = scKeys.map(k => '<th>' + scLabels[k] + '</th>').join('');
-    const scRow = (label, fn, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${scKeys.map(k => `<td>${fn(sc[k])}</td>`).join('')}</tr>`;
-    const D = sc['D'];
-    const scRowX = (label, valFn, dVal, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${scKeys.map(k => {
-      const v = valFn(sc[k]);
-      const mult = dVal > 0 && k !== 'D' ? ` <span style="color:var(--text-dim);font-size:9px">(${(v/dVal).toFixed(1)}x)</span>` : '';
-      return `<td>${fCM(v)}${mult}</td>`;
-    }).join('')}</tr>`;
-    let st = `<thead><tr><th></th>${scHdr}</tr></thead><tbody>`;
-    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Capital Stack</td></tr>`;
-    st += scRow('Total Uses', s => fCM(s.total_uses), 'subtotal-row');
-    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">$ Sources</td></tr>`;
-    const ov = settings.financing_overrides || {};
-    const editStyle = 'width:54px;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:10px;padding:2px 4px;text-align:right';
-    const mkEdit = (k, field, val) => `<td><input type="text" class="sc-edit" value="${fCM(val)}"
-      onchange="updateFinancingOverride('${k}','${field}',this.value)"
-      style="${editStyle}"></td>`;
-    st += scRow('Bank', s => fCM(s.bank_total));
-    if (UI_TOGGLES.showSbicAndTp) {
-      st += `<tr><td>SBIC Loan</td>${scKeys.map(k => {
-        if (k === 'D') return `<td>${fCM(sc[k].sbic_loan)}</td>`;
-        return mkEdit(k, 'sbicCap', sc[k].sbic_loan);
-      }).join('')}</tr>`;
-      st += `<tr><td>3P Equity</td>${scKeys.map(k => {
-        if (k === 'D') return `<td>${fCM(sc[k].tp_equity)}</td>`;
-        return mkEdit(k, 'tpEquityCap', sc[k].tp_equity);
-      }).join('')}</tr>`;
-    }
-    st += scRow('JJB Equity', s => fCM(s.jjb_equity));
-    st += scRow('Total Sources', s => fCM(s.bank_total + s.sbic_loan + s.tp_equity + s.jjb_equity), 'subtotal-row');
-    st += scRow('JJB Bridge Loan', s => fCM(s.bridge_total));
-    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Ownership</td></tr>`;
-    for (const p of VISIBLE_PARTNERS) {
-      if (p === 'SBIC') {
-        st += `<tr><td>SBIC%</td>${scKeys.map(k => {
-          if (k === 'D') return `<td>${(sc[k].own_SBIC || 0).toFixed(1)}%</td>`;
-          const cur = (ov[k] && ov[k].sbicEquityPct !== undefined) ? ov[k].sbicEquityPct : (sc[k].own_SBIC || 0);
-          return `<td><input type="text" class="sc-edit" value="${Number(cur).toFixed(1)}"
-            onchange="updateFinancingOverride('${k}','sbicEquityPct',this.value,'pct')"
-            style="${editStyle}"></td>`;
-        }).join('')}</tr>`;
-      } else {
-        st += scRow(pName(p) + '%', s => (s['own_' + p] || 0).toFixed(1) + '%');
-      }
-    }
-    st += `<tr class="section-header"><td colspan="${scKeys.length+1}">Valuation</td></tr>`;
-    st += scRow('Revenue', s => fCM(s.rev));
-    st += scRow('EBITDA', s => fCM(s.op_inc));
-    st += scRow('Multiple', s => s.multiple + 'x');
-    st += scRowX('Biz Value (\'33)', s => s.biz_val, D.biz_val, 'subtotal-row');
-    for (const p of VISIBLE_PARTNERS) {
-      st += scRowX(pName(p), s => s[p+'_val'], D[p+'_val']);
-    }
-    for (const p of VISIBLE_PARTNERS) {
-      st += `<tr class="section-header"><td colspan="${scKeys.length+1}">${pName(p)}</td></tr>`;
-      st += scRow('Ownership', s => s[p+'_pct'].toFixed(1) + '%');
-      st += scRowX('Avg Dist', s => s[p+'_dist'], D[p+'_dist']);
-      st += scRowX('Equity Value', s => s[p+'_val'], D[p+'_val']);
-      if (p === 'SBIC') {
-        st += scRow('Implied Valuation', s => s.sbic_implied_val > 0 ? fCM(s.sbic_implied_val) : '—');
-        st += scRow('IRR', s => s.sbic_irr ? s.sbic_irr + '%' : '—');
-      }
-    }
-    st += '</tbody>';
-    document.getElementById('scenarioTable').innerHTML = st;
-  }
-
-  // Ownership table — uses VISIBLE_PARTNERS so SBIC/TP only appear when toggle on
+  // Ownership table (summary + collapsible detail)
   let ot = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
   if (d.ownership_detail) {
     const capRow = d.ownership_detail.find(r => r[0].includes('Capital'));
@@ -952,8 +593,8 @@ function render(d) {
       ot += `<tr><td>JJB Equity In</td>${vals.map(v => `<td>${v > 0 ? fCM(v) : '—'}</td>`).join('')}</tr>`;
     }
   }
-  for (const p of VISIBLE_PARTNERS) {
-    ot += `<tr><td>${pName(p)}</td>${sl(d.ownership).map(o => `<td style="text-align:right">${(o[p] || 0).toFixed(1)}</td>`).join('')}</tr>`;
+  for (const p of PARTNERS) {
+    ot += `<tr><td>${p}</td>${sl(d.ownership).map(o => `<td style="text-align:right">${(o[p] || 0).toFixed(1)}</td>`).join('')}</tr>`;
   }
   if (d.ownership_detail) {
     ot += `<tr><td colspan="${Y.length-_DN+1}" style="padding-top:4px">
@@ -962,43 +603,30 @@ function render(d) {
     ot += `</tbody><tbody id="ownershipDetail" style="display:none">`;
     ot += `<tr><td colspan="${Y.length-_DN+1}" style="color:var(--text-sub);font-size:10px;padding-top:6px">EB PEDD grant: +${d.pedd_grant.toFixed(1)} (PE/DD repaid: ${fK(d.cum_pedd)})</td></tr>`;
 
-    // Build a label→row lookup, then emit normalized per-partner sections
     const lookup = {};
     for (const row of d.ownership_detail) lookup[row[0]] = row.slice(1);
     const yLen = (lookup['Starting EB %'] || Y).length;
     const zeros = Array(yLen).fill(0);
     const neg = arr => (arr || zeros).map(v => -v);
 
-    // EB grant dilution on JS & JJB — match backend model exactly:
-    //   PEDD splits 50/50 from JS and JJB (analysis.py:179-180)
-    //   Promote splits pro-rata to remaining JS:JJB shares (analysis.py:188-190)
+    // EB grant dilution on JS & JJB matches backend: PEDD 50/50; Promote pro-rata to current JS:JJB
     const pedd     = lookup['EB grant (PEDD)']  || zeros;
     const promote  = lookup['EB promote']       || zeros;
     const startJJB = lookup['Starting JJB %']   || zeros;
     const startJS  = lookup['Starting JS %']    || zeros;
-    const startEB  = lookup['Starting EB %']    || zeros;
-    const endJJB   = lookup['Ending JJB %']     || zeros;
-    const endJS    = lookup['Ending JS %']      || zeros;
-    const endEB    = lookup['Ending EB %']      || zeros;
     const buyJS    = lookup['JJB buys from JS'] || zeros;
-    const totGrant = pedd.map((v, i) => v + (promote[i] || 0));
-    const lastIdx = endJS.length - 1;
-    // Match backend exactly:
-    //   PEDD splits 50/50 between JS and JJB
-    //   Promote splits pro-rata to current JS:JJB shares (post-PEDD)
     const ebGrantJS = pedd.map((v, i) => {
-      const promRemain = (startJS[i] || 0) + (startJJB[i] || 0);
-      const promShareJS = promRemain > 0 ? (startJS[i] || 0) / promRemain : 0.5;
-      return -(v * 0.5) - (promote[i] || 0) * promShareJS;
+      const remain = (startJS[i] || 0) + (startJJB[i] || 0);
+      const share = remain > 0 ? (startJS[i] || 0) / remain : 0.5;
+      return -(v * 0.5) - (promote[i] || 0) * share;
     });
     const ebGrantJJB = pedd.map((v, i) => {
-      const promRemain = (startJS[i] || 0) + (startJJB[i] || 0);
-      const promShareJJB = promRemain > 0 ? (startJJB[i] || 0) / promRemain : 0.5;
-      return -(v * 0.5) - (promote[i] || 0) * promShareJJB;
+      const remain = (startJS[i] || 0) + (startJJB[i] || 0);
+      const share = remain > 0 ? (startJJB[i] || 0) / remain : 0.5;
+      return -(v * 0.5) - (promote[i] || 0) * share;
     });
 
-    // Expansion row — JJB Equity Issued % is the net% (2027 only).
-    // Simplified split: JJB +net, EB -net×0.55, JS -net×0.45 (terminal 27.5:22.5).
+    // Expansion row — JJB Equity Issued % is the net%, split JJB +net / EB -0.55×net / JS -0.45×net
     const equityIssued = lookup['JJB Equity Issued %'] || zeros;
     const denoise = v => Math.abs(v) < 0.05 ? 0 : v;
     const expEB  = equityIssued.map(v => denoise(-v * 0.55));
@@ -1028,23 +656,10 @@ function render(d) {
         ['Ending',    lookup['Ending JJB %']],
       ],
     };
-    if (UI_TOGGLES.showSbicAndTp) {
-      sections.SBIC = [
-        ['Starting', lookup['Starting SBIC %']],
-        ['Kicker',   lookup['SBIC Kicker %']],
-        ['Ending',   lookup['Ending SBIC %']],
-      ];
-      sections.TP = [
-        ['Starting',  lookup['Starting 3P %']],
-        ['Issued',    lookup['3P Equity Issued %']],
-        ['Ending',    lookup['Ending 3P %']],
-      ];
-    }
 
     const numCol = (v) => `<td style="text-align:right">${typeof v === 'number' ? v.toFixed(1) : (v || '0.0')}</td>`;
-    for (const p of ['EB','JS','JJB','SBIC','TP']) {
-      if (!VISIBLE_PARTNERS.includes(p) || !sections[p]) continue;
-      ot += `<tr class="section-header"><td colspan="${Y.length-_DN+1}">${pName(p)}</td></tr>`;
+    for (const p of PARTNERS) {
+      ot += `<tr class="section-header"><td colspan="${Y.length-_DN+1}">${p}</td></tr>`;
       for (const [label, vals] of sections[p]) {
         const arr = vals || zeros;
         const rendered = _DN ? arr.slice(0, -_DN) : arr;
@@ -1055,7 +670,7 @@ function render(d) {
   ot += '</tbody>';
   document.getElementById('ownershipTable').innerHTML = ot;
 
-  // Distribution waterfall
+  // Distribution waterfall (with-exp and no-exp side by side)
   const cashTips = Y.map((y, i) => {
     const cd = d.tax_cash_detail[i];
     let t = y + ' TAX CASH DIST\n';
@@ -1104,11 +719,11 @@ function render(d) {
 
   // Partner cash — clickable header collapses detail rows for that partner
   let pt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-  for (const p of VISIBLE_PARTNERS) {
+  for (const p of PARTNERS) {
     const pd = d.partners[p];
     if (!pd) continue;
-    const cls = `pcd-${p}`;  // partner cash detail class
-    pt += `<tr class="section-header" style="cursor:pointer" onclick="document.querySelectorAll('.${cls}').forEach(r=>r.style.display=r.style.display==='none'?'':'none')"><td colspan="${Y.length-_DN+1}">${pName(p)} <span style="font-size:8px;color:var(--text-dim)">▼</span></td></tr>`;
+    const cls = `pcd-${p}`;
+    pt += `<tr class="section-header" style="cursor:pointer" onclick="document.querySelectorAll('.${cls}').forEach(r=>r.style.display=r.style.display==='none'?'':'none')"><td colspan="${Y.length-_DN+1}">${p} <span style="font-size:8px;color:var(--text-dim)">▼</span></td></tr>`;
     pt += tr('Tax Dist', pd.tax_dist, fCM, `${cls}" style="display:none`);
     if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCM, `${cls}" style="display:none`);
     pt += tr('Tier 1', pd.tier_1, fCM, `${cls}" style="display:none`);
@@ -1120,7 +735,7 @@ function render(d) {
       const net = gt[p].advance.map((v, i) => v - gt[p].repay[i]);
       pt += tr('Bridge (net)', net, fCM, `${cls}" style="display:none`);
     }
-    pt += tr('Total ' + pName(p), pd.total, fCM, 'subtotal-row');
+    pt += tr('Total ' + p, pd.total, fCM, 'subtotal-row');
     if (d.partners_no_exp && d.partners_no_exp[p]) {
       pt += tr('No Expansion', d.partners_no_exp[p], fCM);
       const diff = pd.total.map((v, i) => v - d.partners_no_exp[p][i]);
@@ -1129,49 +744,6 @@ function render(d) {
   }
   pt += '</tbody>';
   document.getElementById('partnerTable').innerHTML = pt;
-
-  // Valuation
-  const valWrap = document.getElementById('valuationTableWrap');
-  if (valWrap) valWrap.style.display = UI_TOGGLES.showValuationTable ? '' : 'none';
-  if (!UI_TOGGLES.showValuationTable) {
-    document.getElementById('valuationTable').innerHTML = '';
-  } else {
-  const peOpts = [3,4,5,6,7,8,9,10,11,12].map(v => `<option value="${v}">${v}x</option>`).join('');
-  const hasNoExp = d.partners_no_exp && d.partners_no_exp._op_inc_terminal;
-  const noExpCol = hasNoExp ? '<th>No Exp</th>' : '';
-  let vt = `<thead><tr><th></th>${yh(Y)}${noExpCol}</tr></thead><tbody>`;
-  const DY = sl(Y);
-  vt += `<tr><td style="color:var(--text-muted)">P/E Multiple</td>${DY.map(y =>
-    `<td><select data-year="${y}" class="pe-sel" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>`
-  ).join('')}${hasNoExp ? `<td><select id="noExpPE" class="pe-sel-noexp" style="width:100%;background:var(--panel-dark);color:var(--text-sub);border:1px solid var(--border);border-radius:3px;font-family:inherit;font-size:9px;padding:2px;text-align-last:center;cursor:pointer">${peOpts}</select></td>` : ''}</tr>`;
-  const yearPE = settings.yearPE || {};
-  const bizVals = DY.map((y, i) => d.op_inc[i] * (yearPE[String(y)] || 8));
-  const noExpPE = settings.noExpPE || 8;
-  const noExpBiz = hasNoExp ? d.partners_no_exp._op_inc_terminal * noExpPE : 0;
-  const noExpOwn = hasNoExp ? d.partners_no_exp._ownership : {};
-  vt += `<tr><td>Business Value</td>${bizVals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpBiz)}</td>` : ''}</tr>`;
-  for (const p of VISIBLE_PARTNERS) {
-    const vals = DY.map((_, i) => (d.ownership[i][p] || 0) / 100 * bizVals[i]);
-    const noExpVal = hasNoExp ? (noExpOwn[p] || 0) / 100 * noExpBiz : 0;
-    vt += `<tr><td>${pName(p)}</td>${vals.map(v => `<td>${fCM(v)}</td>`).join('')}${hasNoExp ? `<td>${fCM(noExpVal)}</td>` : ''}</tr>`;
-  }
-  vt += '</tbody>';
-  document.getElementById('valuationTable').innerHTML = vt;
-  document.querySelectorAll('.pe-sel').forEach(sel => {
-    const y = sel.dataset.year;
-    sel.value = (settings.yearPE || {})[y] || 8;
-    sel.onchange = () => {
-      if (!settings.yearPE) settings.yearPE = {};
-      settings.yearPE[y] = Number(sel.value);
-      updateSetting('yearPE', settings.yearPE);
-    };
-  });
-  const noExpSel = document.getElementById('noExpPE');
-  if (noExpSel) {
-    noExpSel.value = settings.noExpPE || 8;
-    noExpSel.onchange = () => updateSetting('noExpPE', Number(noExpSel.value));
-  }
-  }  // end if showValuationTable
 
   // Tax detail
   let tx = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
@@ -1208,7 +780,9 @@ function render(d) {
   renderScenarioComparison(d, Y);
 }
 
-// Resolution scenario — hardcoded values per year 2026-2032 (from PDF)
+// --- SCENARIO COMPARISON ---
+// Resolution data (hardcoded from PDF) lives in constants.json; fetched once at startup.
+// Until Stage 4 moves this to backend, keeping inline.
 const RESOLUTION_DATA = {
   EBITDA:  [4000000, 5000000, 5250000, 5512500, 5788125, 6077531, 6381408],  // 2026-2032
   EB:      { withTax: [ 550293,  902179,  989430, 1040240, 1230838, 1680223, 1788860],
@@ -1218,7 +792,7 @@ const RESOLUTION_DATA = {
   JJB:     { withTax: [ 769785,  957658, 1084316, 1231277, 1781589, 2509497, 2707018],
              noTax:   [ 573152,  205089,  227680,  260386,  687689, 1343349, 1477580] },
 };
-let _scenShowTax = true;  // toggle: include tax distributions in totals
+let _scenShowTax = true;
 
 async function fetchScenarioData(overrides) {
   const body = JSON.stringify({...settings, ...overrides});
@@ -1227,7 +801,7 @@ async function fetchScenarioData(overrides) {
 }
 
 let _scenComparisonInflight = false;
-let _scenCache = null;  // {d3, d4} cached across renders to avoid refetch on toggle
+let _scenCache = null;
 async function renderScenarioComparison(d, Y) {
   if (_scenComparisonInflight) return;
   _scenComparisonInflight = true;
@@ -1263,8 +837,7 @@ async function renderScenarioComparison(d, Y) {
       st += `<tr class="section-header"><td colspan="${Y.length-_DN+1}">${s.label}</td></tr>`;
       const taxKey = _scenShowTax ? 'withTax' : 'noTax';
       if (s.resolution) {
-        // Resolution: hardcoded values for 2026-2032; 2033 blank
-        const displayed = Y.length - _DN;  // 8 visible cols (2026-2033)
+        const displayed = Y.length - _DN;
         const fmt = v => v == null ? '—' : (v / 1e6).toFixed(1);
         const renderRow = (label, vals) => {
           const padded = [...vals];
@@ -1284,7 +857,7 @@ async function renderScenarioComparison(d, Y) {
             st += tr('EBITDA', ne.op_inc, fCM);
           }
           const taxes = (ds.partners_no_exp && ds.partners_no_exp._tax) || {};
-          for (const p of ['EB', 'JS', 'JJB']) {
+          for (const p of PARTNERS) {
             const arr = ds.partners_no_exp && ds.partners_no_exp[p];
             if (!arr) continue;
             const vals = _scenShowTax ? arr : arr.map((v, i) => v - (taxes[p] ? taxes[p][i] : 0));
@@ -1293,7 +866,7 @@ async function renderScenarioComparison(d, Y) {
         } else {
           st += tr('Revenue', ds.rev, fCM);
           st += tr('EBITDA', ds.op_inc, fCM);
-          for (const p of ['EB', 'JS', 'JJB']) {
+          for (const p of PARTNERS) {
             const pd = ds.partners && ds.partners[p];
             if (!pd) continue;
             const vals = _scenShowTax ? pd.total : pd.total.map((v, i) => v - (pd.tax_dist[i] || 0));
@@ -1311,25 +884,20 @@ async function renderScenarioComparison(d, Y) {
 }
 
 function renderScenarioSummary(d, Y, cache) {
-  // Cum '26-'29 after-tax CF per partner, + Stake value at end of 2033
   const idx2033 = Y.indexOf(2033);
-  const partners = ['EB', 'JS', 'JJB'];
 
   // Resolution: hardcoded
   const resolCum = {};
-  for (const p of partners) {
-    resolCum[p] = RESOLUTION_DATA[p].noTax.slice(0, 4).reduce((a, b) => a + b, 0);
-  }
-  // Grow 2032 → 2033 at 4%
-  const resolEbitda33 = RESOLUTION_DATA.EBITDA[6] * 1.04;  // index 6 = 2032 in 7-elem array
+  for (const p of PARTNERS) resolCum[p] = RESOLUTION_DATA[p].noTax.slice(0, 4).reduce((a, b) => a + b, 0);
+  const resolEbitda33 = RESOLUTION_DATA.EBITDA[6] * 1.04;
   const resolOwn = {EB: 27.5, JS: 22.5, JJB: 50.0};
   const resolMult = 7;
   const resolBV = resolEbitda33 * resolMult;
 
-  // No Expansion: from partners_no_exp
+  // No Expansion
   const noExpCum = {};
   const noTax = (d.partners_no_exp && d.partners_no_exp._tax) || {};
-  for (const p of partners) {
+  for (const p of PARTNERS) {
     const arr = d.partners_no_exp && d.partners_no_exp[p];
     if (!arr) { noExpCum[p] = 0; continue; }
     let sum = 0;
@@ -1341,11 +909,10 @@ function renderScenarioSummary(d, Y, cache) {
   const noExpMult = 7;
   const noExpBV = noExpEbitda33 * noExpMult;
 
-  // Helper to compute cum + stake from a fetched scenario response
   const computeFor = (ds, multiple) => {
     const cum = {};
     const own = {};
-    for (const p of partners) {
+    for (const p of PARTNERS) {
       const pd = ds.partners && ds.partners[p];
       if (!pd) { cum[p] = 0; own[p] = 0; continue; }
       let sum = 0;
@@ -1354,25 +921,24 @@ function renderScenarioSummary(d, Y, cache) {
       own[p] = (ds.ownership && ds.ownership[idx2033] && ds.ownership[idx2033][p]) || 0;
     }
     const ebitda33 = (ds.op_inc && ds.op_inc[idx2033]) || 0;
-    const bv = ebitda33 * multiple;
-    return {cum, own, ebitda33, bv, multiple};
+    return {cum, own, ebitda33, bv: ebitda33 * multiple, multiple};
   };
 
   const d3 = cache && cache.d3 ? computeFor(cache.d3, 8.5) : null;
   const d4 = cache && cache.d4 ? computeFor(cache.d4, 10)  : null;
 
   const fmt = v => v == null ? '—' : (v / 1e6).toFixed(2);
-  let st = `<thead><tr><th></th>${partners.map(p => `<th>${p}</th>`).join('')}</tr></thead><tbody>`;
+  let st = `<thead><tr><th></th>${PARTNERS.map(p => `<th>${p}</th>`).join('')}</tr></thead><tbody>`;
   st += `<tr class="section-header"><td colspan="4">Cum After-Tax CF ('26–'29)</td></tr>`;
-  st += `<tr><td>Resolution</td>${partners.map(p => `<td>${fmt(resolCum[p])}</td>`).join('')}</tr>`;
-  st += `<tr><td>No Expansion</td>${partners.map(p => `<td>${fmt(noExpCum[p])}</td>`).join('')}</tr>`;
-  st += `<tr><td>3 blk · No PH</td>${partners.map(p => `<td>${d3 ? fmt(d3.cum[p]) : '—'}</td>`).join('')}</tr>`;
-  st += `<tr><td>4 blk · Full PH</td>${partners.map(p => `<td>${d4 ? fmt(d4.cum[p]) : '—'}</td>`).join('')}</tr>`;
+  st += `<tr><td>Resolution</td>${PARTNERS.map(p => `<td>${fmt(resolCum[p])}</td>`).join('')}</tr>`;
+  st += `<tr><td>No Expansion</td>${PARTNERS.map(p => `<td>${fmt(noExpCum[p])}</td>`).join('')}</tr>`;
+  st += `<tr><td>3 blk · No PH</td>${PARTNERS.map(p => `<td>${d3 ? fmt(d3.cum[p]) : '—'}</td>`).join('')}</tr>`;
+  st += `<tr><td>4 blk · Full PH</td>${PARTNERS.map(p => `<td>${d4 ? fmt(d4.cum[p]) : '—'}</td>`).join('')}</tr>`;
 
   st += `<tr class="section-header"><td colspan="4">Stake Value '33 (EBITDA × multiple × own%)</td></tr>`;
   const mkValRow = (label, bv, own, mult, ebitda) => {
     const sub = ` <span style="font-size:9px;color:var(--text-dim)">(EBITDA ${(ebitda/1e6).toFixed(1)}M × ${mult}x)</span>`;
-    return `<tr><td>${label}${sub}</td>${partners.map(p => `<td>${fmt(bv * (own[p] || 0) / 100)}</td>`).join('')}</tr>`;
+    return `<tr><td>${label}${sub}</td>${PARTNERS.map(p => `<td>${fmt(bv * (own[p] || 0) / 100)}</td>`).join('')}</tr>`;
   };
   st += mkValRow('Resolution',     resolBV,  resolOwn, resolMult, resolEbitda33);
   st += mkValRow('No Expansion',   noExpBV,  noExpOwn, noExpMult, noExpEbitda33);
@@ -1382,29 +948,21 @@ function renderScenarioSummary(d, Y, cache) {
   document.getElementById('scenSummaryTable').innerHTML = st;
 }
 
-
 // --- INIT ---
-function applyToggleOverrides() {
-  // Mutate in-memory settings to zero out hidden categories.
-  // Backend hardcodes T_BUY's 6 acres, so we neutralize via rev/cost.
-  if (!UI_TOGGLES.showTomatoRows) {
-    settings.newTAcres = 0;
-    settings.tomatoBuildRevPerAc = 0;
-    settings.tomatoBuyRevPerAc = 0;
-    settings.tomatoPurchasePrice = 0;
-    settings.tomatoHardAssets = 0;
-    settings.tomatoCostPerAc = 0;
-  }
-  if (!UI_TOGGLES.showLettuceRow) {
-    settings.newLAcres = 0;
-  }
-}
-
 async function refresh() {
   await loadSettings();
-  applyToggleOverrides();
+  // Zero out toggled-out categories (tomato, lettuce-new, land) in memory
+  settings.newTAcres = 0;
+  settings.newLAcres = 0;
+  settings.tomatoBuildRevPerAc = 0;
+  settings.tomatoBuyRevPerAc = 0;
+  settings.tomatoPurchasePrice = 0;
+  settings.tomatoHardAssets = 0;
+  settings.tomatoCostPerAc = 0;
+  settings.landAcres = 0;
+
   if (!settings.expansionLender) {
-    setLender('SBA');  // default, also disables bankLoanCap + sbicCap
+    setLender('SBA');
     return;
   }
   if (activePreset === null) activePreset = detectActivePreset();
