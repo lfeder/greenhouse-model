@@ -81,6 +81,11 @@
     </div>
 
     <div class="panel">
+      <div class="panel-title">Cash Flow & Stake Value Summary ($M)</div>
+      <div style="overflow-x:auto"><table class="fin-table" id="scenSummaryTable"></table></div>
+    </div>
+
+    <div class="panel">
       <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
         <span>Scenario Comparison ($M)</span>
         <label style="font-size:10px;color:var(--text-sub);font-weight:normal;cursor:pointer">
@@ -1299,9 +1304,82 @@ async function renderScenarioComparison(d, Y) {
     }
     st += '</tbody>';
     document.getElementById('scenComparisonTable').innerHTML = st;
+    renderScenarioSummary(d, Y, _scenCache);
   } finally {
     _scenComparisonInflight = false;
   }
+}
+
+function renderScenarioSummary(d, Y, cache) {
+  // Cum '26-'29 after-tax CF per partner, + Stake value at end of 2033
+  const idx2033 = Y.indexOf(2033);
+  const partners = ['EB', 'JS', 'JJB'];
+
+  // Resolution: hardcoded
+  const resolCum = {};
+  for (const p of partners) {
+    resolCum[p] = RESOLUTION_DATA[p].noTax.slice(0, 4).reduce((a, b) => a + b, 0);
+  }
+  // Grow 2032 → 2033 at 4%
+  const resolEbitda33 = RESOLUTION_DATA.EBITDA[6] * 1.04;  // index 6 = 2032 in 7-elem array
+  const resolOwn = {EB: 27.5, JS: 22.5, JJB: 50.0};
+  const resolMult = 7;
+  const resolBV = resolEbitda33 * resolMult;
+
+  // No Expansion: from partners_no_exp
+  const noExpCum = {};
+  const noTax = (d.partners_no_exp && d.partners_no_exp._tax) || {};
+  for (const p of partners) {
+    const arr = d.partners_no_exp && d.partners_no_exp[p];
+    if (!arr) { noExpCum[p] = 0; continue; }
+    let sum = 0;
+    for (let i = 0; i < 4; i++) sum += arr[i] - (noTax[p] ? noTax[p][i] : 0);
+    noExpCum[p] = sum;
+  }
+  const noExpEbitda33 = (d.partners_no_exp && d.partners_no_exp._waterfall && d.partners_no_exp._waterfall.op_inc[idx2033]) || 0;
+  const noExpOwn = {EB: 27.5, JS: 22.5, JJB: 50.0};
+  const noExpMult = 7;
+  const noExpBV = noExpEbitda33 * noExpMult;
+
+  // Helper to compute cum + stake from a fetched scenario response
+  const computeFor = (ds, multiple) => {
+    const cum = {};
+    const own = {};
+    for (const p of partners) {
+      const pd = ds.partners && ds.partners[p];
+      if (!pd) { cum[p] = 0; own[p] = 0; continue; }
+      let sum = 0;
+      for (let i = 0; i < 4; i++) sum += (pd.total[i] || 0) - (pd.tax_dist[i] || 0);
+      cum[p] = sum;
+      own[p] = (ds.ownership && ds.ownership[idx2033] && ds.ownership[idx2033][p]) || 0;
+    }
+    const ebitda33 = (ds.op_inc && ds.op_inc[idx2033]) || 0;
+    const bv = ebitda33 * multiple;
+    return {cum, own, ebitda33, bv, multiple};
+  };
+
+  const d3 = cache && cache.d3 ? computeFor(cache.d3, 8.5) : null;
+  const d4 = cache && cache.d4 ? computeFor(cache.d4, 10)  : null;
+
+  const fmt = v => v == null ? '—' : (v / 1e6).toFixed(2);
+  let st = `<thead><tr><th></th>${partners.map(p => `<th>${p}</th>`).join('')}</tr></thead><tbody>`;
+  st += `<tr class="section-header"><td colspan="4">Cum After-Tax CF ('26–'29)</td></tr>`;
+  st += `<tr><td>Resolution</td>${partners.map(p => `<td>${fmt(resolCum[p])}</td>`).join('')}</tr>`;
+  st += `<tr><td>No Expansion</td>${partners.map(p => `<td>${fmt(noExpCum[p])}</td>`).join('')}</tr>`;
+  st += `<tr><td>3 blk · No PH</td>${partners.map(p => `<td>${d3 ? fmt(d3.cum[p]) : '—'}</td>`).join('')}</tr>`;
+  st += `<tr><td>4 blk · Full PH</td>${partners.map(p => `<td>${d4 ? fmt(d4.cum[p]) : '—'}</td>`).join('')}</tr>`;
+
+  st += `<tr class="section-header"><td colspan="4">Stake Value '33 (EBITDA × multiple × own%)</td></tr>`;
+  const mkValRow = (label, bv, own, mult, ebitda) => {
+    const sub = ` <span style="font-size:9px;color:var(--text-dim)">(EBITDA ${(ebitda/1e6).toFixed(1)}M × ${mult}x)</span>`;
+    return `<tr><td>${label}${sub}</td>${partners.map(p => `<td>${fmt(bv * (own[p] || 0) / 100)}</td>`).join('')}</tr>`;
+  };
+  st += mkValRow('Resolution',     resolBV,  resolOwn, resolMult, resolEbitda33);
+  st += mkValRow('No Expansion',   noExpBV,  noExpOwn, noExpMult, noExpEbitda33);
+  if (d3) st += mkValRow('3 blk · No PH',  d3.bv, d3.own, d3.multiple, d3.ebitda33);
+  if (d4) st += mkValRow('4 blk · Full PH', d4.bv, d4.own, d4.multiple, d4.ebitda33);
+  st += '</tbody>';
+  document.getElementById('scenSummaryTable').innerHTML = st;
 }
 
 
