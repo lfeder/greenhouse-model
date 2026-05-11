@@ -781,17 +781,7 @@ function render(d) {
 }
 
 // --- SCENARIO COMPARISON ---
-// Resolution data (hardcoded from PDF) lives in constants.json; fetched once at startup.
-// Until Stage 4 moves this to backend, keeping inline.
-const RESOLUTION_DATA = {
-  EBITDA:  [4000000, 5000000, 5250000, 5512500, 5788125, 6077531, 6381408],  // 2026-2032
-  EB:      { withTax: [ 550293,  902179,  989430, 1040240, 1230838, 1680223, 1788860],
-             noTax:   [ 430000,  459000,  502500,  506250,  629193, 1038842, 1112669] },
-  JS:      { withTax: [1200141, 1215216, 1251308, 1316037,  850751, 1129274, 1218158],
-             noTax:   [1054401,  738589,  791430,  879136,  358496,  604507,  664911] },
-  JJB:     { withTax: [ 769785,  957658, 1084316, 1231277, 1781589, 2509497, 2707018],
-             noTax:   [ 573152,  205089,  227680,  260386,  687689, 1343349, 1477580] },
-};
+let RESOLUTION_DATA = null;  // loaded from /api/constants at init
 let _scenShowTax = true;
 
 async function fetchScenarioData(overrides) {
@@ -949,9 +939,16 @@ function renderScenarioSummary(d, Y, cache) {
 }
 
 // --- INIT ---
+async function loadResolutionData() {
+  if (RESOLUTION_DATA) return;
+  const r = await fetch('/api/constants');
+  const c = await r.json();
+  RESOLUTION_DATA = c.resolution_data;
+}
+
 async function refresh() {
-  await loadSettings();
-  // Zero out toggled-out categories (tomato, lettuce-new, land) in memory
+  await Promise.all([loadSettings(), loadResolutionData()]);
+  // Zero out unused categories (tomato, lettuce-new, land) in memory
   settings.newTAcres = 0;
   settings.newLAcres = 0;
   settings.tomatoBuildRevPerAc = 0;
