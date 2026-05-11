@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notes</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="header">
+  <div class="header-inner">
+    <div class="header-title">Notes</div>
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="display:flex;gap:12px;font-size:10px" id="nav"></div>
+      <div style="font-size:10px">v {{VERSION}}</div>
+      <button onclick="toggleTheme()" class="btn" id="themeToggle">light</button>
+    </div>
+  </div>
+</div>
+<script src="utils.js"></script>
+<script>document.getElementById('nav').innerHTML = buildNav('notes.html'); initTheme();</script>
+
+<div style="max-width:900px;margin:0 auto;padding:24px 32px">
+  <div class="panel">
+    <div class="panel-title">Action Items</div>
+    <ol style="line-height:1.8;font-size:13px;padding-left:24px">
+      <li>Need to seal deal with <b>Marvin</b> on buyout.</li>
+      <li><b>EB</b> approach <b>Royce</b> for option.</li>
+      <li>We need to put this <b>into service before 12/31/27</b>.</li>
+      <li>We fucked up the deal with <b>Ray</b> last time. We can't do it again. <b>Richard</b> to approach Ray.</li>
+    </ol>
+  </div>
+</div>
+
+</body>
+</html>
