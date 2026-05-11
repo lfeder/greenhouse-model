@@ -39,10 +39,6 @@
     <div class="panel-title">Effective Tax Rates by Income</div>
     <div id="effectiveRates"></div>
   </div>
-  <div class="panel">
-    <div class="panel-title">EBITDA Multiples by Revenue Band</div>
-    <div id="revMultiples"></div>
-  </div>
 </div>
 <script>
 // Table helpers loaded from utils.js
@@ -108,19 +104,6 @@ async function load() {
   }
   et += '</table>';
   document.getElementById('effectiveRates').innerHTML = et;
-
-  // Revenue-band EBITDA multiples
-  const mults = c.rev_multiples || [];
-  let mt = '<table style="width:100%;font-size:10px;font-family:inherit;border-collapse:collapse">';
-  mt += '<tr><th style="text-align:left;padding:3px 6px;color:var(--accent);font-size:9px">Revenue Band</th><th style="text-align:right;padding:3px 6px;color:var(--accent);font-size:9px">Multiple</th></tr>';
-  for (let i = 0; i < mults.length; i++) {
-    const [cap, mult] = mults[i];
-    const prevCap = i > 0 ? mults[i-1][0] : 0;
-    const label = cap === null ? fK(prevCap) + '+' : (prevCap ? fK(prevCap) + ' \u2013 ' + fK(cap) : '\u2264 ' + fK(cap));
-    mt += `<tr style="border-bottom:1px solid #1a2e1a"><td style="padding:3px 6px;color:var(--text-sub)">${label}</td><td style="text-align:right;padding:3px 6px;color:var(--text-sub)">${mult}x</td></tr>`;
-  }
-  mt += '</table>';
-  document.getElementById('revMultiples').innerHTML = mt;
 }
 load();
 window.addEventListener('focus', load);
