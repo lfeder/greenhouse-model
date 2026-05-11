@@ -224,7 +224,7 @@ def _run_scenario(s):
     result = run_pnl(rev, exp, s, dep_crops, expansion_int, startup_exp, new_crop_op_inc, expansion_prin)
     result["startup_exp"] = startup_exp
     equity_draws = build_equity_draws(crop_data)
-    year_pe = s["yearPE"]
+    year_pe = s.get("yearPE", {})
     biz_values = [result["op_inc"][i] * int(year_pe.get(str(YEARS[i]), 8)) for i in range(N_YEARS)]
     s["_has_sbic"] = any(c.get("sbic_loan", 0) > 0 for c in crop_data if not c.get("is_buy"))
     s["_3p_equity_total"] = sum(c.get("third_party_equity", 0) for c in crop_data if not c.get("is_buy"))
@@ -260,7 +260,7 @@ def run_everything(s):
     equity_draws = build_equity_draws(crop_data)
 
     # Business values for dilution pricing (op_inc × default PE)
-    year_pe = s["yearPE"]
+    year_pe = s.get("yearPE", {})
     biz_values = [result["op_inc"][i] * int(year_pe.get(str(YEARS[i]), 8)) for i in range(N_YEARS)]
 
     # Ownership with dilution
@@ -451,6 +451,5 @@ def run_everything(s):
         "ownership_detail": ownership_detail,
         "partners_no_exp": partners_no_exp,
         "gantt_data": gantt_data,
-        "scenario_summary": compute_scenario_summary(s),
         **kpis,
     }

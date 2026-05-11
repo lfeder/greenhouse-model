@@ -78,7 +78,7 @@ def compute_ownership(settings, cum_pedd_by_year, equity_draws=None, biz_values=
     exp_grant_pct = settings["ebExpansionGrantPct"] if is_expansion else 0
     exp_grant_start = settings["ebExpansionGrantStartYear"]
     exp_grant_end = settings["ebExpansionGrantEndYear"]
-    buyin_val = settings["buyinValuation"]
+    buyin_val = settings.get("buyinValuation", 15_000_000)  # legacy; now using jjbBuyinValuation
 
     equity_draws = equity_draws or {}
     biz_values = biz_values or [0] * N_YEARS

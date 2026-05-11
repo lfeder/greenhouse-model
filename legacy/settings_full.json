@@ -65,17 +65,84 @@
   "revInflation": 4,
   "costInflation": 3.5,
   "tBillRate": 4,
+  "buyinValuation": 15000000,
   "jjbBuyinValuation": 15000000,
   "ebExpansionGrantPct": 0,
   "ebExpansionGrantStartYear": 2027,
   "ebExpansionGrantEndYear": 2033,
   "capexReservePct": 2,
   "debug": false,
+  "yearPE": {
+    "2026": 4,
+    "2027": 4,
+    "2028": 4,
+    "2029": 4,
+    "2030": 7,
+    "2032": 9,
+    "2033": 10,
+    "2034": 11,
+    "2035": 12
+  },
   "existFedYearsLeft": 8,
   "existFedAnnual": 200000,
   "existStateEndYear": 2029,
   "existStateAnnual": 1000000,
   "fedBonusPct": 100,
   "stateUsefulLife": 10,
+  "tomatoRevPerAc": 1000000,
+  "englishExpPct": 70,
+  "japaneseExpPct": 70,
+  "keikiExpPct": 70,
+  "lettuceExpPct": 65,
+  "tomatoExpPct": 68,
+  "expansion_scenarios": {
+    "A": {
+      "housingPods": 2,
+      "landAcres": 0,
+      "newEAcres": 2.5,
+      "newJAcres": 2,
+      "newKAcres": 1,
+      "newLAcres": 0,
+      "newTAcres": 0,
+      "packhouseAcres": 0.3
+    },
+    "B": {
+      "housingPods": 6,
+      "landAcres": 30,
+      "newEAcres": 6,
+      "newJAcres": 6,
+      "newKAcres": 4,
+      "newLAcres": 0,
+      "newTAcres": 0,
+      "packhouseAcres": 0.6
+    },
+    "C": {
+      "housingPods": 10,
+      "landAcres": 50,
+      "newEAcres": 6,
+      "newJAcres": 6,
+      "newKAcres": 4,
+      "newLAcres": 2.5,
+      "newTAcres": 8,
+      "packhouseAcres": 1
+    }
+  },
+  "financing_overrides": {
+    "B_3P": {
+      "jjbEquityCap": 5000000
+    },
+    "B_SBIC": {
+      "jjbEquityCap": 3000000
+    },
+    "C_3P": {
+      "jjbEquityCap": 8000000
+    },
+    "C_SBIC": {
+      "jjbEquityCap": 8000000,
+      "sbicCap": 25000000
+    }
+  },
+  "financingMode": "sbic",
+  "jjbEquityCap": 10000000,
   "expansionLender": "SBA"
 }
