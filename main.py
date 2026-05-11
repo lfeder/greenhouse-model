@@ -288,6 +288,7 @@ def run_everything(s):
         own_ne, _ = compute_ownership(s_noexp, result_ne["cum_pedd_by_year"], {}, [0]*N_YEARS)
         partners_ne = compute_partner_cash({**result_ne, "tax_cash_dist": result_ne["tax_cash"]}, own_ne)
         partners_no_exp = {p: partners_ne[p]["total"] for p in ["EB", "JS", "JJB", "SBIC", "TP"]}
+        partners_no_exp["_tax"] = {p: partners_ne[p]["tax_dist"] for p in ["EB", "JS", "JJB", "SBIC", "TP"]}
         partners_no_exp["_op_inc_terminal"] = result_ne["op_inc"][-1]
         partners_no_exp["_ownership"] = {"JJB": own_ne[-1]["JJB"], "EB": own_ne[-1]["EB"], "JS": own_ne[-1]["JS"], "SBIC": own_ne[-1].get("SBIC", 0), "TP": own_ne[-1].get("TP", 0)}
         partners_no_exp["_waterfall"] = {

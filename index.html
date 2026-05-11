@@ -81,7 +81,14 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title">Scenario Comparison ($M)</div>
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Scenario Comparison ($M)</span>
+        <label style="font-size:10px;color:var(--text-sub);font-weight:normal;cursor:pointer">
+          <input type="checkbox" id="scenShowTaxToggle" checked
+            onchange="_scenShowTax=this.checked; if(lastData) renderScenarioComparison(lastData, lastData.years);">
+          include tax distributions
+        </label>
+      </div>
       <div style="overflow-x:auto"><table class="fin-table" id="scenComparisonTable"></table></div>
     </div>
 
@@ -123,6 +130,7 @@ async function loadSettings() {
 
 async function compute(partial) {
   if (partial) Object.assign(settings, partial);
+  _scenCache = null;  // settings changed → refetch scenario comparison
   const r = await fetch('/api/compute', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(settings),
@@ -1195,13 +1203,17 @@ function render(d) {
   renderScenarioComparison(d, Y);
 }
 
-// Resolution scenario — hardcoded EB/JS/JJB total cash flow ($) per year 2026-2032 (from PDF)
+// Resolution scenario — hardcoded values per year 2026-2032 (from PDF)
 const RESOLUTION_DATA = {
-  EBITDA: [4000000, 5000000, 5250000, 5512500, 5788125, 6077531, 6381408],  // 2026-2032
-  EB:     [ 519674,  901654,  988855, 1039611, 1150996, 1655153, 1788860],
-  JS:     [ 934678, 1235643, 1271830, 1336666,  950593, 1108761, 1218158],
-  JJB:    [ 491367,  977757, 1104369, 1251277, 1801589, 2463914, 2707018],
+  EBITDA:  [4000000, 5000000, 5250000, 5512500, 5788125, 6077531, 6381408],  // 2026-2032
+  EB:      { withTax: [ 550293,  902179,  989430, 1040240, 1230838, 1680223, 1788860],
+             noTax:   [ 430000,  459000,  502500,  506250,  629193, 1038842, 1112669] },
+  JS:      { withTax: [1200141, 1215216, 1251308, 1316037,  850751, 1129274, 1218158],
+             noTax:   [1054401,  738589,  791430,  879136,  358496,  604507,  664911] },
+  JJB:     { withTax: [ 769785,  957658, 1084316, 1231277, 1781589, 2509497, 2707018],
+             noTax:   [ 573152,  205089,  227680,  260386,  687689, 1343349, 1477580] },
 };
+let _scenShowTax = true;  // toggle: include tax distributions in totals
 
 async function fetchScenarioData(overrides) {
   const body = JSON.stringify({...settings, ...overrides});
@@ -1210,6 +1222,7 @@ async function fetchScenarioData(overrides) {
 }
 
 let _scenComparisonInflight = false;
+let _scenCache = null;  // {d3, d4} cached across renders to avoid refetch on toggle
 async function renderScenarioComparison(d, Y) {
   if (_scenComparisonInflight) return;
   _scenComparisonInflight = true;
@@ -1224,10 +1237,14 @@ async function renderScenarioComparison(d, Y) {
         debug: false,
       };
     };
-    const [d3, d4] = await Promise.all([
-      fetchScenarioData(presetOverrides('3-NO')),
-      fetchScenarioData(presetOverrides('4-FULL')),
-    ]);
+    if (!_scenCache) {
+      const [d3, d4] = await Promise.all([
+        fetchScenarioData(presetOverrides('3-NO')),
+        fetchScenarioData(presetOverrides('4-FULL')),
+      ]);
+      _scenCache = {d3, d4};
+    }
+    const {d3, d4} = _scenCache;
 
     const scenarios = [
       {label: 'Resolution',         resolution: true},
@@ -1239,8 +1256,9 @@ async function renderScenarioComparison(d, Y) {
     let st = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
     for (const s of scenarios) {
       st += `<tr class="section-header"><td colspan="${Y.length-_DN+1}">${s.label}</td></tr>`;
+      const taxKey = _scenShowTax ? 'withTax' : 'noTax';
       if (s.resolution) {
-        // Resolution: only EB/JS/JJB, hardcoded values for 2026-2032; 2033 blank
+        // Resolution: hardcoded values for 2026-2032; 2033 blank
         const displayed = Y.length - _DN;  // 8 visible cols (2026-2033)
         const fmt = v => v == null ? '—' : (v / 1e6).toFixed(1);
         const renderRow = (label, vals) => {
@@ -1249,30 +1267,32 @@ async function renderScenarioComparison(d, Y) {
           return `<tr><td>${label}</td>${padded.slice(0, displayed).map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
         };
         st += renderRow('EBITDA', RESOLUTION_DATA.EBITDA);
-        st += renderRow('EB',     RESOLUTION_DATA.EB);
-        st += renderRow('JS',     RESOLUTION_DATA.JS);
-        st += renderRow('JJB',    RESOLUTION_DATA.JJB);
+        st += renderRow('EB',     RESOLUTION_DATA.EB[taxKey]);
+        st += renderRow('JS',     RESOLUTION_DATA.JS[taxKey]);
+        st += renderRow('JJB',    RESOLUTION_DATA.JJB[taxKey]);
       } else {
         const ds = s.data;
-        // Revenue & EBITDA
         if (s.useNoExp) {
-          // Use no-exp data from the same response
           const ne = ds.partners_no_exp && ds.partners_no_exp._waterfall;
           if (ne) {
             st += tr('Revenue', ne.rev || ds.rev.map(() => 0), fCM);
             st += tr('EBITDA', ne.op_inc, fCM);
           }
-          // Per-partner total = partners_no_exp[p]
+          const taxes = (ds.partners_no_exp && ds.partners_no_exp._tax) || {};
           for (const p of ['EB', 'JS', 'JJB']) {
             const arr = ds.partners_no_exp && ds.partners_no_exp[p];
-            if (arr) st += tr(p, arr, fCM);
+            if (!arr) continue;
+            const vals = _scenShowTax ? arr : arr.map((v, i) => v - (taxes[p] ? taxes[p][i] : 0));
+            st += tr(p, vals, fCM);
           }
         } else {
           st += tr('Revenue', ds.rev, fCM);
           st += tr('EBITDA', ds.op_inc, fCM);
           for (const p of ['EB', 'JS', 'JJB']) {
             const pd = ds.partners && ds.partners[p];
-            if (pd) st += tr(p, pd.total, fCM);
+            if (!pd) continue;
+            const vals = _scenShowTax ? pd.total : pd.total.map((v, i) => v - (pd.tax_dist[i] || 0));
+            st += tr(p, vals, fCM);
           }
         }
       }
