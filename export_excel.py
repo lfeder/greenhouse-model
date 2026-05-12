@@ -26,8 +26,8 @@ PRESETS = {
     "4-FULL": dict(newKAcres=1.4, newJAcres=1.4, newEAcres=2.8, newLAcres=0, newTAcres=0,
                    packhouseAcres=0.5, packhouseCostPerAc=4_000_000, housingPods=2, debug=False),
 }
-SCENARIO_ORDER = ["Current", "No Expansion", "3 blk · No PH", "4 blk · Full PH"]
-SCENARIO_SHEETS = {"Current": "Current", "No Expansion": "No Exp",
+SCENARIO_ORDER = ["No Expansion", "3 blk · No PH", "4 blk · Full PH"]
+SCENARIO_SHEETS = {"No Expansion": "No Exp",
                    "3 blk · No PH": "3-NO PH", "4 blk · Full PH": "4-FULL PH"}
 
 HDR_FONT = Font(bold=True)
@@ -343,7 +343,7 @@ def write_cf_stake_summary(wb, scenarios, constants):
         r = write_row(ws, r, name, [cum["EB"], cum["JS"], cum["JJB"], ""], "$#,##0")
 
     r = write_section(ws, r, "Stake Value '33 (EBITDA × multiple × own%)", 5)
-    multiples = {"Resolution": 7, "Current": 7, "No Expansion": 7,
+    multiples = {"Resolution": 7, "No Expansion": 7,
                  "3 blk · No PH": 8.5, "4 blk · Full PH": 10}
     idx2033 = Y.index(2033) if 2033 in Y else len(Y) - 3
     if resol:
@@ -392,8 +392,6 @@ def main_export():
 
     print("Running scenarios...")
     scenarios = {}
-    print("  Current...")
-    scenarios["Current"] = main.run_everything(dict(settings))
     print("  No Expansion...")
     s_ne = dict(settings)
     s_ne.update({"newKAcres": 0, "newJAcres": 0, "newEAcres": 0, "newLAcres": 0, "newTAcres": 0,
