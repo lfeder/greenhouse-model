@@ -372,6 +372,94 @@ def write_cf_stake_summary(wb, scenarios, constants):
     autosize(ws)
 
 
+def write_resolution_sheet(wb, constants):
+    """Hardcoded baseline scenario data from PDF. Years 2026-2032 (incomplete; no 2033+)."""
+    resol = constants.get("resolution_data", {})
+    if not resol:
+        return
+    years = list(range(2026, 2033))  # 7 columns
+    span = len(years) + 1
+    ws = wb.create_sheet("Resolution")
+    r = 1
+
+    c = ws.cell(row=r, column=1, value="Scenario: Resolution (hardcoded baseline from PDF)")
+    c.font = Font(bold=True, size=14)
+    r += 1
+    c = ws.cell(row=r, column=1, value="Data ends at 2032. Terminal ownership assumed 27.5 / 22.5 / 50.")
+    c.font = Font(italic=True, color="666666", size=10)
+    r += 2
+
+    # ── 1. EBITDA ─────────────────────────────────────────────────────────
+    r = write_topic_banner(ws, r, "1. EBITDA", span)
+    r = write_header(ws, r, ["Row"] + [f"'{str(y)[-2:]}" for y in years])
+    r = write_row(ws, r, "EBITDA", resol["EBITDA"], "$#,##0")
+    r += 2
+
+    # ── 2. Partner cash flow ──────────────────────────────────────────────
+    r = write_topic_banner(ws, r, "2. Partner Cash Flow (with tax)", span)
+    r = write_header(ws, r, ["Row"] + [f"'{str(y)[-2:]}" for y in years])
+    for p in ["EB", "JS", "JJB"]:
+        r = write_row(ws, r, p, resol[p]["withTax"], "$#,##0")
+    r += 2
+
+    r = write_topic_banner(ws, r, "3. Partner Cash Flow (after tax)", span)
+    r = write_header(ws, r, ["Row"] + [f"'{str(y)[-2:]}" for y in years])
+    for p in ["EB", "JS", "JJB"]:
+        r = write_row(ws, r, p, resol[p]["noTax"], "$#,##0")
+    r += 2
+
+    # ── 4. Implied tax dist per partner per year (with - no) ──────────────
+    r = write_topic_banner(ws, r, "4. Implied Tax Distribution (with-tax minus after-tax)", span)
+    r = write_header(ws, r, ["Row"] + [f"'{str(y)[-2:]}" for y in years])
+    for p in ["EB", "JS", "JJB"]:
+        diff = [resol[p]["withTax"][i] - resol[p]["noTax"][i] for i in range(len(years))]
+        r = write_row(ws, r, p, diff, "$#,##0")
+    r += 2
+
+    # ── 5. Cumulative after-tax CF '26-'29 ────────────────────────────────
+    r = write_topic_banner(ws, r, "5. Cum After-Tax CF ('26-'29)", 4)
+    r = write_header(ws, r, ["Partner", "Cum '26-'29"])
+    for p in ["EB", "JS", "JJB"]:
+        cum = sum(resol[p]["noTax"][:4])
+        ws.cell(row=r, column=1, value=p)
+        c = ws.cell(row=r, column=2, value=cum)
+        c.number_format = "$#,##0"
+        r += 1
+    r += 2
+
+    # ── 6. Stake value at 2033 ────────────────────────────────────────────
+    r = write_topic_banner(ws, r, "6. Stake Value '33 (EBITDA 2032 grown 4% to '33 × 7x × ownership)", 5)
+    r = write_header(ws, r, ["Item", "Value", "", "", ""])
+    ebitda32 = resol["EBITDA"][-1]
+    ebitda33 = ebitda32 * 1.04
+    mult = 7
+    bv = ebitda33 * mult
+    rows = [
+        ("EBITDA 2032 (PDF)", ebitda32, "$#,##0"),
+        ("Growth factor", 1.04, "0.00"),
+        ("Implied EBITDA 2033", ebitda33, "$#,##0"),
+        ("EBITDA Multiple", mult, "0.0"),
+        ("Business Value '33", bv, "$#,##0"),
+    ]
+    for lbl, v, fmt in rows:
+        ws.cell(row=r, column=1, value=lbl)
+        c = ws.cell(row=r, column=2, value=v)
+        c.number_format = fmt
+        r += 1
+    r += 1
+
+    # Per-partner stake
+    own = {"EB": 27.5, "JS": 22.5, "JJB": 50.0}
+    r = write_header(ws, r, ["Partner", "Ownership %", "Stake Value '33"])
+    for p in ["EB", "JS", "JJB"]:
+        ws.cell(row=r, column=1, value=p)
+        ws.cell(row=r, column=2, value=own[p]).number_format = "0.0"
+        ws.cell(row=r, column=3, value=bv * own[p] / 100).number_format = "$#,##0"
+        r += 1
+
+    autosize(ws)
+
+
 def write_inputs(wb, settings):
     ws = wb.create_sheet("Inputs", 0)
     r = write_header(ws, 1, ["Key", "Value"])
@@ -410,7 +498,10 @@ def main_export():
     # Sheet 1: Inputs
     write_inputs(wb, settings)
 
-    # Sheets 2-5: one per scenario, all 7 topics stacked
+    # Sheet 2: Resolution (hardcoded baseline)
+    write_resolution_sheet(wb, constants)
+
+    # Sheets 3-5: one per scenario, all 7 topics stacked
     for name in SCENARIO_ORDER:
         write_scenario_sheet(wb, name, scenarios[name])
 
