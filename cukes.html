@@ -918,8 +918,8 @@ function renderRoi() {
       <td>${label}</td>
       <td>${fM(rev)}</td>
       <td>${fM(capex)}</td>
-      <td>${fK_(cumAddRev)}</td>
-      <td>${deltaRev == null ? '—' : fK_(deltaRev)}</td>
+      <td>${fM(cumAddRev)}</td>
+      <td>${deltaRev == null ? '—' : fM(deltaRev)}</td>
       <td>${capex > 0 ? fPct(cumRoi) : '—'}</td>
     </tr>`;
     prevRev = rev;
