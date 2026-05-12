@@ -1,10 +1,13 @@
 """Generate Excel snapshot of the expansion model for offline review.
 
-Consolidates 4 scenarios (Current, No-Expansion, 3-NO PH, 4-FULL PH) into
-one sheet per topic. 7 topic sheets + Inputs + 2 cross-scenario sheets.
+7 sheets total:
+  1. Inputs
+  2-5. One sheet per scenario (Current, No-Expansion, 3-NO PH, 4-FULL PH)
+       Each contains KPIs, Rev-Exp, Ownership, Waterfall, Partner Cash, Tax, Crop IRRs stacked.
+  6. Scenario Compare (cross-scenario rev/EBITDA/per-partner)
+  7. CF + Stake Summary
 
 Usage:  python export_excel.py
-Output: expansion_export_<timestamp>.xlsx
 """
 import json
 from datetime import datetime
@@ -24,25 +27,27 @@ PRESETS = {
                    packhouseAcres=0.5, packhouseCostPerAc=4_000_000, housingPods=2, debug=False),
 }
 SCENARIO_ORDER = ["Current", "No Expansion", "3 blk · No PH", "4 blk · Full PH"]
+SCENARIO_SHEETS = {"Current": "Current", "No Expansion": "No Exp",
+                   "3 blk · No PH": "3-NO PH", "4 blk · Full PH": "4-FULL PH"}
 
-HDR_FONT = Font(bold=True, color="000000")
+HDR_FONT = Font(bold=True)
 HDR_FILL = PatternFill(start_color="C8E6C9", end_color="C8E6C9", fill_type="solid")
 SECTION_FILL = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
 SECTION_FONT = Font(bold=True)
-SCENARIO_FILL = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
-SCENARIO_FONT = Font(bold=True, color="FFFFFF", size=12)
+TOPIC_FILL = PatternFill(start_color="2E7D32", end_color="2E7D32", fill_type="solid")
+TOPIC_FONT = Font(bold=True, color="FFFFFF", size=12)
 
 
 def load_settings():
     return json.loads((DIR / "settings.json").read_text(encoding="utf-8"))
 
 
-def write_scenario_banner(ws, row, name, span):
-    c = ws.cell(row=row, column=1, value=name)
-    c.font = SCENARIO_FONT
-    c.fill = SCENARIO_FILL
+def write_topic_banner(ws, row, title, span):
+    c = ws.cell(row=row, column=1, value=title)
+    c.font = TOPIC_FONT
+    c.fill = TOPIC_FILL
     for col in range(2, span + 1):
-        ws.cell(row=row, column=col).fill = SCENARIO_FILL
+        ws.cell(row=row, column=col).fill = TOPIC_FILL
     return row + 1
 
 
@@ -86,201 +91,164 @@ def autosize(ws):
         ws.column_dimensions[letter].width = min(max_len + 2, 32)
 
 
-# ============================================================
-# Per-topic writers (each consolidates all 4 scenarios)
-# ============================================================
-
-def write_kpis_sheet(wb, scenarios):
-    ws = wb.create_sheet("KPIs")
-    r = 1
-    for name in SCENARIO_ORDER:
-        d = scenarios[name]
-        Y = d["years"]
-        last_idx = len(Y) - 1 - 2
-        r = write_scenario_banner(ws, r, name, 3)
-        r = write_header(ws, r, ["Metric", "Value", "Detail"])
-        steady_rev = d["rev"][last_idx]
-        steady_op = d["op_inc"][last_idx]
-        bridge = (d.get("partners_no_exp") or {}).get("guarantee_total", 0) or 0
-        combined_ds = [d["loan_total_ds"][i] + d["expansion_ds"][i] for i in range(len(Y))]
-        rows = [
-            ("$ Uses", d["total_capex"] + d["shared_capex"] + d.get("startup_capital", 0), "capex + startup"),
-            ("  Crop capex", d["total_capex"], ""),
-            ("  Shared infra", d["shared_capex"], ""),
-            ("  Startup capital", d.get("startup_capital", 0), ""),
-            ("$ Sources", d.get("bank_total", 0) + d.get("jjb_equity", 0), "bank + JJB equity"),
-            ("  Bank loan", d.get("bank_total", 0), ""),
-            ("  JJB equity", d.get("jjb_equity", 0), ""),
-            ("  Bridge loan", bridge, ""),
-            ("Steady Revenue", steady_rev, f"year {Y[last_idx]}"),
-            ("Steady Op Income", steady_op, ""),
-            ("Steady Op Margin", steady_op / steady_rev if steady_rev else 0, "ratio"),
-            ("Peak debt service", max(combined_ds), ""),
-            ("Total IRR (%)", d["total_irr"], "all new crops"),
-            ("Total Unlev (%)", d.get("total_unlev", 0), ""),
-        ]
-        for lbl, v, dt in rows:
-            ws.cell(row=r, column=1, value=lbl)
-            c = ws.cell(row=r, column=2, value=v)
-            if "%" in lbl or "Margin" in lbl:
-                c.number_format = "0.00"
-            else:
-                c.number_format = "$#,##0"
-            ws.cell(row=r, column=3, value=dt)
-            r += 1
-        r += 1  # spacer
-    autosize(ws)
-
-
 def _hdr_years(ws, r, Y):
     return write_header(ws, r, ["Row"] + [f"'{str(y)[-2:]}" for y in Y])
 
 
-def write_revexp_sheet(wb, scenarios):
-    ws = wb.create_sheet("Rev-Exp")
+def write_scenario_sheet(wb, scenario_name, d):
+    """Write one sheet containing all 7 topics stacked for this scenario."""
+    sheet_name = SCENARIO_SHEETS[scenario_name]
+    ws = wb.create_sheet(sheet_name)
+    Y = d["years"]
+    nY = len(Y)
+    span = nY + 1
     r = 1
-    for name in SCENARIO_ORDER:
-        d = scenarios[name]
-        Y = d["years"]
-        r = write_scenario_banner(ws, r, name, len(Y) + 1)
-        r = _hdr_years(ws, r, Y)
-        r = write_section(ws, r, "Revenue", len(Y) + 1)
-        for label, data in d.get("rev_rows", []):
-            r = write_row(ws, r, label, data, "$#,##0")
-        r = write_row(ws, r, "Total Revenue", d["rev"], "$#,##0")
-        r = write_section(ws, r, "Expenses", len(Y) + 1)
-        for label, data in d.get("exp_rows", []):
-            r = write_row(ws, r, label, data, "$#,##0")
-        r = write_row(ws, r, "Total Expenses", d["exp"], "$#,##0")
-        r = write_row(ws, r, "Operating Income", d["op_inc"], "$#,##0")
+
+    # ── Header ─────────────────────────────────────────────────────────────
+    c = ws.cell(row=r, column=1, value=f"Scenario: {scenario_name}")
+    c.font = Font(bold=True, size=14, color="000000")
+    r += 2
+
+    # ── 1. KPIs ────────────────────────────────────────────────────────────
+    r = write_topic_banner(ws, r, "1. KPIs", span)
+    r = write_header(ws, r, ["Metric", "Value", "Detail"])
+    last_idx = nY - 1 - 2  # _DN=2
+    steady_rev = d["rev"][last_idx]
+    steady_op = d["op_inc"][last_idx]
+    bridge = (d.get("partners_no_exp") or {}).get("guarantee_total", 0) or 0
+    combined_ds = [d["loan_total_ds"][i] + d["expansion_ds"][i] for i in range(nY)]
+    kpi_rows = [
+        ("$ Uses", d["total_capex"] + d["shared_capex"] + d.get("startup_capital", 0), "capex + startup"),
+        ("  Crop capex", d["total_capex"], ""),
+        ("  Shared infra", d["shared_capex"], ""),
+        ("  Startup capital", d.get("startup_capital", 0), ""),
+        ("$ Sources", d.get("bank_total", 0) + d.get("jjb_equity", 0), "bank + JJB equity"),
+        ("  Bank loan", d.get("bank_total", 0), ""),
+        ("  JJB equity", d.get("jjb_equity", 0), ""),
+        ("  Bridge loan", bridge, ""),
+        ("Steady Revenue", steady_rev, f"year {Y[last_idx]}"),
+        ("Steady Op Income", steady_op, ""),
+        ("Steady Op Margin", steady_op / steady_rev if steady_rev else 0, "ratio"),
+        ("Peak debt service", max(combined_ds), ""),
+        ("Total IRR (%)", d["total_irr"], "all new crops"),
+        ("Total Unlev (%)", d.get("total_unlev", 0), ""),
+    ]
+    for lbl, v, dt in kpi_rows:
+        ws.cell(row=r, column=1, value=lbl)
+        c = ws.cell(row=r, column=2, value=v)
+        if "%" in lbl or "Margin" in lbl:
+            c.number_format = "0.00"
+        else:
+            c.number_format = "$#,##0"
+        ws.cell(row=r, column=3, value=dt)
         r += 1
-    autosize(ws)
+    r += 2
 
+    # ── 2. Revenue & Expense ──────────────────────────────────────────────
+    r = write_topic_banner(ws, r, "2. Revenue & Expense", span)
+    r = _hdr_years(ws, r, Y)
+    r = write_section(ws, r, "Revenue", span)
+    for label, data in d.get("rev_rows", []):
+        r = write_row(ws, r, label, data, "$#,##0")
+    r = write_row(ws, r, "Total Revenue", d["rev"], "$#,##0")
+    r = write_section(ws, r, "Expenses", span)
+    for label, data in d.get("exp_rows", []):
+        r = write_row(ws, r, label, data, "$#,##0")
+    r = write_row(ws, r, "Total Expenses", d["exp"], "$#,##0")
+    r = write_row(ws, r, "Operating Income", d["op_inc"], "$#,##0")
+    r += 2
 
-def write_ownership_sheet(wb, scenarios):
-    ws = wb.create_sheet("Ownership")
-    r = 1
-    for name in SCENARIO_ORDER:
-        d = scenarios[name]
-        Y = d["years"]
-        r = write_scenario_banner(ws, r, name, len(Y) + 1)
-        r = _hdr_years(ws, r, Y)
-        for p in ["EB", "JS", "JJB"]:
-            r = write_row(ws, r, p + " %", [o.get(p, 0) for o in d["ownership"]], "0.00")
-        if d.get("ownership_detail"):
-            r = write_section(ws, r, "Ownership Detail", len(Y) + 1)
-            for row in d["ownership_detail"]:
-                lbl = row[0]
-                fmt = "$#,##0" if "($)" in lbl else "0.00"
-                r = write_row(ws, r, lbl, row[1:], fmt)
-        r += 1
-    autosize(ws)
+    # ── 3. Ownership ──────────────────────────────────────────────────────
+    r = write_topic_banner(ws, r, "3. Ownership", span)
+    r = _hdr_years(ws, r, Y)
+    for p in ["EB", "JS", "JJB"]:
+        r = write_row(ws, r, p + " %", [o.get(p, 0) for o in d["ownership"]], "0.00")
+    if d.get("ownership_detail"):
+        r = write_section(ws, r, "Ownership Detail", span)
+        for row in d["ownership_detail"]:
+            lbl = row[0]
+            fmt = "$#,##0" if "($)" in lbl else "0.00"
+            r = write_row(ws, r, lbl, row[1:], fmt)
+    r += 2
 
+    # ── 4. Waterfall ──────────────────────────────────────────────────────
+    r = write_topic_banner(ws, r, "4. Waterfall", span)
+    r = _hdr_years(ws, r, Y)
+    r = write_row(ws, r, "Operating Income", d["op_inc"], "$#,##0")
+    if d.get("jjb_startup_line"):
+        r = write_row(ws, r, "JJB Startup Capital (add back)", d["jjb_startup_line"], "$#,##0")
+    r = write_row(ws, r, "Existing DS", [-v for v in d["loan_total_ds"]], "$#,##0")
+    r = write_row(ws, r, "Expansion DS", [-v for v in d["expansion_ds"]], "$#,##0")
+    r = write_row(ws, r, "Capex Reserve", [-v for v in d["capex_res"]], "$#,##0")
+    r = write_row(ws, r, "Distributable Cash", d["distrib_cash"], "$#,##0")
+    r = write_section(ws, r, "Waterfall", span)
+    r = write_row(ws, r, "Tax", [-v for v in d["tax_cash"]], "$#,##0")
+    r = write_row(ws, r, "Tier 0 (EB)", [-v for v in d["tier0_actual"]], "$#,##0")
+    r = write_row(ws, r, "Tier 1 (Partners)", [-v for v in d["tier1_actual"]], "$#,##0")
+    r = write_row(ws, r, "PE/DD Repayment", [-v for v in d["pedd_payments"]], "$#,##0")
+    r = write_row(ws, r, "Tier 2 (Pro-Rata)", [-v for v in d["tier2"]], "$#,##0")
+    if any(v > 50 for v in d.get("tier1_shortfall", [])):
+        r = write_row(ws, r, "T1 Shortfall -> DD", [-v for v in d["tier1_shortfall"]], "$#,##0")
+    r += 2
 
-def write_waterfall_sheet(wb, scenarios):
-    ws = wb.create_sheet("Waterfall")
-    r = 1
-    for name in SCENARIO_ORDER:
-        d = scenarios[name]
-        Y = d["years"]
-        r = write_scenario_banner(ws, r, name, len(Y) + 1)
-        r = _hdr_years(ws, r, Y)
-        r = write_row(ws, r, "Operating Income", d["op_inc"], "$#,##0")
-        if d.get("jjb_startup_line"):
-            r = write_row(ws, r, "JJB Startup Capital (add back)", d["jjb_startup_line"], "$#,##0")
-        r = write_row(ws, r, "Existing DS", [-v for v in d["loan_total_ds"]], "$#,##0")
-        r = write_row(ws, r, "Expansion DS", [-v for v in d["expansion_ds"]], "$#,##0")
-        r = write_row(ws, r, "Capex Reserve", [-v for v in d["capex_res"]], "$#,##0")
-        r = write_row(ws, r, "Distributable Cash", d["distrib_cash"], "$#,##0")
-        r = write_section(ws, r, "Waterfall", len(Y) + 1)
-        r = write_row(ws, r, "Tax", [-v for v in d["tax_cash"]], "$#,##0")
-        r = write_row(ws, r, "Tier 0 (EB)", [-v for v in d["tier0_actual"]], "$#,##0")
-        r = write_row(ws, r, "Tier 1 (Partners)", [-v for v in d["tier1_actual"]], "$#,##0")
-        r = write_row(ws, r, "PE/DD Repayment", [-v for v in d["pedd_payments"]], "$#,##0")
-        r = write_row(ws, r, "Tier 2 (Pro-Rata)", [-v for v in d["tier2"]], "$#,##0")
-        if any(v > 50 for v in d.get("tier1_shortfall", [])):
-            r = write_row(ws, r, "T1 Shortfall -> DD", [-v for v in d["tier1_shortfall"]], "$#,##0")
-        r += 1
-    autosize(ws)
-
-
-def write_partner_cash_sheet(wb, scenarios):
-    ws = wb.create_sheet("Partner Cash")
-    r = 1
-    for name in SCENARIO_ORDER:
-        d = scenarios[name]
-        Y = d["years"]
-        r = write_scenario_banner(ws, r, name, len(Y) + 1)
-        r = _hdr_years(ws, r, Y)
-        for p in ["EB", "JS", "JJB"]:
-            pd = d.get("partners", {}).get(p)
-            if not pd:
-                continue
-            r = write_section(ws, r, p, len(Y) + 1)
-            r = write_row(ws, r, "Tax Dist", pd["tax_dist"], "$#,##0")
-            if pd.get("tier_0"):
-                r = write_row(ws, r, "Tier 0", pd["tier_0"], "$#,##0")
-            r = write_row(ws, r, "Tier 1", pd["tier_1"], "$#,##0")
-            if pd.get("pedd"):
-                r = write_row(ws, r, "PE/DD", pd["pedd"], "$#,##0")
-            r = write_row(ws, r, "Tier 2", pd["tier_2"], "$#,##0")
-            if pd.get("equity_buy_sell"):
-                r = write_row(ws, r, "Equity Buy/Sell", pd["equity_buy_sell"], "$#,##0")
-            r = write_row(ws, r, f"Total {p}", pd["total"], "$#,##0")
-            ex_tax = [pd["total"][i] - pd["tax_dist"][i] for i in range(len(Y))]
-            r = write_row(ws, r, f"After-Tax Cash ({p})", ex_tax, "$#,##0")
-            ne_arr = (d.get("partners_no_exp") or {}).get(p)
-            if ne_arr:
-                r = write_row(ws, r, "No-Expansion baseline", ne_arr, "$#,##0")
-                r = write_row(ws, r, "Expansion Impact",
-                               [pd["total"][i] - ne_arr[i] for i in range(len(Y))], "$#,##0")
-        r += 1
-    autosize(ws)
-
-
-def write_tax_sheet(wb, scenarios):
-    ws = wb.create_sheet("Tax")
-    r = 1
-    for name in SCENARIO_ORDER:
-        d = scenarios[name]
-        Y = d["years"]
-        r = write_scenario_banner(ws, r, name, len(Y) + 1)
-        r = _hdr_years(ws, r, Y)
-        r = write_row(ws, r, "Operating Income", d["op_inc"], "$#,##0")
-        r = write_row(ws, r, "Total Interest",
-                       [-v for v in d.get("total_interest", d["loan_total_int"])], "$#,##0")
-        r = write_row(ws, r, "Taxable Income", d["taxable_inc"], "$#,##0")
-        r = write_section(ws, r, "Federal", len(Y) + 1)
-        r = write_row(ws, r, "Bonus Depreciation", [-v for v in d["dep"]["fed"]], "$#,##0")
-        r = write_row(ws, r, "Fed Taxable", [td["fed_taxable"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "EB Share", [td["eb_fed"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "NOL Used", [-td["nol_used"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "NOL Generated", [td["nol_generated"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "NOL Balance", [td["nol_remaining"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "EB Net Taxable", [td["eb_net_fed"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "Fed Tax (EB)", [-td["fed_tax"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "Fed Tax (entity)", [-td["fed_dist"] for td in d["tax_detail"]], "$#,##0")
-        r = write_section(ws, r, "Hawaii", len(Y) + 1)
-        r = write_row(ws, r, "State Depreciation", [-v for v in d["dep"]["state"]], "$#,##0")
-        r = write_row(ws, r, "HI Taxable", [td["hi_taxable"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "EB HI Taxable", [td["eb_hi"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "HI Tax (EB)", [-td["hi_tax"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "HI Tax (entity)", [-td["hi_dist"] for td in d["tax_detail"]], "$#,##0")
-        r = write_row(ws, r, "Tax Liability", d["tax_liab"], "$#,##0")
-        r = write_row(ws, r, "Tax Cash Dist", [-v for v in d["tax_cash"]], "$#,##0")
-        r += 1
-    autosize(ws)
-
-
-def write_crop_irrs_sheet(wb, scenarios):
-    ws = wb.create_sheet("Crop IRRs")
-    r = 1
-    for name in SCENARIO_ORDER:
-        d = scenarios[name]
-        irrs = d.get("crop_irrs", [])
-        if not irrs:
+    # ── 5. Partner Cash ───────────────────────────────────────────────────
+    r = write_topic_banner(ws, r, "5. Partner Cash", span)
+    r = _hdr_years(ws, r, Y)
+    for p in ["EB", "JS", "JJB"]:
+        pd = d.get("partners", {}).get(p)
+        if not pd:
             continue
-        r = write_scenario_banner(ws, r, name, 9)
+        r = write_section(ws, r, p, span)
+        r = write_row(ws, r, "Tax Dist", pd["tax_dist"], "$#,##0")
+        if pd.get("tier_0"):
+            r = write_row(ws, r, "Tier 0", pd["tier_0"], "$#,##0")
+        r = write_row(ws, r, "Tier 1", pd["tier_1"], "$#,##0")
+        if pd.get("pedd"):
+            r = write_row(ws, r, "PE/DD", pd["pedd"], "$#,##0")
+        r = write_row(ws, r, "Tier 2", pd["tier_2"], "$#,##0")
+        if pd.get("equity_buy_sell"):
+            r = write_row(ws, r, "Equity Buy/Sell", pd["equity_buy_sell"], "$#,##0")
+        r = write_row(ws, r, f"Total {p}", pd["total"], "$#,##0")
+        ex_tax = [pd["total"][i] - pd["tax_dist"][i] for i in range(nY)]
+        r = write_row(ws, r, f"After-Tax Cash ({p})", ex_tax, "$#,##0")
+        ne_arr = (d.get("partners_no_exp") or {}).get(p)
+        if ne_arr:
+            r = write_row(ws, r, "No-Expansion baseline", ne_arr, "$#,##0")
+            r = write_row(ws, r, "Expansion Impact",
+                           [pd["total"][i] - ne_arr[i] for i in range(nY)], "$#,##0")
+    r += 2
+
+    # ── 6. Tax Detail ─────────────────────────────────────────────────────
+    r = write_topic_banner(ws, r, "6. Tax", span)
+    r = _hdr_years(ws, r, Y)
+    r = write_row(ws, r, "Operating Income", d["op_inc"], "$#,##0")
+    r = write_row(ws, r, "Total Interest",
+                   [-v for v in d.get("total_interest", d["loan_total_int"])], "$#,##0")
+    r = write_row(ws, r, "Taxable Income", d["taxable_inc"], "$#,##0")
+    r = write_section(ws, r, "Federal", span)
+    r = write_row(ws, r, "Bonus Depreciation", [-v for v in d["dep"]["fed"]], "$#,##0")
+    r = write_row(ws, r, "Fed Taxable", [td["fed_taxable"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "EB Share", [td["eb_fed"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "NOL Used", [-td["nol_used"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "NOL Generated", [td["nol_generated"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "NOL Balance", [td["nol_remaining"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "EB Net Taxable", [td["eb_net_fed"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "Fed Tax (EB)", [-td["fed_tax"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "Fed Tax (entity)", [-td["fed_dist"] for td in d["tax_detail"]], "$#,##0")
+    r = write_section(ws, r, "Hawaii", span)
+    r = write_row(ws, r, "State Depreciation", [-v for v in d["dep"]["state"]], "$#,##0")
+    r = write_row(ws, r, "HI Taxable", [td["hi_taxable"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "EB HI Taxable", [td["eb_hi"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "HI Tax (EB)", [-td["hi_tax"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "HI Tax (entity)", [-td["hi_dist"] for td in d["tax_detail"]], "$#,##0")
+    r = write_row(ws, r, "Tax Liability", d["tax_liab"], "$#,##0")
+    r = write_row(ws, r, "Tax Cash Dist", [-v for v in d["tax_cash"]], "$#,##0")
+    r += 2
+
+    # ── 7. Crop IRRs ──────────────────────────────────────────────────────
+    irrs = d.get("crop_irrs", [])
+    if irrs:
+        r = write_topic_banner(ws, r, "7. Crop IRRs", 9)
         r = write_header(ws, r, ["Key", "Label", "Lev IRR %", "Unlev %", "Equity $",
                                    "Base Rev", "Base Exp", "Op Inc", "CapEx"])
         for ci in irrs:
@@ -295,7 +263,7 @@ def write_crop_irrs_sheet(wb, scenarios):
                 elif col in (3, 4) and isinstance(val, (int, float)):
                     c.number_format = "0.0"
             r += 1
-        r += 1
+
     autosize(ws)
 
 
@@ -306,11 +274,12 @@ def write_crop_irrs_sheet(wb, scenarios):
 def write_scenario_comparison(wb, scenarios, constants):
     any_d = next(iter(scenarios.values()))
     Y = any_d["years"]
+    span = len(Y) + 1
     ws = wb.create_sheet("Scenario Compare")
     r = _hdr_years(ws, 1, Y)
     resol = constants.get("resolution_data", {})
 
-    r = write_section(ws, r, "RESOLUTION (hardcoded baseline)", len(Y) + 1)
+    r = write_section(ws, r, "RESOLUTION (hardcoded baseline)", span)
     if resol:
         r = write_row(ws, r, "EBITDA", resol["EBITDA"] + [None, None, None], "$#,##0")
         for p in ["EB", "JS", "JJB"]:
@@ -319,7 +288,7 @@ def write_scenario_comparison(wb, scenarios, constants):
 
     for name in SCENARIO_ORDER:
         d = scenarios[name]
-        r = write_section(ws, r, name.upper(), len(Y) + 1)
+        r = write_section(ws, r, name.upper(), span)
         if name == "No Expansion":
             ne = (d.get("partners_no_exp") or {}).get("_waterfall") or {}
             r = write_row(ws, r, "Revenue", ne.get("rev", d["rev"]), "$#,##0")
@@ -440,18 +409,14 @@ def main_export():
     wb = Workbook()
     wb.remove(wb.active)
 
+    # Sheet 1: Inputs
     write_inputs(wb, settings)
 
-    # 7 consolidated topic sheets
-    write_kpis_sheet(wb, scenarios)
-    write_revexp_sheet(wb, scenarios)
-    write_ownership_sheet(wb, scenarios)
-    write_waterfall_sheet(wb, scenarios)
-    write_partner_cash_sheet(wb, scenarios)
-    write_tax_sheet(wb, scenarios)
-    write_crop_irrs_sheet(wb, scenarios)
+    # Sheets 2-5: one per scenario, all 7 topics stacked
+    for name in SCENARIO_ORDER:
+        write_scenario_sheet(wb, name, scenarios[name])
 
-    # Cross-scenario sheets
+    # Sheets 6-7: cross-scenario
     write_scenario_comparison(wb, scenarios, constants)
     write_cf_stake_summary(wb, scenarios, constants)
 
@@ -460,7 +425,7 @@ def main_export():
     wb.save(out)
     print(f"\nWrote: {out}")
     print(f"  Size: {out.stat().st_size / 1024:.1f} KB")
-    print(f"  Sheets: {len(wb.sheetnames)} ({', '.join(wb.sheetnames)})")
+    print(f"  Sheets ({len(wb.sheetnames)}): {', '.join(wb.sheetnames)}")
     return out
 
 
