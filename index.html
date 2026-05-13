@@ -56,7 +56,14 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('partnerBody').style.display=document.getElementById('partnerBody').style.display==='none'?'':'none'">Partner Cash ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span style="cursor:pointer" onclick="document.getElementById('partnerBody').style.display=document.getElementById('partnerBody').style.display==='none'?'':'none'">Partner Cash ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></span>
+        <label style="font-size:10px;color:var(--text-sub);font-weight:normal;cursor:pointer">
+          <input type="checkbox" id="pcIncludeTaxToggle"
+            onchange="_pcIncludeTax=this.checked; if(lastData) render(lastData);">
+          Include Tax
+        </label>
+      </div>
       <div id="partnerBody">
         <div style="overflow-x:auto"><table class="fin-table" id="partnerTable"></table></div>
       </div>
@@ -762,7 +769,7 @@ function render(d) {
     if (!pd) continue;
     const cls = `pcd-${p}`;
     pt += `<tr class="section-header" style="cursor:pointer" onclick="document.querySelectorAll('.${cls}').forEach(r=>r.style.display=r.style.display==='none'?'':'none')"><td colspan="${Y.length-_DN+1}">${p} <span style="font-size:8px;color:var(--text-dim)">▼</span></td></tr>`;
-    pt += tr('Tax Dist', pd.tax_dist, fCM, `${cls}" style="display:none`);
+    if (_pcIncludeTax) pt += tr('Tax Dist', pd.tax_dist, fCM, `${cls}" style="display:none`);
     if (pd.tier_0) pt += tr('Tier 0', pd.tier_0, fCM, `${cls}" style="display:none`);
     pt += tr('Tier 1', pd.tier_1, fCM, `${cls}" style="display:none`);
     if (pd.pedd) pt += tr('PE/DD', pd.pedd, fCM, `${cls}" style="display:none`);
@@ -773,12 +780,13 @@ function render(d) {
       const net = gt[p].advance.map((v, i) => v - gt[p].repay[i]);
       pt += tr('Bridge (net)', net, fCM, `${cls}" style="display:none`);
     }
-    pt += tr('Total ' + p, pd.total, fCM, 'subtotal-row');
+    const totalVals = _pcIncludeTax ? pd.total : pd.total.map((v, i) => v - (pd.tax_dist[i] || 0));
+    pt += tr('Total ' + p, totalVals, fCM, 'subtotal-row');
     // Baseline for comparison: 'resolution' (default) or 'noexp'
     const benchmark = settings.benchmark || 'resolution';
     let baseline = null, baselineLabel = '';
     if (benchmark === 'resolution' && RESOLUTION_DATA && RESOLUTION_DATA[p]) {
-      const raw = RESOLUTION_DATA[p].withTax || [];
+      const raw = (_pcIncludeTax ? RESOLUTION_DATA[p].withTax : RESOLUTION_DATA[p].noTax) || [];
       if (raw.length >= 2) {
         const growth = raw[raw.length-1] / raw[raw.length-2];
         baseline = [...raw];
@@ -786,12 +794,13 @@ function render(d) {
       }
       baselineLabel = 'Resolution';
     } else if (benchmark === 'noexp' && d.partners_no_exp && d.partners_no_exp[p]) {
-      baseline = d.partners_no_exp[p];
+      const neTax = (d.partners_no_exp._tax && d.partners_no_exp._tax[p]) || [];
+      baseline = _pcIncludeTax ? d.partners_no_exp[p] : d.partners_no_exp[p].map((v, i) => v - (neTax[i] || 0));
       baselineLabel = 'No Expansion';
     }
     if (baseline) {
       pt += tr(baselineLabel, baseline, fCM);
-      const diff = pd.total.map((v, i) => v - (baseline[i] || 0));
+      const diff = totalVals.map((v, i) => v - (baseline[i] || 0));
       pt += tr('Expansion Impact', diff, fCM);
     }
   }
@@ -836,6 +845,7 @@ function render(d) {
 // --- SCENARIO COMPARISON ---
 let RESOLUTION_DATA = null;  // loaded from /api/constants at init
 let _scenShowTax = true;
+let _pcIncludeTax = false;
 
 async function fetchScenarioData(overrides) {
   const body = JSON.stringify({...settings, ...overrides});
