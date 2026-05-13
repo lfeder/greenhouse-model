@@ -198,6 +198,8 @@ function buildSidebar() {
     const style = active ? 'background:var(--accent);color:#000' : '';
     return `<button class="btn" style="${style};font-size:9px;padding:3px 4px" onclick="loadBuildPreset('${id}')">${p.label}</button>`;
   };
+  const _pinnedLtv = settings.financingPct || 80;
+  const _ltvBtn = (v) => `<button class="btn" style="${_pinnedLtv===v?'background:var(--accent);color:#000;':''}font-size:10px;padding:3px 8px;flex:1" onclick="updateSetting('financingPct',${v})">${v}%</button>`;
   h += `<div class="panel" style="position:sticky;top:60px;z-index:20;background:var(--panel)">
     <div class="panel-title" style="display:flex;justify-content:space-between;align-items:baseline">
       <span>Build Preset</span>
@@ -207,6 +209,10 @@ function buildSidebar() {
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
       ${presetBtn('3-NO')}${presetBtn('3-SHED')}${presetBtn('3-FULL')}
       ${presetBtn('4-NO')}${presetBtn('4-SHED')}${presetBtn('4-FULL')}
+    </div>
+    <div style="font-size:9px;color:var(--text-dim);margin:8px 0 3px">LTV</div>
+    <div style="display:flex;gap:4px">
+      ${_ltvBtn(80)}${_ltvBtn(85)}${_ltvBtn(90)}
     </div>
   </div>`;
 
