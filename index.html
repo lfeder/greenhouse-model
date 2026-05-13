@@ -709,6 +709,8 @@ function render(d) {
     }).join('')}</tr>`;
     t += tr('PE/DD Repayment', src.pedd_payments.map(v => -v), fCM);
     t += tr('Tier 2 (Pro-Rata)', src.tier2.map(v => -v), fCM);
+    const totalExTax = src.distrib_cash.map((v, i) => v - (src.tax_cash[i] || 0));
+    t += tr('Total (ex Tax)', totalExTax.map(v => -v), fCM, 'subtotal-row');
     if (src.tier1_shortfall.some(v => v > 50)) t += tr('T1 Shortfall → DD', src.tier1_shortfall.map(v => -v), fCM);
     t += '</tbody>';
     return t;
@@ -750,6 +752,8 @@ function render(d) {
     rt += renderRow('Tier 1 (Partners)', tier1All.map(v => -v));
     rt += renderRow('PE/DD Repayment', peddAll.map(v => -v));
     rt += renderRow('Tier 2 (Pro-Rata)', tier2All.map(v => -v));
+    const totalExTaxR = sumRow(eb.tier_0, tier1All, peddAll, tier2All);
+    rt += renderRow('Total (ex Tax)', totalExTaxR.map(v => -v), 'subtotal-row');
     rt += '</tbody>';
     document.getElementById('distTableNoExp').innerHTML = rt;
   } else if (d.partners_no_exp && d.partners_no_exp._waterfall) {
