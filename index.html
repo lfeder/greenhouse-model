@@ -192,14 +192,15 @@ function buildSidebar() {
     const style = active ? 'background:var(--accent);color:#000' : '';
     return `<button class="btn" style="${style};font-size:9px;padding:3px 4px" onclick="loadBuildPreset('${id}')">${p.label}</button>`;
   };
-  h += `<div class="panel" style="position:sticky;top:60px;z-index:20;background:var(--panel)"><div class="panel-title">Build Preset</div>
+  h += `<div class="panel" style="position:sticky;top:60px;z-index:20;background:var(--panel)">
+    <div class="panel-title" style="display:flex;justify-content:space-between;align-items:baseline">
+      <span>Build Preset</span>
+      <span style="font-size:9px;color:var(--text-dim);font-weight:normal">60k sqft blocks (1K · 1J · ${activePreset && activePreset.startsWith('4') ? '2E' : '1E'})</span>
+    </div>
     <div style="display:grid;grid-template-columns:1fr;gap:4px;margin-bottom:4px">${presetBtn('NONE')}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
       ${presetBtn('3-NO')}${presetBtn('3-SHED')}${presetBtn('3-FULL')}
       ${presetBtn('4-NO')}${presetBtn('4-SHED')}${presetBtn('4-FULL')}
-    </div>
-    <div style="font-size:9px;color:var(--text-dim);margin-top:6px;line-height:1.3">
-      60k sqft blocks (1K · 1J · ${activePreset && activePreset.startsWith('4') ? '2E' : '1E'}). Lettuce/tomato zeroed.
     </div>
   </div>`;
 
@@ -234,9 +235,9 @@ function buildSidebar() {
 
   const FM = v => (v < 0 ? '−' : '') + (Math.abs(v) / 1e6).toFixed(2) + 'M';
 
-  // Expansion Loan — lender (SBA/JJB) + equity %. Term & rate derived from lender.
+  // Expansion Loan — lender (SBA/JJB) + LTV %. Term & rate derived from lender.
   const curLender = settings.expansionLender || 'SBA';
-  const curLtv = 100 - (settings.financingPct || 80);  // here LTV = equity %
+  const curFin = settings.financingPct || 80;
   const lenderTerms = { SBA: '25 yr · 7%', JJB: '5 yr · 9%' };
   const tBtn = (label, isActive, onclick) =>
     `<button class="btn" style="${isActive?'background:var(--accent);color:#000;':''}font-size:10px;padding:3px 8px;flex:1" onclick="${onclick}">${label}</button>`;
@@ -247,10 +248,10 @@ function buildSidebar() {
       ${tBtn('JJB', curLender==='JJB', "setLender('JJB')")}
     </div>
     <div style="font-size:10px;color:var(--text-sub);margin-bottom:8px">→ ${lenderTerms[curLender]}</div>
-    <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">EQUITY %</div>
+    <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">LTV</div>
     <div style="display:flex;gap:4px">
-      ${tBtn('15%', curLtv===15, "updateSetting('financingPct',85)")}
-      ${tBtn('20%', curLtv===20, "updateSetting('financingPct',80)")}
+      ${tBtn('85%', curFin===85, "updateSetting('financingPct',85)")}
+      ${tBtn('80%', curFin===80, "updateSetting('financingPct',80)")}
     </div>
   </div>`;
 
@@ -261,15 +262,9 @@ function buildSidebar() {
   const _netPct = Math.round(_rawNet / 0.0025) * 0.0025 * 100;
   h += `<div class="panel"><div class="panel-title">Equity Valuations</div>
     ${S('jjbBuyinValuation', {label:'JJB Buy-in Valuation',min:5000000,max:25000000,step:1000000,def:15000000,fmt:FM})}
-    <div style="font-size:9px;color:var(--text-dim);margin-top:-4px;line-height:1.4">
+    <div style="font-size:9px;color:var(--text-dim);margin-top:8px;line-height:1.4">
       → JJB net: ${_netPct.toFixed(2)}% · gross: ${(2*_netPct).toFixed(2)}% (JJB$ ${(_jjbCap/1e6).toFixed(2)}M)
     </div>
-  </div>`;
-
-  h += `<div class="panel"><div class="panel-title">EB Promote (from JS & JJB)</div>
-    ${S('ebExpansionGrantPct', {label:'Annual %',min:0,max:1,step:0.25,def:0.5,fmt:v=>v.toFixed(2)+'%'})}
-    ${S('ebExpansionGrantStartYear', {label:'Start Year',min:2026,max:2032,step:1,def:2027,fmt:v=>''+v})}
-    ${S('ebExpansionGrantEndYear', {label:'End Year',min:2028,max:2035,step:1,def:2035,fmt:v=>''+v})}
   </div>`;
 
   document.getElementById('sidebar').innerHTML = h;
