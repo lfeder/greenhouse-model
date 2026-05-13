@@ -456,7 +456,7 @@ function renderGantt(d) {
         <div style="${hC}">Mrgn</div>
         <div style="${hC}">Cost/Ac</div>
         <div style="${hR}">Cost</div>
-        <div style="${hC};cursor:help" title="Production ramp — linear from 0% to 100% over (ramp_years × 4) quarters.&#10;Q_n = production quarter (1-indexed from first prod quarter).&#10;ramp = min(100%, Q_n / (ramp_years × 4))&#10;&#10;1-yr: Q1=25% Q2=50% Q3=75% Q4=100%&#10;2-yr: Q1=12.5% Q4=50% Q8=100%&#10;4-yr: Q1=6.25% Q8=50% Q16=100%">Ramp <span style="color:var(--text-dim)">ⓘ</span></div>
+        <div style="${hC}">Ramp <span style="color:var(--accent);cursor:help;padding:0 3px" title="Production ramp — linear from 0% to 100% over (ramp_years × 4) quarters.&#10;Q_n = production quarter (1-indexed from first prod quarter).&#10;ramp = min(100%, Q_n / (ramp_years × 4))&#10;&#10;1-yr ramp: Q1=25% Q2=50% Q3=75% Q4=100%&#10;2-yr ramp: Q1=12.5% Q4=50% Q8=100%&#10;3-yr ramp: Q1=8.3% Q6=50% Q12=100%&#10;4-yr ramp: Q1=6.25% Q8=50% Q16=100%">ⓘ</span></div>
         <div></div><div class="gantt-timeline-header">${yearHdr}</div>
       </div>
       ${rows}
