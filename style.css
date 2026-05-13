@@ -42,7 +42,7 @@ input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 
 .toggle-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
 .toggle-row label { font-size: 10px; color: var(--text-sub); cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; }
 
-.kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 9px; margin-bottom: 18px; }
+.kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; margin-bottom: 18px; }
 .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 7px; padding: 11px 12px; }
 .kpi-label { font-size: 9px; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; text-align: right; }
 .kpi-value { font-size: 17px; font-weight: 700; line-height: 1; color: var(--text); text-align: right; }
@@ -72,7 +72,7 @@ input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 
 .gantt-container { font-size: 10px; }
 .gantt-header, .gantt-row {
   display: grid;
-  grid-template-columns: 88px 38px 46px 40px 50px 44px 52px 40px 36px 36px 60px 42px 16px 1fr;
+  grid-template-columns: 100px 42px 50px 44px 56px 46px 56px 44px 46px 16px 1fr;
   align-items: center;
   gap: 0;
 }
