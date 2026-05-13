@@ -695,6 +695,10 @@ function render(d) {
     t += tr('Operating Income', src.op_inc, fCM, 'subtotal-row');
     const dsTotal = src.loan_total_ds.map((v, i) => v + (src.expansion_ds[i] || 0));
     t += tr('DS', dsTotal.map(v => -v), fCM);
+    const jsl = src.jjb_startup_line || src.startup_exp;
+    if (jsl && jsl.some(v => v > 0)) {
+      t += tr('JJB Startup Capital', jsl, fCM);
+    }
     t += tr('Distributable Cash', src.distrib_cash, fCM, 'total-row-table');
     t += sr('Waterfall', Y);
     t += tr('Tax', src.tax_cash.map(v => -v), fCM);
