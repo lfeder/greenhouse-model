@@ -399,23 +399,46 @@ def compute_crop_irrs(crop_data, s):
     sbic_rate = s["sbicRate"] / 100
     sbic_term = s["sbicTerm"]
 
-    def _loan_schedule(loan_amt, rate, term, start_year, io_end_y):
-        """Compute yearly int/prin/bal arrays for a single loan."""
-        int_row, prin_row, bal_row = [], [], []
-        bal = 0
-        annual_ds = _annual_pmt(loan_amt, rate, term) if loan_amt > 0 else 0
+    def _loan_schedule(loan_amt, rate, term, start_q, end_q, io_end_y):
+        """Compute yearly int/prin/bal arrays. Loan draws linearly across
+        construction quarters (start_q..end_q inclusive); interest accrues
+        quarterly on avg balance. Post-construction: IO until io_end_y, then
+        amortizing through start_year + term - 1."""
+        int_row = [0.0] * N_YEARS
+        prin_row = [0.0] * N_YEARS
+        bal_row = [0.0] * N_YEARS
+        if loan_amt <= 0:
+            return int_row, prin_row, bal_row
+        start_year = start_q // 10
+        end_year = end_q // 10
+        build_qs = (end_year - start_year) * 4 + (end_q % 10) - (start_q % 10) + 1
+        q_rate = rate / 4
+        # quarterly amort payment sized so loan fully amortizes over remaining
+        # term post-construction (start_year + term - 1 is last year)
+        amort_last_q = (start_year + term - 1) * 10 + 4
+        bal = 0.0
+        drawn = 0
         for i, y in enumerate(YEARS):
-            if y == start_year:
-                bal = loan_amt
-            yr_int = yr_prin = 0
-            if start_year <= y <= start_year + term - 1 and bal > 0:
-                yr_int = bal * rate
-                if y >= io_end_y:
-                    yr_prin = min(annual_ds - yr_int, bal)
-                    bal -= yr_prin
-            int_row.append(yr_int)
-            prin_row.append(yr_prin)
-            bal_row.append(max(0, bal))
+            for q in range(1, 5):
+                quarter = y * 10 + q
+                if quarter < start_q or quarter > amort_last_q:
+                    continue
+                if quarter <= end_q:
+                    drawn += 1
+                    new_bal = loan_amt * drawn / build_qs
+                    avg = (bal + new_bal) / 2
+                    int_row[i] += avg * q_rate
+                    bal = new_bal
+                else:
+                    q_int = bal * q_rate
+                    int_row[i] += q_int
+                    if y >= io_end_y:
+                        rem_q = max(1, (start_year + term - 1 - y) * 4 + (4 - q) + 1)
+                        q_pmt = (bal * q_rate / (1 - (1 + q_rate) ** -rem_q)) if q_rate > 0 else bal / rem_q
+                        q_prin = min(q_pmt - q_int, bal)
+                        bal -= q_prin
+                        prin_row[i] += q_prin
+            bal_row[i] = max(0, bal)
         return int_row, prin_row, bal_row
 
     # First pass: compute per-crop cashflows and collect infra cashflows
@@ -446,8 +469,8 @@ def compute_crop_irrs(crop_data, s):
             equity = crop.get("jjb_equity", crop["capex"] - b_amt - s_amt)
 
         # Compute schedules for each tranche
-        b_int, b_prin, b_bal = _loan_schedule(b_amt, bank_rate, bank_term, start_year, io_end_y)
-        s_int, s_prin, s_bal = _loan_schedule(s_amt, sbic_rate, sbic_term, start_year, io_end_y)
+        b_int, b_prin, b_bal = _loan_schedule(b_amt, bank_rate, bank_term, crop["start_q"], crop["end_q"], io_end_y)
+        s_int, s_prin, s_bal = _loan_schedule(s_amt, sbic_rate, sbic_term, crop["start_q"], crop["end_q"], io_end_y)
 
         # Combined per-crop cashflows
         cfs = []
