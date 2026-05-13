@@ -49,9 +49,8 @@
     <div class="panel">
       <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('distBody').style.display=document.getElementById('distBody').style.display==='none'?'':'none'">Distributions ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
       <div id="distBody">
-        <div id="distTableBaselineLabel" style="font-size:10px;color:var(--text-muted);margin:4px 0 2px">Waterfall — No Expansion</div>
         <div style="overflow-x:auto"><table class="fin-table" id="distTableNoExp"></table></div>
-        <div style="font-size:10px;color:var(--text-muted);margin:12px 0 2px">Waterfall — With Expansion</div>
+        <div style="height:10px"></div>
         <div style="overflow-x:auto"><table class="fin-table" id="distTable"></table></div>
       </div>
     </div>
@@ -690,36 +689,33 @@ function render(d) {
     }
     return t;
   });
-  const buildWaterfall = (src, isNoExp) => {
-    let t = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+  const buildWaterfall = (src, isNoExp, titleLabel) => {
+    let t = `<thead><tr><th style="text-align:left;font-weight:600;color:var(--text-muted)">${titleLabel || ''}</th>${yh(Y)}</tr></thead><tbody>`;
     t += tr('Operating Income', src.op_inc, fCM, 'subtotal-row');
     const dsTotal = src.loan_total_ds.map((v, i) => v + (src.expansion_ds[i] || 0));
-    t += tr('DS', dsTotal.map(v => -v), fCM);
+    t += tr('DS', dsTotal, fCM);
     const jsl = src.jjb_startup_line || src.startup_exp;
     if (jsl && jsl.some(v => v > 0)) {
       t += tr('JJB Startup Capital', jsl, fCM);
     }
     t += tr('Distributable Cash', src.distrib_cash, fCM, 'total-row-table');
-    t += sr('Waterfall', Y);
-    t += tr('Tax', src.tax_cash.map(v => -v), fCM);
-    t += tr('Tier 0 (EB)', src.tier0_actual.map(v => -v), fCM);
+    t += tr('Tax', src.tax_cash, fCM);
+    t += tr('Tier 0 (EB)', src.tier0_actual, fCM);
     t += `<tr><td>Tier 1 (Partners)</td>${sl(src.tier1_actual).map((v, i) => {
       const short = (src.tier1_shortfall[i] || 0) > 50;
-      return `<td${short ? ' style="color:var(--yellow)"' : ''}>${fCM(-v)}${short ? ' *' : ''}</td>`;
+      return `<td${short ? ' style="color:var(--yellow)"' : ''}>${fCM(v)}${short ? ' *' : ''}</td>`;
     }).join('')}</tr>`;
-    t += tr('PE/DD Repayment', src.pedd_payments.map(v => -v), fCM);
-    t += tr('Tier 2 (Pro-Rata)', src.tier2.map(v => -v), fCM);
+    t += tr('PE/DD Repayment', src.pedd_payments, fCM);
+    t += tr('Tier 2 (Pro-Rata)', src.tier2, fCM);
     const totalExTax = src.distrib_cash.map((v, i) => v - (src.tax_cash[i] || 0));
-    t += tr('Total (ex Tax)', totalExTax.map(v => -v), fCM, 'subtotal-row');
-    if (src.tier1_shortfall.some(v => v > 50)) t += tr('T1 Shortfall → DD', src.tier1_shortfall.map(v => -v), fCM);
+    t += tr('Total (ex Tax)', totalExTax, fCM, 'subtotal-row');
+    if (src.tier1_shortfall.some(v => v > 50)) t += tr('T1 Shortfall → DD', src.tier1_shortfall, fCM);
     t += '</tbody>';
     return t;
   };
-  document.getElementById('distTable').innerHTML = buildWaterfall(d, false);
+  document.getElementById('distTable').innerHTML = buildWaterfall(d, false, 'Expansion');
   const distBenchmark = settings.benchmark || 'resolution';
-  const labelEl = document.getElementById('distTableBaselineLabel');
   if (distBenchmark === 'resolution' && RESOLUTION_DATA) {
-    labelEl.textContent = 'Waterfall — Resolution';
     const displayed = Y.length - _DN;
     const fmt = v => v == null ? '—' : fCM(v);
     const extrapolate = (arr) => {
@@ -743,22 +739,20 @@ function render(d) {
     const peddAll = sumRow(js.pedd, jjb.pedd);
     const tier2All = sumRow(eb.tier_2, js.tier_2, jjb.tier_2);
     const distrib = sumRow(taxAll, eb.tier_0, tier1All, peddAll, tier2All);
-    let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+    let rt = `<thead><tr><th style="text-align:left;font-weight:600;color:var(--text-muted)">Resolution</th>${yh(Y)}</tr></thead><tbody>`;
     rt += renderRow('EBITDA', RESOLUTION_DATA.EBITDA, 'subtotal-row');
     rt += renderRow('Distributable Cash', distrib, 'total-row-table');
-    rt += sr('Waterfall', Y);
-    rt += renderRow('Tax', taxAll.map(v => -v));
-    rt += renderRow('Tier 0 (EB)', eb.tier_0.map(v => -v));
-    rt += renderRow('Tier 1 (Partners)', tier1All.map(v => -v));
-    rt += renderRow('PE/DD Repayment', peddAll.map(v => -v));
-    rt += renderRow('Tier 2 (Pro-Rata)', tier2All.map(v => -v));
+    rt += renderRow('Tax', taxAll);
+    rt += renderRow('Tier 0 (EB)', eb.tier_0);
+    rt += renderRow('Tier 1 (Partners)', tier1All);
+    rt += renderRow('PE/DD Repayment', peddAll);
+    rt += renderRow('Tier 2 (Pro-Rata)', tier2All);
     const totalExTaxR = sumRow(eb.tier_0, tier1All, peddAll, tier2All);
-    rt += renderRow('Total (ex Tax)', totalExTaxR.map(v => -v), 'subtotal-row');
+    rt += renderRow('Total (ex Tax)', totalExTaxR, 'subtotal-row');
     rt += '</tbody>';
     document.getElementById('distTableNoExp').innerHTML = rt;
   } else if (d.partners_no_exp && d.partners_no_exp._waterfall) {
-    labelEl.textContent = 'Waterfall — No Expansion';
-    document.getElementById('distTableNoExp').innerHTML = buildWaterfall(d.partners_no_exp._waterfall, true);
+    document.getElementById('distTableNoExp').innerHTML = buildWaterfall(d.partners_no_exp._waterfall, true, 'No Expansion');
   }
 
   // Partner cash — clickable header collapses detail rows for that partner
