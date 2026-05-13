@@ -287,6 +287,17 @@ def build_rev_exp(s):
         if sc and sc_yr and sc_yr in YEARS:
             n = sc_yr - 2026
             startup_exp[YEARS.index(sc_yr)] += sc * (1 + ci / 100) ** n
+    # Upfront closing costs (out-of-pocket fees not financed into loan):
+    # appraisal, legal, title, environmental, recording. Hits startup line
+    # in the year construction starts.
+    upfront_closing = s.get("upfrontClosingCosts", 50000)
+    if not debug and upfront_closing > 0 and crop_data:
+        build_crops_only = [c for c in crop_data if not c.get("is_buy") and not c.get("is_infra")]
+        if build_crops_only:
+            start_year = min(c["start_q"] // 10 for c in build_crops_only)
+            if start_year in YEARS:
+                startup_exp[YEARS.index(start_year)] += upfront_closing
+
     if any(v != 0 for v in startup_exp):
         for i in range(N_YEARS):
             exp[i] += startup_exp[i]
@@ -367,19 +378,24 @@ def allocate_capital_stack(crop_data, s):
     bank_ltv = s["financingPct"] / 100
 
     build_crops = [c for c in crop_data if not c.get("is_buy")]
-    total_capex = sum(c["capex"] for c in build_crops)
-    # JJB equity covers only the capex gap. Startup is added separately
-    # via build_equity_draws (was double-counted in lendable_base).
+    raw_capex = sum(c["capex"] for c in build_crops)
+    # Financing fees: ~2% of the LOAN amount (not the project). Each lender
+    # fees only their own portion (bank fees bank piece, CDC fees CDC piece —
+    # no stacking). Fees roll into the loan; JJB picks up its share via
+    # the same LTV split (e.g., 20% of fees if 80% LTV).
+    fee_pct = s.get("financingFeesPct", 2.0) / 100
+    fees = raw_capex * bank_ltv * fee_pct
+    total_capex = raw_capex + fees
 
     total_bank = min(total_capex * bank_ltv, bank_cap)
     total_sbic = max(0, s.get("sbicCap", 0) or 0)
     total_3p = max(0, s.get("tpEquityCap", 0) or 0)
     total_jjb = total_capex - total_bank - total_sbic - total_3p
 
-    # Distribute pro-rata per crop by capex
+    # Distribute pro-rata per crop by capex (use raw capex for pct base)
     for crop in build_crops:
         capex = crop["capex"]
-        pct = capex / total_capex if total_capex > 0 else 0
+        pct = capex / raw_capex if raw_capex > 0 else 0
         crop["bank_loan"] = total_bank * pct
         crop["sbic_loan"] = total_sbic * pct
         crop["jjb_equity"] = total_jjb * pct
