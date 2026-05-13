@@ -508,7 +508,7 @@ function render(d) {
   const startupCap = d.startup_capital || 0;
   const fees = d.financing_fees || 0;
   const bridgeLoan = d.partners_no_exp ? (d.partners_no_exp.guarantee_total || 0) : 0;
-  const totalUses = capex + startupCap + fees;
+  const totalUses = capex + startupCap + fees + bridgeLoan;
   const bankTotal = d.bank_total || 0;
   const jjbEquity = d.jjb_equity || 0;
   const totalSources = bankTotal + jjbEquity;
@@ -521,10 +521,10 @@ function render(d) {
   const lastDebt = combinedDS[lastIdx];
   // JJB equity contribution = capex-gap + startup capital (both funded by JJB)
   const jjbTotal = jjbEquity + startupCap;
-  const totalSourcesFull = bankTotal + jjbTotal;
+  const totalSourcesFull = bankTotal + jjbTotal + bridgeLoan;
   document.getElementById('kpiGrid').innerHTML = [
-    ['$ Uses', fK(totalUses), `crop: ${fK(d.total_capex)}<br>infra: ${fK(d.shared_capex)}${startupCap > 0 ? '<br>startup: ' + fK(startupCap) : ''}${fees > 0 ? '<br>fees: ' + fK(fees) : ''}`],
-    ['$ Sources', fK(totalSourcesFull), `bank: ${fK(bankTotal)}<br>JJB eq: ${fK(jjbTotal)}${bridgeLoan > 0 ? '<br>bridge: ' + fK(bridgeLoan) : ''}`],
+    ['$ Uses', fK(totalUses), `crop: ${fK(d.total_capex)}<br>infra: ${fK(d.shared_capex)}${startupCap > 0 ? '<br>startup: ' + fK(startupCap) : ''}${fees > 0 ? '<br>fees: ' + fK(fees) : ''}${bridgeLoan > 0 ? '<br>bridge: ' + fK(bridgeLoan) : ''}`],
+    ['$ Sources', fK(totalSourcesFull), `bank: ${fK(bankTotal)}<br>JJB eq: ${fK(jjbTotal)}${bridgeLoan > 0 ? '<br>JJB bridge: ' + fK(bridgeLoan) : ''}`],
     ['Steady Rev', fK(steadyRev), `year ${Y[lastIdx]}`],
     ['Steady Op Inc', fK(steadyOpInc), `${((steadyOpInc / steadyRev * 100) || 0).toFixed(1)}% margin`],
     ['Debt Svc', fK(peakDebt), `peak in '${String(peakYear).slice(2)}<br>${fK(lastDebt)} in '${String(Y[lastIdx]).slice(2)}`],
