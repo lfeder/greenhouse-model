@@ -120,6 +120,15 @@ function updateSetting(key, value) {
   compute({[key]: value});
 }
 
+function setExpansionStart(q) {
+  // q encoded as 20271 etc. Updates K/J/E/PACK start quarters in one go.
+  compute({kStartQ: q, jStartQ: q, eStartQ: q, packStartQ: q});
+}
+
+function setBuildMonths(m) {
+  compute({kBuildMonths: m, jBuildMonths: m, eBuildMonths: m, packBuildMonths: m});
+}
+
 function setLender(name) {
   const presets = { SBA: {ltv:20, term:25, rate:7}, JJB: {ltv:15, term:5, rate:9} };
   const p = presets[name];
@@ -192,6 +201,26 @@ function buildSidebar() {
     <div style="font-size:9px;color:var(--text-dim);margin-top:6px;line-height:1.3">
       60k sqft blocks (1K · 1J · ${activePreset && activePreset.startsWith('4') ? '2E' : '1E'}). Lettuce/tomato zeroed.
     </div>
+  </div>`;
+
+  // Expansion timing — global start quarter + construction months
+  const curStartQ = settings.kStartQ || 20271;
+  const curBuildMonths = settings.kBuildMonths || 12;
+  const qLabel = (q) => `Q${q%10}'${String(Math.floor(q/10)).slice(2)}`;
+  const startOpts = [];
+  for (let y = 2026; y <= 2028; y++) for (let q = 1; q <= 4; q++) {
+    const v = y*10 + q;
+    startOpts.push(`<option value="${v}" ${v===curStartQ?'selected':''}>${qLabel(v)}</option>`);
+  }
+  const monthOpts = [];
+  for (let m = 12; m <= 18; m++) {
+    monthOpts.push(`<option value="${m}" ${m===curBuildMonths?'selected':''}>${m} mo</option>`);
+  }
+  h += `<div class="panel"><div class="panel-title">Expansion Timing</div>
+    <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">START QUARTER</div>
+    <select class="btn" style="width:100%;font-size:10px;padding:3px 6px;margin-bottom:8px" onchange="setExpansionStart(Number(this.value))">${startOpts.join('')}</select>
+    <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">CONSTRUCTION MONTHS</div>
+    <select class="btn" style="width:100%;font-size:10px;padding:3px 6px" onchange="setBuildMonths(Number(this.value))">${monthOpts.join('')}</select>
   </div>`;
 
   h += `<div class="panel"><div class="panel-title">Revenue Adjustments</div>
@@ -361,38 +390,7 @@ function renderGantt(d) {
     }
     totals.cost += newVal * costPerUnit;
 
-    // IRR
-    let irrHtml, unlevHtml;
-    const ci = irrMap[key];
-    if (ci) {
-      const ud = ci.unlev_detail;
-      let tip = ci.label + '\n\n— LEVERED IRR: ' + ci.irr.toFixed(1) + '%\n';
-      tip += 'After debt service, equity outlay, startup capital.\n';
-      tip += 'Equity: ' + fK(ci.equity) + '  (incl startup + infra share)\n';
-      tip += 'Yearly cashflows (rev - exp - DS - equity):\n';
-      for (let yi = 0; yi < d.years.length; yi++) {
-        const cf = ci.cashflows[yi];
-        if (Math.abs(cf) > 50) tip += '  ' + d.years[yi] + ': ' + fK(cf) + '\n';
-      }
-      tip += '\n— UNLEVERED YIELD: ' + ci.unlev.toFixed(1) + '%\n';
-      tip += 'Steady-state op income / total capex.\n';
-      tip += 'Rev: ' + fK(ud.base_rev) + '  Exp: ' + fK(ud.base_exp) + '\n';
-      tip += 'Op Inc: ' + fK(ud.op_inc) + '  CapEx: ' + fK(ud.capex);
-      const esc = tip.replace(/"/g, '&quot;');
-      irrHtml = `<div class="gantt-cell gantt-right" style="color:var(--green);cursor:help" title="${esc}">${Math.round(ci.irr)}%</div>`;
-      unlevHtml = `<div class="gantt-cell gantt-right" style="color:var(--green);cursor:help" title="${esc}">${Math.round(ci.unlev)}%</div>`;
-    } else {
-      irrHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
-      unlevHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
-    }
-
-    // Start Q dropdown
-    const startQKey = lk === 'pack' ? 'packStartQ' : lk === 'house' ? 'housingStartQ' : lk + 'StartQ';
-    const curStartQ = settings[startQKey];
-    const startOpts = Q_OPTIONS.map(o => `<option value="${o.val}" ${o.val===curStartQ?'selected':''}>${o.label}</option>`).join('');
-    const startHtml = `<div class="gantt-cell"><select class="gantt-select gantt-ctrl" data-key="${startQKey}">${startOpts}</select></div>`;
-
-    // Ramp (crops only)
+// Ramp (crops only)
     let rampHtml;
     if (!isInfra) {
       const rampKey = lk + 'RampYears';
@@ -403,20 +401,21 @@ function renderGantt(d) {
       rampHtml = `<div class="gantt-cell-muted">–</div>`;
     }
 
-    // Timeline bars
+    // Timeline bars. end_q = last build quarter; production starts end_q + 1.
     const startCol = qToCol(item.start_q);
     const endCol = qToCol(item.end_q);
-    const buildW = endCol - startCol;
+    const buildW = endCol - startCol + 1;  // inclusive of end_q
+    const firstProdCol = endCol + 1;       // production starts here
     const rampW = (item.ramp_years || 0) * 4;
-    const prodStart = endCol + rampW;
+    const prodStart = firstProdCol + rampW;
     const prodW = GANTT_COLS - prodStart;
 
     let barsHtml = `<div class="gantt-timeline">${qLines}`;
     if (buildW > 0) {
-      barsHtml += `<div class="gantt-bar gantt-bar-build" style="grid-column:${startCol+1}/span ${Math.max(1, buildW)}" title="Build: ${Q_OPTIONS.find(o=>o.val===item.start_q)?.label||''} → ${Q_OPTIONS.find(o=>o.val===item.end_q)?.label||''}"></div>`;
+      barsHtml += `<div class="gantt-bar gantt-bar-build" style="grid-column:${startCol+1}/span ${buildW}" title="Build: ${Q_OPTIONS.find(o=>o.val===item.start_q)?.label||''} → ${Q_OPTIONS.find(o=>o.val===item.end_q)?.label||''} (production starts next quarter)"></div>`;
     }
     if (rampW > 0 && !isInfra) {
-      barsHtml += `<div class="gantt-bar gantt-bar-ramp" style="grid-column:${endCol+1}/span ${rampW}"></div>`;
+      barsHtml += `<div class="gantt-bar gantt-bar-ramp" style="grid-column:${firstProdCol+1}/span ${rampW}"></div>`;
     }
     if (prodW > 0 && !isInfra) {
       barsHtml += `<div class="gantt-bar gantt-bar-prod" style="grid-column:${prodStart+1}/span ${Math.max(1, prodW)}"></div>`;
@@ -427,8 +426,7 @@ function renderGantt(d) {
       <div class="gantt-label">${labelHtml}</div>
       ${oldHtml}${newHtml}${totalHtml}
       ${revHtml}${marginHtml}${costHtml}${costTotalHtml}
-      ${irrHtml}${unlevHtml}
-      ${startHtml}${rampHtml}
+      ${rampHtml}
       <div></div>${barsHtml}
     </div>`;
 
@@ -451,8 +449,7 @@ function renderGantt(d) {
         <div></div>
         <div style="${hSpan};grid-column:2/5">(acres)</div>
         <div style="${hSpan};grid-column:5/9">($M)</div>
-        <div style="grid-column:9/11"></div>
-        <div style="grid-column:11/13"></div>
+        <div style="grid-column:9/10"></div>
         <div></div><div></div>
       </div>
       <div class="gantt-header">
@@ -464,10 +461,7 @@ function renderGantt(d) {
         <div style="${hC}">Mrgn</div>
         <div style="${hC}">Cost/Ac</div>
         <div style="${hR}">Cost</div>
-        <div style="${hR}">IRR</div>
-        <div style="${hR}">Unlev</div>
-        <div style="${hC}">Start</div>
-        <div style="${hC};cursor:help" title="Production ramp after build completes (linear: prod_yr / (ramp_years + 1)).&#10;0yr: 100%&#10;1yr: 50% → 100%&#10;2yr: 33% → 67% → 100%&#10;3yr: 25% → 50% → 75% → 100%&#10;4yr: 20% → 40% → 60% → 80% → 100%">Ramp <span style="color:var(--text-dim)">ⓘ</span></div>
+        <div style="${hC};cursor:help" title="Production ramp — linear from 0% to 100% over (ramp_years × 4) quarters.&#10;Q_n = production quarter (1-indexed from first prod quarter).&#10;ramp = min(100%, Q_n / (ramp_years × 4))&#10;&#10;1-yr: Q1=25% Q2=50% Q3=75% Q4=100%&#10;2-yr: Q1=12.5% Q4=50% Q8=100%&#10;4-yr: Q1=6.25% Q8=50% Q16=100%">Ramp <span style="color:var(--text-dim)">ⓘ</span></div>
         <div></div><div class="gantt-timeline-header">${yearHdr}</div>
       </div>
       ${rows}
@@ -480,17 +474,7 @@ function renderGantt(d) {
         <div class="gantt-cell">–</div>
         <div class="gantt-cell">–</div>
         <div class="gantt-cell gantt-right" style="color:var(--text)">${(totals.cost/1e6).toFixed(1)}</div>
-        <div class="gantt-cell gantt-right" style="color:var(--green)">${Math.round(d.total_irr)}%</div>
-        <div class="gantt-cell gantt-right" style="color:var(--green)">${Math.round(d.total_unlev)}%</div>
-        <div class="gantt-cell"></div><div class="gantt-cell"></div><div></div><div></div>
-      </div>
-      <div class="gantt-row" title="3 months of working capital prefunded as equity one quarter before production">
-        <div class="gantt-label"><div class="gantt-crop-name" style="color:var(--text-muted)">Startup Capital</div></div>
-        <div class="gantt-cell">–</div><div class="gantt-cell">–</div><div class="gantt-cell">–</div>
-        <div class="gantt-cell">–</div><div class="gantt-cell">–</div><div class="gantt-cell">–</div>
-        <div class="gantt-cell gantt-right" style="color:var(--text-muted)">${((d.startup_capital||0)/1e6).toFixed(1)}</div>
-        <div class="gantt-cell"></div><div class="gantt-cell"></div>
-        <div class="gantt-cell"></div><div class="gantt-cell"></div><div></div><div></div>
+        <div class="gantt-cell"></div><div></div><div></div>
       </div>
     </div>`;
 
@@ -541,7 +525,6 @@ function render(d) {
     ['Steady Rev', fK(steadyRev), `year ${Y[lastIdx]}`],
     ['Steady Op Inc', fK(steadyOpInc), `${((steadyOpInc / steadyRev * 100) || 0).toFixed(1)}% margin`],
     ['Debt Svc', fK(peakDebt), `peak in '${String(peakYear).slice(2)}<br>${fK(lastDebt)} in '${String(Y[lastIdx]).slice(2)}`],
-    ['Total IRR', d.total_irr + '%', 'all new crops'],
   ].map(([l, v, s]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div><div class="kpi-sub">${s}</div></div>`).join('');
 
   // Revenue / Expense table

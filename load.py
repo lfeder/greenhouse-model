@@ -108,18 +108,50 @@ def ramp_factor(prod_yr, ramp_years):
 
 
 def ramp_crop_rev_exp(base_rev, base_exp, end_q, ramp_years, rev_inf, cost_inf):
+    """Quarterly ramp model.
+
+    end_q = LAST construction quarter. Production starts the quarter AFTER.
+    Ramp is linear from 0 to 100% over (ramp_years × 4) quarters.
+
+    Example: 12-month build starting Q1'27 → end_q = Q4'27.
+       2027: 0 production (construction Q1-Q4)
+       2028 Q1-Q4: ramp positions 1, 2, 3, 4 (=25/50/75/100% for 1-yr ramp)
+       2029+: 100%
+    """
     end_year = end_q // 10
     end_qtr = end_q % 10
+    # First production quarter = end_q + 1 (next quarter)
+    if end_qtr >= 4:
+        first_prod_year = end_year + 1
+        first_prod_qtr = 1
+    else:
+        first_prod_year = end_year
+        first_prod_qtr = end_qtr + 1
+
+    ramp_qtrs = ramp_years * 4  # quarters until ramp reaches 100%
+
     rev, exp = [], []
     for y in YEARS:
-        if y < end_year:
-            rev.append(0); exp.append(0); continue
-        frac = (4 - end_qtr + 1) / 4 if y == end_year else 1
-        prod_yr = 1 if y == end_year else y - end_year + 1
-        ramp = ramp_factor(prod_yr, ramp_years)
+        if y < first_prod_year:
+            rev.append(0.0); exp.append(0.0); continue
         n = y - 2026
-        rev.append(base_rev * ramp * frac * (1 + rev_inf / 100) ** n)
-        exp.append(base_exp * ramp * frac * (1 + cost_inf / 100) ** n)
+        rm = (1 + rev_inf / 100) ** n
+        cm = (1 + cost_inf / 100) ** n
+        year_rev = 0.0
+        year_exp = 0.0
+        for q in range(1, 5):
+            if y == first_prod_year and q < first_prod_qtr:
+                continue
+            # 1-indexed production quarter number from first prod quarter
+            prod_q = (y - first_prod_year) * 4 + (q - first_prod_qtr) + 1
+            if ramp_qtrs <= 0 or prod_q >= ramp_qtrs:
+                ramp = 1.0
+            else:
+                ramp = prod_q / ramp_qtrs
+            year_rev += base_rev * ramp * 0.25 * rm
+            year_exp += base_exp * ramp * 0.25 * cm
+        rev.append(year_rev)
+        exp.append(year_exp)
     return rev, exp
 
 
