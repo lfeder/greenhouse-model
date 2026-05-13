@@ -270,7 +270,7 @@ function buildSidebar() {
   </div>`;
 
   // Compute derived net% for display under the slider
-  const _jjbCap = (lastData && lastData.jjb_equity) || 0;
+  const _jjbCap = ((lastData && lastData.jjb_equity) || 0) + ((lastData && lastData.startup_capital) || 0);
   const _val = settings.jjbBuyinValuation || 15000000;
   const _rawNet = _val > 0 ? _jjbCap / (2 * _val) : 0;
   const _netPct = Math.round(_rawNet / 0.0025) * 0.0025 * 100;
