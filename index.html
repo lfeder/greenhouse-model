@@ -49,7 +49,7 @@
     <div class="panel">
       <div class="panel-title" style="cursor:pointer" onclick="document.getElementById('distBody').style.display=document.getElementById('distBody').style.display==='none'?'':'none'">Distributions ($M) <span style="font-size:8px;color:var(--text-dim)">▼</span></div>
       <div id="distBody">
-        <div style="font-size:10px;color:var(--text-muted);margin:4px 0 2px">Waterfall — No Expansion</div>
+        <div id="distTableBaselineLabel" style="font-size:10px;color:var(--text-muted);margin:4px 0 2px">Waterfall — No Expansion</div>
         <div style="overflow-x:auto"><table class="fin-table" id="distTableNoExp"></table></div>
         <div style="font-size:10px;color:var(--text-muted);margin:12px 0 2px">Waterfall — With Expansion</div>
         <div style="overflow-x:auto"><table class="fin-table" id="distTable"></table></div>
@@ -417,11 +417,22 @@ function renderGantt(d) {
     }
     barsHtml += '</div>';
 
+    // ROI = unlevered yield (steady-state op income / total capex)
+    let roiHtml;
+    const ci = irrMap[key];
+    if (ci && typeof ci.unlev === 'number') {
+      const ud = ci.unlev_detail || {};
+      const tip = `${ci.label}\nUnlevered Yield: ${ci.unlev.toFixed(1)}%\nSteady-state op income / total capex.\nRev: ${fK(ud.base_rev)}  Exp: ${fK(ud.base_exp)}\nOp Inc: ${fK(ud.op_inc)}  CapEx: ${fK(ud.capex)}`.replace(/"/g, '&quot;');
+      roiHtml = `<div class="gantt-cell gantt-right" style="color:var(--green);cursor:help" title="${tip}">${Math.round(ci.unlev)}%</div>`;
+    } else {
+      roiHtml = `<div class="gantt-cell-muted gantt-right">–</div>`;
+    }
+
     const rowHtml = `<div class="gantt-row" data-key="${key}">
       <div class="gantt-label">${labelHtml}</div>
       ${oldHtml}${newHtml}${totalHtml}
       ${revHtml}${marginHtml}${costHtml}${costTotalHtml}
-      ${rampHtml}
+      ${roiHtml}${rampHtml}
       <div></div>${barsHtml}
     </div>`;
 
@@ -444,7 +455,7 @@ function renderGantt(d) {
         <div></div>
         <div style="${hSpan};grid-column:2/5">(acres)</div>
         <div style="${hSpan};grid-column:5/9">($M)</div>
-        <div style="grid-column:9/10"></div>
+        <div style="grid-column:9/11"></div>
         <div></div><div></div>
       </div>
       <div class="gantt-header">
@@ -456,6 +467,7 @@ function renderGantt(d) {
         <div style="${hC}">Mrgn</div>
         <div style="${hC}">Cost/Ac</div>
         <div style="${hR}">Cost</div>
+        <div style="${hR}">ROI</div>
         <div style="${hC}">Ramp <span style="color:var(--accent);cursor:help;padding:0 3px" title="Production ramp — linear from 0% to 100% over (ramp_years × 4) quarters.&#10;Q_n = production quarter (1-indexed from first prod quarter).&#10;ramp = min(100%, Q_n / (ramp_years × 4))&#10;&#10;1-yr ramp: Q1=25% Q2=50% Q3=75% Q4=100%&#10;2-yr ramp: Q1=12.5% Q4=50% Q8=100%&#10;3-yr ramp: Q1=8.3% Q6=50% Q12=100%&#10;4-yr ramp: Q1=6.25% Q8=50% Q16=100%">ⓘ</span></div>
         <div></div><div class="gantt-timeline-header">${yearHdr}</div>
       </div>
@@ -469,6 +481,7 @@ function renderGantt(d) {
         <div class="gantt-cell">–</div>
         <div class="gantt-cell">–</div>
         <div class="gantt-cell gantt-right" style="color:var(--text)">${(totals.cost/1e6).toFixed(1)}</div>
+        <div class="gantt-cell gantt-right" style="color:var(--green)">${Math.round(d.total_unlev || 0)}%</div>
         <div class="gantt-cell"></div><div></div><div></div>
       </div>
     </div>`;
@@ -692,7 +705,36 @@ function render(d) {
     return t;
   };
   document.getElementById('distTable').innerHTML = buildWaterfall(d, false);
-  if (d.partners_no_exp && d.partners_no_exp._waterfall) {
+  const distBenchmark = settings.benchmark || 'resolution';
+  const labelEl = document.getElementById('distTableBaselineLabel');
+  if (distBenchmark === 'resolution' && RESOLUTION_DATA) {
+    labelEl.textContent = 'Waterfall — Resolution';
+    const displayed = Y.length - _DN;
+    const fmt = v => v == null ? '—' : fCM(v);
+    const extrapolate = (arr) => {
+      if (!arr || arr.length < 2) return arr || [];
+      const g = arr[arr.length - 1] / arr[arr.length - 2];
+      const out = [...arr];
+      while (out.length < displayed) out.push(out[out.length - 1] * g);
+      return out;
+    };
+    const renderRow = (label, vals, cls) => {
+      const padded = extrapolate(vals);
+      while (padded.length < displayed) padded.push(null);
+      return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${padded.slice(0, displayed).map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
+    };
+    const ebitdaExt = extrapolate(RESOLUTION_DATA.EBITDA);
+    const revExt = ebitdaExt.map(e => e == null ? null : e / 0.33);
+    let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
+    rt += renderRow('Revenue', revExt);
+    rt += renderRow('EBITDA', RESOLUTION_DATA.EBITDA, 'subtotal-row');
+    rt += renderRow('EB', RESOLUTION_DATA.EB.withTax);
+    rt += renderRow('JS', RESOLUTION_DATA.JS.withTax);
+    rt += renderRow('JJB', RESOLUTION_DATA.JJB.withTax);
+    rt += '</tbody>';
+    document.getElementById('distTableNoExp').innerHTML = rt;
+  } else if (d.partners_no_exp && d.partners_no_exp._waterfall) {
+    labelEl.textContent = 'Waterfall — No Expansion';
     document.getElementById('distTableNoExp').innerHTML = buildWaterfall(d.partners_no_exp._waterfall, true);
   }
 

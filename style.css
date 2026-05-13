@@ -72,7 +72,7 @@ input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 
 .gantt-container { font-size: 10px; }
 .gantt-header, .gantt-row {
   display: grid;
-  grid-template-columns: 100px 42px 50px 44px 56px 46px 56px 44px 46px 16px 1fr;
+  grid-template-columns: 100px 42px 50px 44px 56px 46px 56px 44px 42px 46px 16px 1fr;
   align-items: center;
   gap: 0;
 }
