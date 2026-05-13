@@ -308,22 +308,40 @@ def run_everything(s):
             "tier1_shortfall": result_ne["tier1_shortfall"],
         }
 
-        # JJB bridge loan: fund cumulative shortfalls, repay from cumulative surpluses
+        # Build Resolution baseline per partner. Data covers 2026-2032 (7 years).
+        # Extrapolate years past 2032 using the 2031→2032 growth rate per partner.
+        from pathlib import Path
+        import json as _json
+        try:
+            _resol = _json.loads((Path(__file__).parent / "constants.json").read_text(encoding="utf-8")).get("resolution_data", {})
+        except Exception:
+            _resol = {}
+        def _resol_baseline(p):
+            data = _resol.get(p, {}).get("withTax", [])
+            if not data:
+                return [0.0] * N_YEARS
+            out = list(data)
+            growth = (out[-1] / out[-2]) if (len(out) >= 2 and out[-2] > 0) else 1.0
+            while len(out) < N_YEARS:
+                out.append(out[-1] * growth)
+            return out[:N_YEARS]
+
+        # JJB bridge loan: fund cumulative shortfalls vs. RESOLUTION baseline.
         # Compares CUMULATIVE received-to-date (not year-by-year). If a partner is
-        # ahead on cumulative basis, the bridge does not kick in for a single
-        # weak year. JJB's total reflects the offsetting funding obligation.
+        # ahead on cumulative basis vs Resolution, the bridge does not kick in.
         guarantee = {}
         for p in ["EB", "JS"]:
             advance = [0.0] * N_YEARS
             repay = [0.0] * N_YEARS
             balance = [0.0] * N_YEARS
-            cum_noexp = 0.0
+            baseline = _resol_baseline(p)
+            cum_baseline = 0.0
             cum_with = 0.0
             prev_bal = 0.0
             for i in range(N_YEARS):
-                cum_noexp += partners_no_exp[p][i]
-                cum_with  += partners[p]["total"][i]
-                target_bal = max(0.0, cum_noexp - cum_with)
+                cum_baseline += baseline[i]
+                cum_with     += partners[p]["total"][i]
+                target_bal = max(0.0, cum_baseline - cum_with)
                 delta = target_bal - prev_bal
                 if delta > 0:
                     advance[i] = delta

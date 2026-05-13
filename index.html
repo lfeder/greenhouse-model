@@ -806,17 +806,29 @@ async function renderScenarioComparison(d, Y) {
       st += `<tr class="section-header"><td colspan="${Y.length-_DN+1}">${s.label}</td></tr>`;
       const taxKey = _scenShowTax ? 'withTax' : 'noTax';
       if (s.resolution) {
+        // Resolution: hardcoded 2026-2032. Extrapolate to 2033 using 2031→2032 growth.
+        // Revenue derived as EBITDA / 0.33.
         const displayed = Y.length - _DN;
         const fmt = v => v == null ? '—' : (v / 1e6).toFixed(1);
+        const extrapolate = (arr) => {
+          if (!arr || arr.length < 2) return arr || [];
+          const g = arr[arr.length - 1] / arr[arr.length - 2];
+          const out = [...arr];
+          while (out.length < displayed) out.push(out[out.length - 1] * g);
+          return out;
+        };
         const renderRow = (label, vals) => {
-          const padded = [...vals];
+          const padded = extrapolate(vals);
           while (padded.length < displayed) padded.push(null);
           return `<tr><td>${label}</td>${padded.slice(0, displayed).map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
         };
-        st += renderRow('EBITDA', RESOLUTION_DATA.EBITDA);
-        st += renderRow('EB',     RESOLUTION_DATA.EB[taxKey]);
-        st += renderRow('JS',     RESOLUTION_DATA.JS[taxKey]);
-        st += renderRow('JJB',    RESOLUTION_DATA.JJB[taxKey]);
+        const ebitdaExt = extrapolate(RESOLUTION_DATA.EBITDA);
+        const revExt = ebitdaExt.map(e => e == null ? null : e / 0.33);
+        st += renderRow('Revenue', revExt);
+        st += renderRow('EBITDA',  RESOLUTION_DATA.EBITDA);
+        st += renderRow('EB',      RESOLUTION_DATA.EB[taxKey]);
+        st += renderRow('JS',      RESOLUTION_DATA.JS[taxKey]);
+        st += renderRow('JJB',     RESOLUTION_DATA.JJB[taxKey]);
       } else {
         const ds = s.data;
         if (s.useNoExp) {
@@ -858,7 +870,8 @@ function renderScenarioSummary(d, Y, cache) {
   // Resolution: hardcoded
   const resolCum = {};
   for (const p of PARTNERS) resolCum[p] = RESOLUTION_DATA[p].noTax.slice(0, 4).reduce((a, b) => a + b, 0);
-  const resolEbitda33 = RESOLUTION_DATA.EBITDA[6] * 1.04;
+  // Extrapolate Resolution EBITDA to 2033 using 2031→2032 growth rate
+  const resolEbitda33 = RESOLUTION_DATA.EBITDA[6] * (RESOLUTION_DATA.EBITDA[6] / RESOLUTION_DATA.EBITDA[5]);
   const resolOwn = {EB: 27.5, JS: 22.5, JJB: 50.0};
   const resolMult = 7;
   const resolBV = resolEbitda33 * resolMult;
