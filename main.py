@@ -317,7 +317,7 @@ def run_everything(s):
         except Exception:
             _resol = {}
         def _resol_baseline(p):
-            data = _resol.get(p, {}).get("withTax", [])
+            data = _resol.get(p, {}).get("noTax", [])
             if not data:
                 return [0.0] * N_YEARS
             out = list(data)
@@ -338,13 +338,14 @@ def run_everything(s):
             if benchmark == "resolution":
                 baseline = _resol_baseline(p)
             else:
-                baseline = partners_no_exp[p]
+                ne_tax = partners_no_exp.get("_tax", {}).get(p, [0.0] * N_YEARS)
+                baseline = [partners_no_exp[p][i] - ne_tax[i] for i in range(N_YEARS)]
             cum_baseline = 0.0
             cum_with = 0.0
             prev_bal = 0.0
             for i in range(N_YEARS):
                 cum_baseline += baseline[i]
-                cum_with     += partners[p]["total"][i]
+                cum_with     += partners[p]["total"][i] - partners[p]["tax_dist"][i]
                 target_bal = max(0.0, cum_baseline - cum_with)
                 delta = target_bal - prev_bal
                 if delta > 0:
