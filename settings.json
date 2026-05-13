@@ -70,7 +70,7 @@
   "ebExpansionGrantStartYear": 2027,
   "ebExpansionGrantEndYear": 2033,
   "capexReservePct": 2,
-  "financingFeesPct": 2.0,
+  "financingFeesPct": 2,
   "upfrontClosingCosts": 50000,
   "debug": false,
   "existFedYearsLeft": 8,
@@ -79,5 +79,6 @@
   "existStateAnnual": 1000000,
   "fedBonusPct": 100,
   "stateUsefulLife": 10,
-  "expansionLender": "SBA"
+  "expansionLender": "SBA",
+  "benchmark": "resolution"
 }

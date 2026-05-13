@@ -326,15 +326,19 @@ def run_everything(s):
                 out.append(out[-1] * growth)
             return out[:N_YEARS]
 
-        # JJB bridge loan: fund cumulative shortfalls vs. RESOLUTION baseline.
-        # Compares CUMULATIVE received-to-date (not year-by-year). If a partner is
-        # ahead on cumulative basis vs Resolution, the bridge does not kick in.
+        # JJB bridge loan: fund cumulative shortfalls vs. chosen baseline.
+        # benchmark='resolution' (default) compares to Resolution PDF baseline.
+        # benchmark='noexp' compares to model's No-Expansion run.
+        benchmark = s.get("benchmark", "resolution")
         guarantee = {}
         for p in ["EB", "JS"]:
             advance = [0.0] * N_YEARS
             repay = [0.0] * N_YEARS
             balance = [0.0] * N_YEARS
-            baseline = _resol_baseline(p)
+            if benchmark == "resolution":
+                baseline = _resol_baseline(p)
+            else:
+                baseline = partners_no_exp[p]
             cum_baseline = 0.0
             cum_with = 0.0
             prev_bal = 0.0

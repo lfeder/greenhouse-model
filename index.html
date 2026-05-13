@@ -715,9 +715,24 @@ function render(d) {
       pt += tr('Bridge (net)', net, fCM, `${cls}" style="display:none`);
     }
     pt += tr('Total ' + p, pd.total, fCM, 'subtotal-row');
-    if (d.partners_no_exp && d.partners_no_exp[p]) {
-      pt += tr('No Expansion', d.partners_no_exp[p], fCM);
-      const diff = pd.total.map((v, i) => v - d.partners_no_exp[p][i]);
+    // Baseline for comparison: 'resolution' (default) or 'noexp'
+    const benchmark = settings.benchmark || 'resolution';
+    let baseline = null, baselineLabel = '';
+    if (benchmark === 'resolution' && RESOLUTION_DATA && RESOLUTION_DATA[p]) {
+      const raw = RESOLUTION_DATA[p].withTax || [];
+      if (raw.length >= 2) {
+        const growth = raw[raw.length-1] / raw[raw.length-2];
+        baseline = [...raw];
+        while (baseline.length < Y.length) baseline.push(baseline[baseline.length-1] * growth);
+      }
+      baselineLabel = 'Resolution';
+    } else if (benchmark === 'noexp' && d.partners_no_exp && d.partners_no_exp[p]) {
+      baseline = d.partners_no_exp[p];
+      baselineLabel = 'No Expansion';
+    }
+    if (baseline) {
+      pt += tr(baselineLabel, baseline, fCM);
+      const diff = pd.total.map((v, i) => v - (baseline[i] || 0));
       pt += tr('Expansion Impact', diff, fCM);
     }
   }
