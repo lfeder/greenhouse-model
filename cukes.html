@@ -895,11 +895,12 @@ function renderRoi() {
     '<th>Cum. capex (new)</th>' +
     '<th>Cum. rev vs baseline</th>' +
     '<th>Δ rev vs prev</th>' +
-    '<th>Cum. OpInc ROI / yr</th>' +
+    '<th>Marginal OpInc ROI / yr</th>' +
     '</tr></thead><tbody>';
 
   const OP_INC_MARGIN = 0.30;
   let prevRev = null;
+  let prevCapex = 0;
   let finalRev = null;
   let finalCapex = 0;
   for (let idx = 0; idx < acreLevels.length; idx++) {
@@ -907,9 +908,10 @@ function renderRoi() {
     const rev = annualRevAt(A, idx);
     const capex = Math.max(0, A - existingTotal) * costPerAc;
     const cumAddRev = idx === 0 ? 0 : rev - baseline;
-    const cumOpInc = cumAddRev * OP_INC_MARGIN;
-    const cumRoi = capex > 0 ? cumOpInc / capex : null;
     const deltaRev = prevRev == null ? null : rev - prevRev;
+    const incrCapex = capex - prevCapex;
+    const margOpInc = deltaRev == null ? null : deltaRev * OP_INC_MARGIN;
+    const margRoi = (margOpInc != null && incrCapex > 0) ? margOpInc / incrCapex : null;
     const nGH = idx;  // 0 = baseline
     const label = nGH === 0
       ? `${A.toFixed(1)} (baseline)`
@@ -920,9 +922,10 @@ function renderRoi() {
       <td>${fM(capex)}</td>
       <td>${fM(cumAddRev)}</td>
       <td>${deltaRev == null ? '—' : fM(deltaRev)}</td>
-      <td>${capex > 0 ? fPct(cumRoi) : '—'}</td>
+      <td>${margRoi == null ? '—' : fPct(margRoi)}</td>
     </tr>`;
     prevRev = rev;
+    prevCapex = capex;
     finalRev = rev;
     finalCapex = capex;
   }
