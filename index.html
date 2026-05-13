@@ -576,6 +576,9 @@ function render(d) {
   rt += tr('Operating Income', d.op_inc, fCM, 'total-row-table');
   const opMargin = d.op_inc.map((v, i) => d.rev[i] > 0 ? (v / d.rev[i] * 100) : 0);
   rt += `<tr><td>Op Margin</td>${sl(opMargin).map(v => `<td>${Math.round(v)}%</td>`).join('')}</tr>`;
+  rt += tr('Existing DS', d.loan_total_ds.map(v => -v), fCM);
+  rt += tr('Expansion DS', d.expansion_ds.map(v => -v), fCM);
+  rt += `<tr><td>DSCR</td>${sl(d.op_inc.map((oi, i) => { const ds = d.loan_total_ds[i] + (d.expansion_ds[i] || 0); return ds > 0 ? (oi / ds).toFixed(1) + 'x' : '—'; })).map(v => `<td>${v}</td>`).join('')}</tr>`;
   if (d.loan_data && d.expansion_loan_detail) {
     const totalDebt = Y.map((_, i) => {
       let bal = 0;
@@ -690,14 +693,8 @@ function render(d) {
   const buildWaterfall = (src, isNoExp) => {
     let t = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
     t += tr('Operating Income', src.op_inc, fCM, 'subtotal-row');
-    const jsl = src.jjb_startup_line || src.startup_exp;
-    if (jsl && jsl.some(v => v > 0)) {
-      t += `<tr><td>JJB Startup Capital</td>${sl(jsl).map(v => `<td>${fCM(v)}</td>`).join('')}</tr>`;
-    }
-    t += `<tr><td>Existing DS</td>${sl(src.loan_total_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
-    if (!isNoExp) t += `<tr><td>Expansion DS</td>${sl(src.expansion_ds).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
-    t += `<tr><td>DSCR</td>${sl(src.op_inc.map((oi, i) => { const ds = src.loan_total_ds[i] + (src.expansion_ds[i] || 0); return ds > 0 ? (oi / ds).toFixed(1) + 'x' : '—'; })).map(v => `<td>${v}</td>`).join('')}</tr>`;
-    t += `<tr><td>Capex Reserve</td>${sl(src.capex_res).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
+    const dsTotal = src.loan_total_ds.map((v, i) => v + (src.expansion_ds[i] || 0));
+    t += tr('DS', dsTotal.map(v => -v), fCM);
     t += tr('Distributable Cash', src.distrib_cash, fCM, 'total-row-table');
     t += sr('Waterfall', Y);
     t += tr('Tax', src.tax_cash.map(v => -v), fCM);
@@ -721,7 +718,8 @@ function render(d) {
     const fmt = v => v == null ? '—' : fCM(v);
     const extrapolate = (arr) => {
       if (!arr || arr.length < 2) return arr || [];
-      const g = arr[arr.length - 1] / arr[arr.length - 2];
+      const a = arr[arr.length - 2], b = arr[arr.length - 1];
+      const g = (a !== 0 && isFinite(b / a)) ? b / a : 1;
       const out = [...arr];
       while (out.length < displayed) out.push(out[out.length - 1] * g);
       return out;
@@ -731,14 +729,23 @@ function render(d) {
       while (padded.length < displayed) padded.push(null);
       return `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${padded.slice(0, displayed).map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
     };
-    const ebitdaExt = extrapolate(RESOLUTION_DATA.EBITDA);
-    const revExt = ebitdaExt.map(e => e == null ? null : e / 0.33);
+    const eb = RESOLUTION_DATA.EB, js = RESOLUTION_DATA.JS, jjb = RESOLUTION_DATA.JJB;
+    const n = RESOLUTION_DATA.EBITDA.length;
+    const sumRow = (...arrs) => Array.from({length: n}, (_, i) => arrs.reduce((s, a) => s + (a[i] || 0), 0));
+    const taxAll = sumRow(eb.tax, js.tax, jjb.tax);
+    const tier1All = sumRow(eb.tier_1, js.tier_1, jjb.tier_1);
+    const peddAll = sumRow(js.pedd, jjb.pedd);
+    const tier2All = sumRow(eb.tier_2, js.tier_2, jjb.tier_2);
+    const distrib = sumRow(taxAll, eb.tier_0, tier1All, peddAll, tier2All);
     let rt = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-    rt += renderRow('Revenue', revExt);
     rt += renderRow('EBITDA', RESOLUTION_DATA.EBITDA, 'subtotal-row');
-    rt += renderRow('EB', RESOLUTION_DATA.EB.withTax);
-    rt += renderRow('JS', RESOLUTION_DATA.JS.withTax);
-    rt += renderRow('JJB', RESOLUTION_DATA.JJB.withTax);
+    rt += renderRow('Distributable Cash', distrib, 'total-row-table');
+    rt += sr('Waterfall', Y);
+    rt += renderRow('Tax', taxAll.map(v => -v));
+    rt += renderRow('Tier 0 (EB)', eb.tier_0.map(v => -v));
+    rt += renderRow('Tier 1 (Partners)', tier1All.map(v => -v));
+    rt += renderRow('PE/DD Repayment', peddAll.map(v => -v));
+    rt += renderRow('Tier 2 (Pro-Rata)', tier2All.map(v => -v));
     rt += '</tbody>';
     document.getElementById('distTableNoExp').innerHTML = rt;
   } else if (d.partners_no_exp && d.partners_no_exp._waterfall) {
