@@ -386,6 +386,7 @@ def allocate_capital_stack(crop_data, s):
     fee_pct = s.get("financingFeesPct", 2.0) / 100
     fees = raw_capex * bank_ltv * fee_pct
     total_capex = raw_capex + fees
+    s["_financing_fees"] = fees   # expose for KPI display
 
     total_bank = min(total_capex * bank_ltv, bank_cap)
     total_sbic = max(0, s.get("sbicCap", 0) or 0)
@@ -416,4 +417,5 @@ def compute_kpis(s, crop_data, debug):
         "total_capex": crop_capex, "shared_capex": shared_capex,
         "bank_total": bank_total, "sbic_total": sbic_total,
         "tp_equity": tp_total, "jjb_equity": jjb_equity, "startup_capital": startup_total,
+        "financing_fees": s.get("_financing_fees", 0),
     }
