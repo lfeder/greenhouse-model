@@ -266,13 +266,7 @@ function buildSidebar() {
       ${tBtn('SBA', curLender==='SBA', "setLender('SBA')")}
       ${tBtn('JJB', curLender==='JJB', "setLender('JJB')")}
     </div>
-    <div style="font-size:10px;color:var(--text-sub);margin-bottom:8px">→ ${lenderTerms[curLender]}</div>
-    <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">LTV</div>
-    <div style="display:flex;gap:4px">
-      ${tBtn('80%', curFin===80, "updateSetting('financingPct',80)")}
-      ${tBtn('85%', curFin===85, "updateSetting('financingPct',85)")}
-      ${tBtn('90%', curFin===90, "updateSetting('financingPct',90)")}
-    </div>
+    <div style="font-size:10px;color:var(--text-sub)">→ ${lenderTerms[curLender]}</div>
   </div>`;
 
   // Compute derived net% for display under the slider
