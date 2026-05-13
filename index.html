@@ -213,10 +213,9 @@ function buildSidebar() {
     const v = y*10 + q;
     startOpts.push(`<option value="${v}" ${v===curStartQ?'selected':''}>${qLabel(v)}</option>`);
   }
-  const monthOpts = [];
-  for (let m = 12; m <= 18; m++) {
-    monthOpts.push(`<option value="${m}" ${m===curBuildMonths?'selected':''}>${m} mo</option>`);
-  }
+  const monthOpts = [12, 15, 18].map(m =>
+    `<option value="${m}" ${m===curBuildMonths?'selected':''}>${m} mo</option>`
+  );
   h += `<div class="panel"><div class="panel-title">Expansion Timing</div>
     <div style="font-size:9px;color:var(--text-dim);margin-bottom:3px">START QUARTER</div>
     <select class="btn" style="width:100%;font-size:10px;padding:3px 6px;margin-bottom:8px" onchange="setExpansionStart(Number(this.value))">${startOpts.join('')}</select>
