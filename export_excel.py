@@ -226,7 +226,7 @@ def write_scenario_sheet(wb, scenario_name, d):
                    [-v for v in d.get("total_interest", d["loan_total_int"])], "$#,##0")
     r = write_row(ws, r, "Taxable Income", d["taxable_inc"], "$#,##0")
     r = write_section(ws, r, "Federal", span)
-    r = write_row(ws, r, "Bonus Depreciation", [-v for v in d["dep"]["fed"]], "$#,##0")
+    r = write_row(ws, r, "Depreciation", [-v for v in d["dep"]["fed"]], "$#,##0")
     r = write_row(ws, r, "Fed Taxable", [td["fed_taxable"] for td in d["tax_detail"]], "$#,##0")
     r = write_row(ws, r, "EB Share", [td["eb_fed"] for td in d["tax_detail"]], "$#,##0")
     r = write_row(ws, r, "NOL Used", [-td["nol_used"] for td in d["tax_detail"]], "$#,##0")

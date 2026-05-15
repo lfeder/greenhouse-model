@@ -802,7 +802,7 @@ function render(d) {
   tx += `<tr><td><a href="debt.html" style="color:inherit;text-decoration:underline dotted">Total Interest</a></td>${sl(totalInt).map(v => `<td>${fCM(-v)}</td>`).join('')}</tr>`;
   tx += tr('Taxable Income', d.taxable_inc, fCM);
   tx += sr('Federal', Y);
-  tx += tr('Bonus Depreciation', d.dep.fed.map(v => -v), fCM);
+  tx += tr('Depreciation', d.dep.fed.map(v => -v), fCM);
   const fedTaxable = Y.map((_, i) => d.tax_detail[i].fed_taxable);
   tx += tr('Fed Taxable', fedTaxable, fCM, 'subtotal-row');
   tx += tr('EB Share', d.tax_detail.map(td => td.eb_fed), fCM);
