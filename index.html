@@ -79,18 +79,6 @@
       <div style="overflow-x:auto"><table class="fin-table" id="scenSummaryTable"></table></div>
     </div>
 
-    <div class="panel">
-      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
-        <span>Scenario Comparison ($M)</span>
-        <label style="font-size:10px;color:var(--text-sub);font-weight:normal;cursor:pointer">
-          <input type="checkbox" id="scenShowTaxToggle" checked
-            onchange="_scenShowTax=this.checked; if(lastData) renderScenarioComparison(lastData, lastData.years);">
-          include tax distributions
-        </label>
-      </div>
-      <div style="overflow-x:auto"><table class="fin-table" id="scenComparisonTable"></table></div>
-    </div>
-
   </div>
 </div>
 
@@ -205,7 +193,7 @@ function buildSidebar() {
       <span>Build Preset</span>
       <span style="font-size:9px;color:var(--text-dim);font-weight:normal">60k sqft blocks</span>
     </div>
-    <div style="display:grid;grid-template-columns:1fr;gap:4px;margin-bottom:4px">${presetBtn('NONE')}</div>
+    ${(settings.benchmark || 'resolution') === 'resolution' ? '' : `<div style="display:grid;grid-template-columns:1fr;gap:4px;margin-bottom:4px">${presetBtn('NONE')}</div>`}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
       ${presetBtn('3-NO')}${presetBtn('3-SHED')}${presetBtn('3-FULL')}
       ${presetBtn('4-NO')}${presetBtn('4-SHED')}${presetBtn('4-FULL')}
@@ -844,7 +832,6 @@ function render(d) {
 
 // --- SCENARIO COMPARISON ---
 let RESOLUTION_DATA = null;  // loaded from /api/constants at init
-let _scenShowTax = true;
 let _pcIncludeTax = false;
 
 async function fetchScenarioData(overrides) {
@@ -876,72 +863,6 @@ async function renderScenarioComparison(d, Y) {
       ]);
       _scenCache = {d3, d4};
     }
-    const {d3, d4} = _scenCache;
-
-    const scenarios = [
-      {label: 'Resolution',         resolution: true},
-      {label: 'No Expansion',       data: d, useNoExp: true},
-      {label: '3 blk · No PH',      data: d3},
-      {label: '4 blk · Full PH',    data: d4},
-    ];
-
-    let st = `<thead><tr><th></th>${yh(Y)}</tr></thead><tbody>`;
-    for (const s of scenarios) {
-      st += `<tr class="section-header"><td colspan="${Y.length-_DN+1}">${s.label}</td></tr>`;
-      const taxKey = _scenShowTax ? 'withTax' : 'noTax';
-      if (s.resolution) {
-        // Resolution: hardcoded 2026-2032. Extrapolate to 2033 using 2031→2032 growth.
-        // Revenue derived as EBITDA / 0.33.
-        const displayed = Y.length - _DN;
-        const fmt = v => v == null ? '—' : (v / 1e6).toFixed(1);
-        const extrapolate = (arr) => {
-          if (!arr || arr.length < 2) return arr || [];
-          const g = arr[arr.length - 1] / arr[arr.length - 2];
-          const out = [...arr];
-          while (out.length < displayed) out.push(out[out.length - 1] * g);
-          return out;
-        };
-        const renderRow = (label, vals) => {
-          const padded = extrapolate(vals);
-          while (padded.length < displayed) padded.push(null);
-          return `<tr><td>${label}</td>${padded.slice(0, displayed).map(v => `<td>${fmt(v)}</td>`).join('')}</tr>`;
-        };
-        const ebitdaExt = extrapolate(RESOLUTION_DATA.EBITDA);
-        const revExt = ebitdaExt.map(e => e == null ? null : e / 0.33);
-        st += renderRow('Revenue', revExt);
-        st += renderRow('EBITDA',  RESOLUTION_DATA.EBITDA);
-        st += renderRow('EB',      RESOLUTION_DATA.EB[taxKey]);
-        st += renderRow('JS',      RESOLUTION_DATA.JS[taxKey]);
-        st += renderRow('JJB',     RESOLUTION_DATA.JJB[taxKey]);
-      } else {
-        const ds = s.data;
-        if (s.useNoExp) {
-          const ne = ds.partners_no_exp && ds.partners_no_exp._waterfall;
-          if (ne) {
-            st += tr('Revenue', ne.rev || ds.rev.map(() => 0), fCM);
-            st += tr('EBITDA', ne.op_inc, fCM);
-          }
-          const taxes = (ds.partners_no_exp && ds.partners_no_exp._tax) || {};
-          for (const p of PARTNERS) {
-            const arr = ds.partners_no_exp && ds.partners_no_exp[p];
-            if (!arr) continue;
-            const vals = _scenShowTax ? arr : arr.map((v, i) => v - (taxes[p] ? taxes[p][i] : 0));
-            st += tr(p, vals, fCM);
-          }
-        } else {
-          st += tr('Revenue', ds.rev, fCM);
-          st += tr('EBITDA', ds.op_inc, fCM);
-          for (const p of PARTNERS) {
-            const pd = ds.partners && ds.partners[p];
-            if (!pd) continue;
-            const vals = _scenShowTax ? pd.total : pd.total.map((v, i) => v - (pd.tax_dist[i] || 0));
-            st += tr(p, vals, fCM);
-          }
-        }
-      }
-    }
-    st += '</tbody>';
-    document.getElementById('scenComparisonTable').innerHTML = st;
     renderScenarioSummary(d, Y, _scenCache);
   } finally {
     _scenComparisonInflight = false;
@@ -996,8 +917,9 @@ function renderScenarioSummary(d, Y, cache) {
   const fmt = v => v == null ? '—' : (v / 1e6).toFixed(2);
   let st = `<thead><tr><th></th>${PARTNERS.map(p => `<th>${p}</th>`).join('')}</tr></thead><tbody>`;
   st += `<tr class="section-header"><td colspan="4">Cum After-Tax CF ('26–'29)</td></tr>`;
+  const _showNoExp = (settings.benchmark || 'resolution') !== 'resolution';
   st += `<tr><td>Resolution</td>${PARTNERS.map(p => `<td>${fmt(resolCum[p])}</td>`).join('')}</tr>`;
-  st += `<tr><td>No Expansion</td>${PARTNERS.map(p => `<td>${fmt(noExpCum[p])}</td>`).join('')}</tr>`;
+  if (_showNoExp) st += `<tr><td>No Expansion</td>${PARTNERS.map(p => `<td>${fmt(noExpCum[p])}</td>`).join('')}</tr>`;
   st += `<tr><td>3 blk · No PH</td>${PARTNERS.map(p => `<td>${d3 ? fmt(d3.cum[p]) : '—'}</td>`).join('')}</tr>`;
   st += `<tr><td>4 blk · Full PH</td>${PARTNERS.map(p => `<td>${d4 ? fmt(d4.cum[p]) : '—'}</td>`).join('')}</tr>`;
 
@@ -1007,7 +929,7 @@ function renderScenarioSummary(d, Y, cache) {
     return `<tr><td>${label}${sub}</td>${PARTNERS.map(p => `<td>${fmt(bv * (own[p] || 0) / 100)}</td>`).join('')}</tr>`;
   };
   st += mkValRow('Resolution',     resolBV,  resolOwn, resolMult, resolEbitda33);
-  st += mkValRow('No Expansion',   noExpBV,  noExpOwn, noExpMult, noExpEbitda33);
+  if (_showNoExp) st += mkValRow('No Expansion',   noExpBV,  noExpOwn, noExpMult, noExpEbitda33);
   if (d3) st += mkValRow('3 blk · No PH',  d3.bv, d3.own, d3.multiple, d3.ebitda33);
   if (d4) st += mkValRow('4 blk · Full PH', d4.bv, d4.own, d4.multiple, d4.ebitda33);
   st += '</tbody>';
